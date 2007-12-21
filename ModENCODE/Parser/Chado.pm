@@ -6,6 +6,7 @@ use Carp qw(croak carp);
 use Data::Dumper;
 
 use DBI;
+use ModENCODE::Chado::Experiment;
 use ModENCODE::Chado::AppliedProtocol;
 use ModENCODE::Chado::Protocol;
 use ModENCODE::Chado::Data;
@@ -22,6 +23,7 @@ my %db              :ATTR( :name<db>,               :default<undef> );
 my %username        :ATTR( :name<username>,         :default<''> );
 my %password        :ATTR( :name<password>,         :default<''> );
 my %protocol_slots  :ATTR(                          :default<[]> );
+my %experiment      :ATTR(                          :default<undef> );
 
 sub START {
   my ($self, $ident, $args) = @_;
@@ -47,6 +49,18 @@ sub get_available_experiments {
   }
   return \@experiments;
 }
+
+sub get_experiment {
+  my ($self) = @_;
+  if (!scalar(@{$protocol_slots{ident $self}})) {
+    print STDERR "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+  }
+  if (!defined($experiment{ident $self})) {
+    print STDERR "Experiment is empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+  }
+  return $experiment{ident $self};
+}
+
 
 sub get_normalized_protocol_slots {
   my ($self) = @_;
@@ -323,8 +337,10 @@ sub flatten_attribute : PRIVATE {
   return @columns;
 }
 
+
 sub load_experiment {
   my ($self, $experiment_id) = @_;
+
   my @protocol_slots;
   # Get the first (leftmost) set of applied protocols used in this experiment
   my $first_proto_sth = $self->get_dbh()->prepare("SELECT first_applied_protocol_id FROM experiment_applied_protocol WHERE experiment_id = ?");
@@ -378,6 +394,14 @@ sub load_experiment {
     }
   } while (scalar(values(%next_applied_protocols)));
   $protocol_slots{ident $self} = \@protocol_slots;
+
+  my $experiment_sth = $self->get_dbh()->prepare("SELECT experiment_id, description FROM experiment WHERE experiment_id = ?");
+  $experiment_sth->execute($experiment_id);
+  my $row = $experiment_sth->fetchrow_hashref();
+  $experiment{ident $self} = new ModENCODE::Chado::Experiment({
+      'description' => $row->{'description'},
+      'applied_protocol_slots' => $self->get_normalized_protocol_slots(),
+    });
 }
 
 sub get_applied_protocol {

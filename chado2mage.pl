@@ -32,8 +32,12 @@ if (!$experiment_id) {
   print "\n";
 } else {
   $reader->load_experiment($experiment_id);
-  #print Dumper($reader->get_normalized_protocol_slots());
+  #my $protocol_slots = $reader->get_normalized_protocol_slots();
+  #foreach my $applied_protocols (@$protocol_slots) {
+  #print join("\n", map { $_->to_string() } @$applied_protocols) . "\n";
+  #}
   #print Dumper($reader->get_denormalized_protocol_slots());
   #print Dumper($reader->get_tsv_columns());
   print $reader->get_tsv();
+  #print $reader->get_experiment()->to_string();
 }
