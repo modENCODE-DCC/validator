@@ -1,0 +1,75 @@
+package ModENCODE::Chado::Protocol;
+
+use strict;
+use Class::Std;
+use Carp qw(croak);
+
+
+# Attributes
+my %name             :ATTR( :name<name>,                :default<''> );
+my %description      :ATTR( :name<description>,         :default<''> );
+my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
+
+# Relationships
+my %attributes       :ATTR( :get<attributes>,           :default<[]> );
+my %termsource       :ATTR( :get<termsource>,           :default<undef> );
+
+sub BUILD {
+  my ($self, $ident, $args) = @_;
+  my $attributes = $args->{'attributes'};
+  if (defined($attributes)) {
+    if (ref($attributes) ne 'ARRAY') {
+      $attributes = [ $attributes ];
+    }
+    foreach my $attribute (@$attributes) {
+      $self->add_attribute($attribute);
+    }
+  }
+  my $termsource = $args->{'termsource'};
+  if (defined($termsource)) {
+    $self->set_termsource($termsource);
+  }
+}
+
+sub add_attribute {
+  my ($self, $attribute) = @_;
+  ($attribute->isa('ModENCODE::Chado::Attribute')) or croak("Can't add a " . ref($attribute) . " as a attribute.");
+  push @{$attributes{ident $self}}, $attribute;
+}
+
+sub set_termsource {
+  my ($self, $termsource) = @_;
+  ($termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($termsource) . " as a termsource.");
+  $termsource{ident $self} = $termsource;
+}
+
+sub to_string {
+  my ($self) = @_;
+  my $string = $self->get_name();
+  $string .= "\n  Attributes:      <" . join(", ", map { $_->to_string() } @{$self->get_attributes()}) . ">" if scalar(@{$self->get_attributes()});
+  $string .= "\n  Term Source REF: " . $self->get_termsource()->to_string() if ($self->get_termsource());
+  return $string;
+}
+
+sub equals {
+  my ($self, $other) = @_;
+  return 0 unless ref($self) eq ref($other);
+
+  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_description() eq $other->get_description());
+
+  my @attributes = @{$self->get_attributes()};
+  return 0 unless scalar(@attributes) == scalar(@{$other->get_attributes()});
+  foreach my $attribute (@attributes) {
+    return 0 unless scalar(grep { $_->equals($attribute) } @{$other->get_attributes()});
+  }
+
+  if ($self->get_termsource()) {
+    return 0 unless $other->get_termsource();
+    return 0 unless $self->get_termsource()->equals($other->get_termsource());
+  }
+
+  return 1;
+}
+
+1;
+

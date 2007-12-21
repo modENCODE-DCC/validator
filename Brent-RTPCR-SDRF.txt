@@ -1,0 +1,18 @@
+Source Name	Characteristics [Biosample]	Term Source REF	Protocol REF	Protocol REF	Parameter Value [forward_primer]	Parameter Value [reverse_primer]	Sample Name	Protocol REF	Result Value [TA ID]	Term Source REF	Protocol REF	Result Value [dbEST ID]	Term Source REF									
+CME-L1-1	Celniker/RNA:86	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name1	Sequencing	TA-1	TA	Analysis	dbEST1	dbEST									
+CME-L1-2	Celniker/RNA:88	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name1	Sequencing	TA-1	TA	Analysis	dbEST1	dbEST									
+CME-L1-3	Celniker/RNA:90	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name1	Sequencing	TA-1	TA	Analysis	dbEST1	dbEST									
+																						
+CME-L1-1	Celniker/RNA:86	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name2	Sequencing	TA-2	TA	Analysis	dbEST2	dbEST									
+CME-L1-2	Celniker/RNA:88	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name2	Sequencing	TA-2	TA	Analysis	dbEST2	dbEST									
+CME-L1-3	Celniker/RNA:90	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name2	Sequencing	TA-2	TA	Analysis	dbEST2	dbEST									
+																						
+CME-L1-1	Celniker/RNA:86	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name3	Sequencing	TA-3	TA	Analysis	dbEST3	dbEST									
+CME-L1-2	Celniker/RNA:88	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name3	Sequencing	TA-3	TA	Analysis	dbEST3	dbEST									
+CME-L1-3	Celniker/RNA:90	ModEncodeWiki	cDNA_Preparation	PCR	primer1-F/sequence	primer1-R/sequence	CME-some-name3	Sequencing	TA-3	TA	Analysis	dbEST3	dbEST									
+																						
+
+																						
+																						
+																						
+#	"<IN YOUR FIRST EXPERIMENTS SO FAR, YOU'VE ACQUIRED YOUR RNA FROM OTHER SOURCES, WE NEED TO CREATE A PAGE THAT INDICATES HOW YOU PREPARED THE RNA>"																					
