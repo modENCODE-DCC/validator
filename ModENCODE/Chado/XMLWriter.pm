@@ -3,6 +3,7 @@ package ModENCODE::Chado::XMLWriter;
 use strict;
 use Class::Std;
 use Carp qw(croak carp);
+use HTML::Entities ();
 
 my %indent          :ATTR(                             :default<0> );
 my %indent_width    :ATTR( :name<indent_width>,        :default<2> );
@@ -46,7 +47,7 @@ sub write_chadoxml {
 
   # Write the experiment
   $self->println("<experiment>");
-  $self->println("<description>" . $experiment->get_description() . "</description>");
+  $self->println("<description>" . HTML::Entities::encode_numeric($experiment->get_description()) . "</description>");
   foreach my $applied_protocol (@{$experiment->get_applied_protocols_at_slot(0)}) {
     $self->println("<experiment_applied_protocol>");
     $self->println("<first_applied_protocol_id>" . $applied_protocol->get_chadoxml_id() . "</first_applied_protocol_id>");
@@ -101,8 +102,8 @@ sub write_applied_protocol : PRIVATE {
 sub write_protocol : PRIVATE {
   my ($self, $protocol) = @_;
   $self->println("<protocol id=\"" . $protocol->get_chadoxml_id() . "\">");
-  $self->println("<name>" . $protocol->get_name() . "</name>");
-  $self->println("<description>" . $protocol->get_description() . "</description>");
+  $self->println("<name>" . HTML::Entities::encode_numeric($protocol->get_name()) . "</name>");
+  $self->println("<description>" . HTML::Entities::encode_numeric($protocol->get_description()) . "</description>");
 
   foreach my $attribute (@{$protocol->get_attributes()}) {
     $self->println("<protocol_attribute>");
@@ -124,9 +125,9 @@ sub write_protocol : PRIVATE {
 sub write_datum {
   my ($self, $datum) = @_;
   $self->println("<data id=\"" . $datum->get_chadoxml_id() . "\">");
-  $self->println("<name>" . $datum->get_name() . "</name>");
-  $self->println("<heading>" . $datum->get_heading() . "</heading>");
-  $self->println("<value>" . $datum->get_value() . "</value>");
+  $self->println("<name>" . HTML::Entities::encode_numeric($datum->get_name()) . "</name>");
+  $self->println("<heading>" . HTML::Entities::encode_numeric($datum->get_heading()) . "</heading>");
+  $self->println("<value>" . HTML::Entities::encode_numeric($datum->get_value()) . "</value>");
 
   if ($datum->get_termsource()) {
     $self->println("<dbxref_id>");
@@ -154,9 +155,9 @@ sub write_datum {
 sub write_attribute {
   my ($self, $attribute) = @_;
   $self->println("<attribute>");
-  $self->println("<name>" . $attribute->get_name() . "</name>");
-  $self->println("<heading>" . $attribute->get_heading() . "</heading>");
-  $self->println("<value>" . $attribute->get_value() . "</value>");
+  $self->println("<name>" . HTML::Entities::encode_numeric($attribute->get_name()) . "</name>");
+  $self->println("<heading>" . HTML::Entities::encode_numeric($attribute->get_heading()) . "</heading>");
+  $self->println("<value>" . HTML::Entities::encode_numeric($attribute->get_value()) . "</value>");
 
   if ($attribute->get_termsource()) {
     $self->println("<dbxref_id>");
@@ -176,8 +177,8 @@ sub write_attribute {
 sub write_cvterm {
   my ($self, $cvterm) = @_;
   $self->println("<cvterm>");
-  $self->println("<name>" . $cvterm->get_name() . "</name>");
-  $self->println("<definition>" . $cvterm->get_definition() . "</definition>");
+  $self->println("<name>" . HTML::Entities::encode_numeric($cvterm->get_name()) . "</name>");
+  $self->println("<definition>" . HTML::Entities::encode_numeric($cvterm->get_definition()) . "</definition>");
   
   if ($cvterm->get_cv()) {
     $self->println("<cv_id>");
@@ -197,16 +198,16 @@ sub write_cvterm {
 sub write_cv {
   my ($self, $cv) = @_;
   $self->println("<cv>");
-  $self->println("<name>" . $cv->get_name() . "</name>");
-  $self->println("<definition>" . $cv->get_definition() . "</definition>");
+  $self->println("<name>" . HTML::Entities::encode_numeric($cv->get_name()) . "</name>");
+  $self->println("<definition>" . HTML::Entities::encode_numeric($cv->get_definition()) . "</definition>");
   $self->println("</cv>");
 }
 
 sub write_dbxref : PRIVATE {
   my ($self, $dbxref) = @_;
   $self->println("<dbxref>");
-  $self->println("<accession>" . $dbxref->get_accession() . "</accession>");
-  $self->println("<version>" . $dbxref->get_version() . "</version>");
+  $self->println("<accession>" . HTML::Entities::encode_numeric($dbxref->get_accession()) . "</accession>");
+  $self->println("<version>" . HTML::Entities::encode_numeric($dbxref->get_version()) . "</version>");
   $self->println("<db_id>");
   $self->write_db($dbxref->get_db());
   $self->println("</db_id>");
@@ -215,7 +216,11 @@ sub write_dbxref : PRIVATE {
 
 sub write_db : PRIVATE {
   my ($self, $db) = @_;
-  $self->println("<db><name>" . $db->get_name() . "</name></db>");
+  $self->println("<db>");
+  $self->println("<name>" . HTML::Entities::encode_numeric($db->get_name()) . "</name>");
+  $self->println("<url>" . HTML::Entities::encode_numeric($db->get_url()) . "</url>");
+  $self->println("<description>" . HTML::Entities::encode_numeric($db->get_description()) . "</description>");
+  $self->println("</db>");
 }
 
 sub println {

@@ -46,6 +46,7 @@ sub set_termsource {
 sub to_string {
   my ($self) = @_;
   my $string = $self->get_name();
+  $string .= "\n  Description:     " . $self->get_description() if $self->get_description();
   $string .= "\n  Attributes:      <" . join(", ", map { $_->to_string() } @{$self->get_attributes()}) . ">" if scalar(@{$self->get_attributes()});
   $string .= "\n  Term Source REF: " . $self->get_termsource()->to_string() if ($self->get_termsource());
   return $string;

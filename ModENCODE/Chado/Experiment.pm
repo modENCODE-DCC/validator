@@ -63,6 +63,18 @@ sub get_applied_protocols_at_slot {
   return $applied_protocol_slots{ident $self}->[$slot] || [];
 }
 
+sub add_properties {
+  my ($self, $properties) = @_;
+  if (defined($properties)) {
+    if (ref($properties) ne 'ARRAY') {
+      $properties = [ $properties ];
+    }
+    foreach my $property (@$properties) {
+      $self->add_property($property);
+    }
+  }
+}
+
 sub add_property {
   my ($self, $property) = @_;
   ($property->isa('ModENCODE::Chado::ExperimentProp')) or croak("Can't add a " . ref($property) . " as a property.");
@@ -73,7 +85,7 @@ sub to_string {
   my ($self) = @_;
   my $string = "Experiment (" . $self->get_description() . ")\n";
   $string .= "  with properties [";
-  $string .= join(", ", map { $_->to_string() } @{$self->get_properties()});
+  $string .= "\n    " . join("\n    ", map { $_->to_string() } @{$self->get_properties()}) . "\n  " if scalar(@{$self->get_properties()});
   $string .= "]\n  has applied_protocols:\n";
   my @proto_slots = @{$self->get_applied_protocol_slots()};
   for (my $i = 0; $i < scalar(@proto_slots); $i++) {

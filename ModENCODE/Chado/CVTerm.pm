@@ -4,6 +4,9 @@ use strict;
 use Class::Std;
 use Carp qw(croak);
 
+use ModENCODE::Chado::DB;
+use ModENCODE::Chado::DBXref;
+
 # Attributes
 my %name             :ATTR( :name<name>,                :default<''> );
 my %definition       :ATTR( :name<definition>,          :default<''> );

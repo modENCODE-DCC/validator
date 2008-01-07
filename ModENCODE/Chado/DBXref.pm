@@ -6,7 +6,7 @@ use Carp qw(croak);
 
 # Attributes
 my %accession        :ATTR( :name<accession>,           :default<''> );
-my %version          :ATTR( :name<version>,             :default<''> );
+my %version          :ATTR( :name<version>,             :default<undef> );
 
 # Relationships
 my %db               :ATTR( :get<db>,                   :default<undef> );
@@ -28,7 +28,9 @@ sub set_db {
 sub to_string {
   my ($self) = @_;
   my $string = "[REF:" . $self->get_db()->to_string() . ".";
-  $string .= ($self->get_accession() || "xxx") . "]";
+  $string .= ($self->get_accession() || "xxx");
+  $string .= "(" . $self->get_version() . ")" if defined($self->get_version());
+  $string .= "]";
   return $string;
 }
 
