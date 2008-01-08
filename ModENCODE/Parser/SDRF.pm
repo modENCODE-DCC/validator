@@ -68,7 +68,7 @@ sub BUILD {
                                         }
                                         | <error>
 
-    end_of_line:                        <skip:'[" \t\r]*'> /\Z/
+    end_of_line:                        <skip:'[" \t\n\r]*'> /\Z/
 
     ## # # # # # # # # # # # # ##
     # PROTOCOL                  #
@@ -245,7 +245,7 @@ sub BUILD {
                                         /([^\t"\[\(]+)[ "]*/
                                         { 
                                           $return = $1;
-                                          $return =~ s/^\s*|\s*$//g;
+                                          $return =~ s/^\s*|\s*[\r\n]+//g;
                                         }
 
     term_source_header:                 /Term *Source *REF/i
@@ -290,12 +290,12 @@ sub parse {
     close FH;
   }
   $document =~ s/\A [" ]*/\t/gxms;
+  $document =~ s/\015[^\012]/\n/g; # Replace old-style Mac CR endings with LFs like a regular OS
   my $parser = $self->_get_parser();
   open DOC, '<', \$document;
 
   # Parse header line
   my $header = <DOC>;
-  chop($header);
   my $parse_results = $parser->SDRF_header($header) or croak "Couldn't parse header line";
   my ($row_parser, $num_applied_protocols) = @$parse_results;
 
@@ -306,7 +306,7 @@ sub parse {
 
   # Parse the rest of the file
   while (my $line = <DOC>) {
-    chop($line);
+    $line =~ s/[\r\n]*$//g;
     next if $line =~ m/^\s*#/; # Skip comments
     next if $line =~ m/^\s*$/; # Skip blank lines
 

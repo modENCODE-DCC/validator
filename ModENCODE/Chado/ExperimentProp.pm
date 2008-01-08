@@ -34,4 +34,14 @@ sub to_string {
   return $string;
 }
 
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::ExperimentProp({
+      'value' => $self->get_value(),
+      'rank' => $self->get_rank(),
+    });
+  $clone->set_type($self->get_type()->clone());
+  return $clone;
+}
+
 1;

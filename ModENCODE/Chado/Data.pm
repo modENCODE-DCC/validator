@@ -96,4 +96,20 @@ sub equals {
   return 1;
 }
 
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::Data({
+      'name' => $self->get_name(),
+      'heading' => $self->get_heading(),
+      'value' => $self->get_value(),
+      'chadoxml_id' => $self->get_chadoxml_id(),
+    });
+  foreach my $attribute (@{$self->get_attributes()}) {
+    $clone->add_attribute($attribute->clone());
+  }
+  $clone->set_termsource($self->get_termsource()->clone());
+  $clone->set_type($self->get_type()->clone());
+  return $clone;
+}
+
 1;

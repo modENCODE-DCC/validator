@@ -22,4 +22,13 @@ sub equals {
   return 1;
 }
 
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::CV({
+      'name' => $self->get_name(),
+      'definition' => $self->get_definition(),
+    });
+  return $clone;
+}
+
 1;

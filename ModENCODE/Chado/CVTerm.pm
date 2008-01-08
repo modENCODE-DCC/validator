@@ -73,4 +73,14 @@ sub equals {
   return 1;
 }
 
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::CVTerm({
+      'name' => $self->get_name(),
+      'definition' => $self->get_definition(),
+    });
+  $clone->set_cv($self->get_cv()->clone());
+  $clone->set_dbxref($self->get_dbxref()->clone());
+  return $clone;
+}
 1;

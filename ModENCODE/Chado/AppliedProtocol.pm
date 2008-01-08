@@ -88,4 +88,19 @@ sub equals {
   return 1;
 }
 
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::AppliedProtocol({
+      'chadoxml_id' => $self->get_chadoxml_id(),
+    });
+  foreach my $input_datum (@{$self->get_input_data()}) {
+    $clone->add_input_datum($input_datum->clone());
+  }
+  foreach my $output_datum (@{$self->get_output_data()}) {
+    $clone->add_output_datum($output_datum->clone());
+  }
+  $clone->set_protocol($self->get_protocol()->clone());
+  return $clone;
+}
+
 1;

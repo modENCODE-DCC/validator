@@ -121,4 +121,22 @@ sub equals {
 
   return 1;
 }
+
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::Experiment({
+      'description' => $self->get_description(),
+    });
+  my $applied_protocol_slots = $self->get_applied_protocol_slots();
+  for (my $i = 0; $i < scalar(@{$applied_protocol_slots}); $i++) {
+    foreach my $applied_protocol (@{$applied_protocol_slots->[$i]}) {
+      $clone->add_applied_protocol_to_slot($applied_protocol, $i);
+    }
+  }
+  foreach my $property (@{$self->get_properties()}) {
+    $clone->add_property($property->clone());
+  }
+  return $clone;
+}
+
 1;

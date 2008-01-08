@@ -28,4 +28,14 @@ sub equals {
   return 1;
 }
 
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::DB({
+      'name' => $self->get_name(),
+      'url' => $self->get_url(),
+      'description' => $self->get_description(),
+    });
+  return $clone;
+}
+
 1;

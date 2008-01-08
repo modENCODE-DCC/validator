@@ -48,4 +48,14 @@ sub equals {
   return 1;
 }
 
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::DBXref({
+      'accession' => $self->get_accession(),
+      'version' => $self->get_version(),
+    });
+  $clone->set_db($self->get_db()->clone());
+  return $clone;
+}
+
 1;

@@ -72,5 +72,18 @@ sub equals {
   return 1;
 }
 
-1;
+sub clone {
+  my ($self) = @_;
+  my $clone = new ModENCODE::Chado::Protocol({
+      'name' => $self->get_name(),
+      'description' => $self->get_description(),
+      'chadoxml_id' => $self->get_chadoxml_id(),
+    });
+  foreach my $attribute (@{$self->get_attributes()}) {
+    $clone->add_attribute($attribute->clone());
+  }
+  $clone->set_termsource($self->get_termsource()->clone());
+  return $clone;
+}
 
+1;

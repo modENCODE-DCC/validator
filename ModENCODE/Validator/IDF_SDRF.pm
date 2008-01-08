@@ -12,6 +12,7 @@ my %termsources      :ATTR( :name<termsources> );
 sub validate {
   my ($self, $sdrf_experiment) = @_;
   my $success = 1;
+  $sdrf_experiment = $sdrf_experiment->clone(); # Don't actually change the SDRF that was passed in
   # First, just copy over all the experiment attributes
   $sdrf_experiment->add_properties($self->get_idf_experiment()->get_properties());
   # Protocols
@@ -83,6 +84,8 @@ sub validate {
     print STDERR "The following term source(s) are referred to in the SDRF but not defined in the IDF!\n  '" . join("', '", map { $_->get_name() } @undefined_term_sources) . "'\n";
     $success = 0;
   }
+
+  # Merge IDF data into the SDRF
 
   return $success;
 }
