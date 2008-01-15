@@ -288,6 +288,8 @@ sub parse {
     open FH, "<$document" or croak "Couldn't read file $document";
     $document = <FH>;
     close FH;
+  } else {
+    croak "Can't find file '$document'";
   }
   $document =~ s/\A [" ]*/\t/gxms;
   $document =~ s/\015[^\012]/\n/g; # Replace old-style Mac CR endings with LFs like a regular OS

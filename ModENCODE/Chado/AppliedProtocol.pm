@@ -58,9 +58,10 @@ sub set_protocol {
 
 sub to_string {
   my ($self) = @_;
-  my $string = "Applied Protocol \"" . $self->get_protocol()->to_string() . "\"->";
+  my $string = "Applied Protocol \"" . $self->get_protocol()->get_name() . "\"->";
   $string .= "(" . join(", ", map { $_->to_string() } @{$self->get_input_data()}) . ")";
   $string .= " = (" . join(", ", map { $_->to_string() } @{$self->get_output_data()}) . ")";
+  $string .= "\n    with protocol: " . $self->get_protocol->to_string();
   return $string;
 }
 

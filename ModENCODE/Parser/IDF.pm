@@ -67,6 +67,26 @@ sub BUILD {
                                               'value' => $experiment->{'Experimental Design'}->[0],
                                               'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Design', 'cv' => $modencode_cv}),
                                             });
+                                          if (defined($experiment->{'Experimental Design'})) {
+                                            for (my $i = 0; $i < scalar(@{$experiment->{'Experimental Design'}}); $i++) {
+                                              my $design_name = $experiment->{'Experimental Design'}->[$i];
+                                              my $design_termsource = $experiment->{'Experimental Design Term Source REF'}->[$i];
+                                              if (length($design_name)) {
+                                                push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'value' => $design_name,
+                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Design', 'cv' => $modencode_cv}),
+                                                    'rank' => $i,
+                                                  });
+                                              }
+                                              if (length($design_termsource)) {
+                                                push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'value' => $design_termsource,
+                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Design Term Source REF', 'cv' => $modencode_cv}),
+                                                    'rank' => $i,
+                                                  });
+                                              }
+                                            }
+                                          }
                                           if (defined($experiment->{'Experimental Factor Name'})) {
                                             for (my $i = 0; $i < scalar(@{$experiment->{'Experimental Factor Name'}}); $i++) {
                                               my $factor_name = $experiment->{'Experimental Factor Name'}->[$i];
@@ -110,11 +130,18 @@ sub BUILD {
                                           push @{$experiment->{'Investigation Title'}}, @{$item[4]};
                                         }
 
-  experimental_design_heading:          /Experimental *Design/i
-  experimental_design:                  <skip:'[\r\n \t]*'> experimental_design_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  experimental_design:                  experimental_design_name experimental_design_term_source_ref(?)
+  experimental_design_name_heading:     /Experimental *Design/i
+  experimental_design_name:             <skip:'[\r\n \t]*'> experimental_design_name_heading <skip:'[ "]*\t[ "]*'> field_value(s)
                                         { 
                                           $experiment->{'Experimental Design'} = [] if (!defined($experiment->{'Experimental Design'}));
                                           push @{$experiment->{'Experimental Design'}}, @{$item[4]};
+                                        }
+  experimental_design_termsource_heading: /Experimental *Design *Term *Source *REF/i
+  experimental_design_term_source_ref:  <skip:'[\r\n \t]*'> experimental_design_termsource_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+                                        { 
+                                          $experiment->{'Experimental Design Term Source REF'} = [] if (!defined($experiment->{'Experimental Design Term Source REF'}));
+                                          push @{$experiment->{'Experimental Design Term Source REF'}}, @{$item[4]};
                                         }
 
   experimental_factor:                  experimental_factor_name experimental_factor_type(?) experimental_factor_term_source_ref(?)
@@ -565,6 +592,8 @@ sub parse {
     open FH, "<$document" or croak "Couldn't read file $document";
     $document = <FH>;
     close FH;
+  } else {
+    croak "Can't find file '$document'";
   }
   $document =~ s/\A [" ]*/\t/gxms;
   my $parser = $self->_get_parser();

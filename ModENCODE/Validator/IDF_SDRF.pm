@@ -9,12 +9,69 @@ my %idf_experiment   :ATTR( :name<idf_experiment> );
 my %protocols        :ATTR( :name<protocols> );
 my %termsources      :ATTR( :name<termsources> );
 
+sub merge {
+  my ($self, $sdrf_experiment) = @_;
+  $sdrf_experiment = $sdrf_experiment->clone(); # Don't actually change the SDRF that was passed in
+
+  # Copy basic experiment attributes from IDF experiment object to SDRF experiment object
+  $sdrf_experiment->add_properties($self->get_idf_experiment()->get_properties());
+
+  # Update SDRF protocols with additional information from IDF
+  my @sdrf_protocols;
+  foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
+    foreach my $applied_protocol (@$applied_protocol_slots) {
+      push @sdrf_protocols, $applied_protocol->get_protocol();
+    }
+  }
+  foreach my $sdrf_protocol (@sdrf_protocols) {
+    my ($idf_protocol) = grep { $_->get_name() eq $sdrf_protocol->get_name() } @{$self->get_protocols()};
+    if (length($idf_protocol->get_description())) {
+      $sdrf_protocol->set_description($idf_protocol->get_description());
+      foreach my $attribute (@{$idf_protocol->get_attributes()}) {
+        $sdrf_protocol->add_attribute($attribute);
+      }
+    }
+  }
+
+  # Update SDRF term sources (DBXrefs and their DBs) with information from IDF
+  my @sdrf_terms;
+  foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
+    foreach my $applied_protocol (@$applied_protocol_slots) {
+      if ($applied_protocol->get_protocol()) {
+        if ($applied_protocol->get_protocol()->get_termsource() && $applied_protocol->get_protocol()->get_termsource()->get_db()) {
+          push @sdrf_terms, $applied_protocol->get_protocol()->get_termsource();
+        }
+        foreach my $attribute (@{$applied_protocol->get_protocol->get_attributes()}) {
+          if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
+            push @sdrf_terms, $attribute->get_termsource();
+          }
+        }
+      }
+      foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
+        if ($datum->get_termsource() && $datum->get_termsource()->get_db()) {
+          push @sdrf_terms, $datum->get_termsource();
+        }
+        foreach my $attribute (@{$datum->get_attributes()}) {
+          if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
+            push @sdrf_terms, $attribute->get_termsource();
+          }
+        }
+      }
+    }
+  }
+  foreach my $sdrf_term (@sdrf_terms) {
+    my ($idf_term) = grep { $_->get_db()->get_name() eq $sdrf_term->get_db()->get_name() } @{$self->get_termsources()};
+    $sdrf_term->set_db($idf_term->get_db());
+    $sdrf_term->set_version($idf_term->get_version());
+  }
+
+  return $sdrf_experiment;
+}
+
 sub validate {
   my ($self, $sdrf_experiment) = @_;
   my $success = 1;
   $sdrf_experiment = $sdrf_experiment->clone(); # Don't actually change the SDRF that was passed in
-  # First, just copy over all the experiment attributes
-  $sdrf_experiment->add_properties($self->get_idf_experiment()->get_properties());
   # Protocols
   #   Get all the protocols from the sdrf_experiment and make sure they exist in the idf
   my @sdrf_protocols;
@@ -84,8 +141,6 @@ sub validate {
     print STDERR "The following term source(s) are referred to in the SDRF but not defined in the IDF!\n  '" . join("', '", map { $_->get_name() } @undefined_term_sources) . "'\n";
     $success = 0;
   }
-
-  # Merge IDF data into the SDRF
 
   return $success;
 }
