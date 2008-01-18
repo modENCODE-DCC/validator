@@ -17,18 +17,39 @@ sub merge {
   $sdrf_experiment->add_properties($self->get_idf_experiment()->get_properties());
 
   # Update SDRF protocols with additional information from IDF
-  my @sdrf_protocols;
+  my @sdrf_applied_protocols;
   foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      push @sdrf_protocols, $applied_protocol->get_protocol();
-    }
+    push @sdrf_applied_protocols, (@$applied_protocol_slots);
   }
+  my @sdrf_protocols = map { $_->get_protocol() } @sdrf_applied_protocols;;
+  # Add any protocol attributes as an attribute (except for Protocol Parameters, which is special)
   foreach my $sdrf_protocol (@sdrf_protocols) {
     my ($idf_protocol) = grep { $_->get_name() eq $sdrf_protocol->get_name() } @{$self->get_protocols()};
     if (length($idf_protocol->get_description())) {
       $sdrf_protocol->set_description($idf_protocol->get_description());
       foreach my $attribute (@{$idf_protocol->get_attributes()}) {
+        next if $attribute->get_heading() =~ m/^\s*Protocol *Parameters?/i;
         $sdrf_protocol->add_attribute($attribute);
+      }
+    }
+  }
+  # Parameters
+  #   Remove any named "inputs" from applied protocols that aren't listed as protocol parameters in the IDF
+  foreach my $sdrf_applied_protocol (@sdrf_applied_protocols) {
+    my $sdrf_protocol = $sdrf_applied_protocol->get_protocol();
+    my ($idf_protocol) = grep { $_->get_name() eq $sdrf_protocol->get_name() } @{$self->get_protocols()};
+    my ($parameters) = grep { $_->get_heading() =~ m/^\s*Protocol Parameters?\s*$/ } @{$idf_protocol->get_attributes()};
+    my @idf_params; @idf_params = split /\s*;\s*/, $parameters->get_value() if (defined($parameters));
+    my @remove_these_data;
+    foreach my $datum (@{$sdrf_applied_protocol->get_input_data()}) {
+      if (defined($datum->get_name()) && length($datum->get_name())) {
+        my @matching_params = grep { $_ eq $datum->get_name() } @idf_params;;
+        if (!scalar(@matching_params)) {
+          print $sdrf_applied_protocol->to_string() . "\n";
+          print STDERR "Removing datum '" . $datum->get_name . "' as input from '" . $sdrf_protocol->get_name() . "'; not found in IDF's Protocol Parameters.\n";
+          $sdrf_applied_protocol->remove_input_datum($datum);
+          print $sdrf_applied_protocol->to_string() . "\n";
+        }
       }
     }
   }
@@ -93,8 +114,47 @@ sub validate {
     print STDERR "The following protocol(s) are referred to in the SDRF but not defined in the IDF!\n  '" . join("', '", map { $_->get_name() } @undefined_protocols) . "'\n";
     $success = 0;
   }
+  # Parameters
+  #   Make sure all the protocol parameters in the IDF exist in the SDRF and vice versa
+  #   Collect all of the parameters (by protocol) used in the SDRF from Protocol Attributes, Data, and Data Attributes
+  my %named_fields;
+  foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
+    foreach my $applied_protocol (@$applied_protocol_slots) {
+      my $protocol = $applied_protocol->get_protocol();
+      my $protocol_name = $protocol->get_name();
+      $named_fields{$protocol_name} = [] unless defined($named_fields{$protocol_name});
+      foreach my $protocol_attribute (@{$protocol->get_attributes()}) {
+        if (defined($protocol_attribute->get_name()) && length($protocol_attribute->get_name())) {
+          push @{$named_fields{$protocol_name}}, $protocol_attribute->get_name();
+        }
+      }
+      foreach my $datum (@{$applied_protocol->get_input_data()}) {
+        if (defined($datum->get_name()) && length($datum->get_name())) {
+          push @{$named_fields{$protocol_name}}, $datum->get_name();
+        }
+        foreach my $datum_attribute (@{$datum->get_attributes()}) {
+          if (defined($datum_attribute->get_name()) && length($datum_attribute->get_name())) {
+            push @{$named_fields{$protocol_name}}, $datum_attribute->get_name();
+          }
+        }
+      }
+    }
+  }
+  foreach my $idf_protocol (@{$self->get_protocols()}) {
+    my ($parameters) = grep { $_->get_heading() =~ m/^\s*Protocol Parameters?\s*$/ } @{$idf_protocol->get_attributes()};
+    my @idf_params; @idf_params = split /\s*;\s*/, $parameters->get_value() if (defined($parameters));
+    my @sdrf_params = defined($named_fields{$idf_protocol->get_name()}) ? @{$named_fields{$idf_protocol->get_name()}} : ();
+    # Make sure all IDF params are in the SDRF
+    foreach my $idf_param (@idf_params) {
+      my @matching_param = grep { $_ eq $idf_param } @sdrf_params;
+      if (!scalar(@matching_param)) {
+        print STDERR "Unable to find the '$idf_param' field in the SDRF even though it is defined in the IDF.\n";
+        $success = 0;
+      }
+    }
+  }
   # Term sources
-  # Collect term source DBXrefs from Protocols, Attributes, Datas
+  #   Collect term source DBXrefs from Protocols, Attributes, Datas
   my @term_source_dbs;
   foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {

@@ -93,6 +93,10 @@ sub BUILD {
                                           { $return = sub { return { 'direction' => 'input', 'datum' => &{$item[1]}(@_) } } }
                                         | parameter_file
                                           { $return = sub { return { 'direction' => 'input', 'datum' => &{$item[1]}(@_) } } }
+                                        | array_design_ref
+                                          { $return = sub { return { 'direction' => 'input', 'datum' => &{$item[1]}(@_) } } }
+                                        | hybridization_name
+                                          { $return = sub { return { 'direction' => 'input', 'datum' => &{$item[1]}(@_) } } }
 
     output:                             result 
                                           { $return = sub { return { 'direction' => 'output', 'datum' => &{$item[1]}(@_) } } }
@@ -127,6 +131,28 @@ sub BUILD {
                                             my $value = shift(@$values);
                                             my $type = 'modtab:file';
                                             return $self->create_input($item[1], $value, $item[3], $type, undef, $item[5], $values);
+                                          };
+                                        }
+
+    array_design_ref_heading:           /Array *Design *REF/i
+    array_design_ref:                   array_design_ref_heading <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+                                        { 
+                                          $return = sub {
+                                            my ($self, $values) = @_;
+                                            my $value = shift(@$values);
+                                            my $type = undef;
+                                            return $self->create_input($item[1], $value, $item[3], $type, $item[5], $item[6], $values);
+                                          };
+                                        }
+
+    hybridization_name_heading:         /Hybridization *Names?/i
+    hybridization_name:                 hybridization_name_heading <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+                                        { 
+                                          $return = sub {
+                                            my ($self, $values) = @_;
+                                            my $value = shift(@$values);
+                                            my $type = undef;
+                                            return $self->create_input($item[1], $value, $item[3], $type, $item[5], $item[6], $values);
                                           };
                                         }
 
@@ -353,6 +379,7 @@ sub parse {
         my $anonymous_datum = new ModENCODE::Chado::Data({
             'heading' => "Anonymous Datum #" . $anonymous_data_num++,
             'type' => $type,
+            'anonymous' => 1,
           });
         $previous_applied_protocol->add_output_datum($anonymous_datum);
         $next_applied_protocol->add_input_datum($anonymous_datum);

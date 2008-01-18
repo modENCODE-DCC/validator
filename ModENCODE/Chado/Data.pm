@@ -10,6 +10,7 @@ my %name             :ATTR( :name<name>,                :default<''> );
 my %heading          :ATTR( :name<heading>,             :default<''> );
 my %value            :ATTR( :name<value>,               :default<''> );
 my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
+my %anonymous        :ATTR( :set<anonymous>,            :init_arg<anonymous>,           :default<0> );
 
 # Relationships
 my %attributes       :ATTR( :get<attributes>,           :default<[]> );
@@ -37,6 +38,10 @@ sub BUILD {
   }
 }
 
+sub is_anonymous {
+  my ($self) = @_;
+  return $anonymous{ident $self};
+}
 
 sub set_type {
   my ($self, $type) = @_;
@@ -103,6 +108,7 @@ sub clone {
       'heading' => $self->get_heading(),
       'value' => $self->get_value(),
       'chadoxml_id' => $self->get_chadoxml_id(),
+      'anonymous' => $self->is_anonymous(),
     });
   foreach my $attribute (@{$self->get_attributes()}) {
     $clone->add_attribute($attribute->clone());

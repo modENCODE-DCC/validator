@@ -19,23 +19,26 @@ my ($experiment, $protocols, $sdrfs, $termsources) = @{$parser->parse($ARGV[0])}
 #print "\nTERMSOURCES:\n  " . join("\n  ", map { $_->to_string() } @$termsources) . "\n";
 
 # Validate IDF vs. SDRF
+print STDERR "Reading IDF...\n";
 my $idf_validator = new ModENCODE::Validator::IDF_SDRF({
     'idf_experiment' => $experiment,
     'protocols' => $protocols,
     'termsources' => $termsources,
   });
+print STDERR "  Done.\n";
+print STDERR "Validating IDF vs SDRF...\n";
+my $merged_sdrf;
 foreach my $sdrf (@$sdrfs) {
   my $success = $idf_validator->validate($sdrf);
   if ($success) { 
-#    print $sdrf->to_string();
-#    print "--------------------------------------------------------------------------------\n";
-    my $merged_sdrf = $idf_validator->merge($sdrf);
-    #print $merged_sdrf->to_string();
-#    print "================================================================================\n";
+    $merged_sdrf = $idf_validator->merge($sdrf);
   } else {
     croak "Couldn't validate SDRF vs. IDF";
   }
 }
+print STDERR "  Done.\n";
 
+print STDERR "Validating IDF and SDRF vs wiki...\n";
 my $wiki_validator = new ModENCODE::Validator::Wiki();
-$wiki_validator->validate($sdrfs->[0]);
+$wiki_validator->validate($merged_sdrf);
+print STDERR "  Done.\n";

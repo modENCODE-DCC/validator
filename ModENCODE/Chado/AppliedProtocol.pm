@@ -50,6 +50,16 @@ sub add_output_datum {
   push @{$output_data{ident $self}}, $output_datum;
 }
 
+sub remove_input_datum {
+  my ($self, $input_datum) = @_;
+  for (my $i = 0; $i < scalar(@{$input_data{ident $self}}); $i++) {
+    my $existing_datum = $input_data{ident $self}->[$i];
+    if ($existing_datum->equals($input_datum)) {
+      splice(@{$input_data{ident $self}}, $i, 1);
+    }
+  }
+}
+
 sub set_protocol {
   my ($self, $protocol) = @_;
   ($protocol->isa('ModENCODE::Chado::Protocol')) or croak("Can't add a " . ref($protocol) . " as a protocol.");
