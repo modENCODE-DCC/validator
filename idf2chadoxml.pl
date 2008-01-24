@@ -9,17 +9,17 @@ use ModENCODE::Validator::Wiki;
 use ModENCODE::Validator::TermSources;
 
 
-print "Parsing IDF and SDRF...\n";
+print STDERR "Parsing IDF and SDRF...\n";
 my $parser = new ModENCODE::Parser::IDF();
 my $writer = new ModENCODE::Chado::XMLWriter();
 
 my ($experiment, $protocols, $sdrfs, $termsources) = @{$parser->parse($ARGV[0])};
-print "Done.\n";
+print STDERR "Done.\n";
 
 #print $experiment->to_string();
-#print "\nPROTOCOLS:\n" . join("\n", map { $_->to_string() } @$protocols) . "\n";
-#print "\nSDRF:\n" . join("\n", map { $_->to_string() } @$sdrfs) . "\n";
-#print "\nTERMSOURCES:\n  " . join("\n  ", map { $_->to_string() } @$termsources) . "\n";
+#print STDERR "\nPROTOCOLS:\n" . join("\n", map { $_->to_string() } @$protocols) . "\n";
+#print STDERR "\nSDRF:\n" . join("\n", map { $_->to_string() } @$sdrfs) . "\n";
+#print STDERR "\nTERMSOURCES:\n  " . join("\n  ", map { $_->to_string() } @$termsources) . "\n";
 
 # Validate IDF vs. SDRF
 print STDERR "Validating IDF vs SDRF...\n";
@@ -57,4 +57,6 @@ print STDERR "Done.\n";
 print STDERR "Merging missing accessions and/or term names from known ontologies.\n";
 my $termsource_merged_experiment = $termsource_validator->merge($wiki_merged_experiment);
 print STDERR "Done.\n";
-print $termsource_merged_experiment->to_string();
+
+$writer->write_chadoxml($termsource_merged_experiment);
+#print $termsource_merged_experiment->to_string();

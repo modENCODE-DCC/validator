@@ -127,7 +127,7 @@ sub merge {
       }
     }
   }
-  print "  Done.\n";
+  print STDERR "  Done.\n";
   print STDERR "  Adding wiki protocol metadata to the protocol objects.\n";
   # Add protocol attributes based on wiki forms
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
@@ -197,7 +197,7 @@ sub merge {
       }
     }
   }
-  print "  Done.\n";
+  print STDERR "  Done.\n";
   return $experiment;
 }
 
@@ -259,7 +259,9 @@ sub validate {
       $protocol_defs_by_name{ident $self}->{$protocol_name} = $formdata;
     }
     # Fetch protocol descriptions from wiki based on wiki link in the Protocol Description field
+    print STDERR "    ";
     foreach my $protocol_description (@unique_protocol_descriptions) {
+      print STDERR ".";
       next unless $protocol_description =~ m/^\s*https?:\/\/wiki.modencode.org\/project/;
       my $data = SOAP::Data->name('query' => \SOAP::Data->value(
           SOAP::Data->name('url' => HTML::Entities::encode($protocol_description))->type('xsd:string'),
@@ -271,14 +273,15 @@ sub validate {
       bless($res, 'HASH');
       my $formdata = new ModENCODE::Validator::Wiki::FormData($res);
       $protocol_defs_by_url{ident $self}->{$protocol_description} = $formdata;
-      #print "Got protocol data: " . $formdata->to_string() . "\n";
     }
+    print STDERR "\n";
     print STDERR "  Done.\n";
   }
 
   # Validate wiki data vs. experiment data passed in
   print STDERR "  Verifying IDF protocols against wiki...\n";
   print STDERR "    Validating wiki CV terms...\n";
+  print STDERR "      ";
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
@@ -292,6 +295,7 @@ sub validate {
       foreach my $wiki_protocol_attr (@{$wiki_protocol_def->get_values()}) {
         if (scalar(@{$wiki_protocol_attr->get_types()}) && scalar(@{$wiki_protocol_attr->get_values()})) {
           foreach my $value (@{$wiki_protocol_attr->get_values()}) {
+            print STDERR ".";
             my ($cv, $term, $name) = $cvhandler{ident $self}->parse_term($value);
             if (!defined($cv)) { $cv = $wiki_protocol_attr->get_types()->[0]; }
             if (!$cvhandler{ident $self}->is_valid_term($cv, $term)) {
@@ -303,6 +307,7 @@ sub validate {
       }
     }
   }
+  print STDERR "\n";
   # Second, special fields need to be dealt with:
   # * "input type" and "output type" are parameter definitions, and need to be validated against the IDF
   # definitions of the same and against the actual uses of them in the SDRF

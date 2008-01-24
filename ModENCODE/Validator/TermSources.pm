@@ -22,12 +22,14 @@ sub merge {
       # Protocol
       if ($protocol->get_termsource()) {
         my ($term, $accession) = $self->get_term_and_accession($protocol->get_termsource(), $protocol->get_name());
+        $protocol->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
         $protocol->get_termsource()->set_accession($accession);
       }
       # Protocol attributes
       foreach my $attribute (@{$protocol->get_attributes()}) {
         if ($attribute->get_termsource()) {
           my ($term, $accession) = $self->get_term_and_accession($attribute->get_termsource(), $attribute->get_value());
+          $attribute->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
           $attribute->get_termsource()->set_accession($accession);
         }
       }
@@ -36,11 +38,13 @@ sub merge {
       foreach my $datum (@data) {
         if ($datum->get_termsource()) {
           my ($term, $accession) = $self->get_term_and_accession($datum->get_termsource, $datum->get_value());
+          $datum->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
           $datum->get_termsource()->set_accession($accession);
         }
         foreach my $attribute (@{$datum->get_attributes()}) {
           if ($attribute->get_termsource()) {
             my ($term, $accession) = $self->get_term_and_accession($attribute->get_termsource(), $attribute->get_value());
+            $attribute->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
             $attribute->get_termsource()->set_accession($accession);
           }
         }
@@ -56,40 +60,46 @@ sub validate {
   $experiment = $experiment->clone(); # Don't do anything to change the experiment passed in
   if (!$cvhandler{ident $self}) { $cvhandler{ident $self} = new ModENCODE::Validator::CVHandler(); }
   print STDERR "  Verifying term sources referenced in the SDRF against the terms they constrain.\n";
+  print STDERR "    ";
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
       # TERM SOURCES
       # Term sources can apply to protocols, data, and attributes (which is to say pretty much everything)
       # Protocol
+      print STDERR ".";
       if ($protocol->get_termsource() && !($self->is_valid($protocol->get_termsource(), $protocol->get_name()))) {
-        print STDERR "    Term source " . $protocol->get_termsource()->to_string() . " not valid as it applies to protocol " . $protocol->get_name() . "\n";
+        print STDERR "\n    Term source " . $protocol->get_termsource()->to_string() . " not valid as it applies to protocol " . $protocol->get_name() . "\n    ";
         $success = 0;
       }
       # Protocol attributes
       foreach my $attribute (@{$protocol->get_attributes()}) {
+        print STDERR ".";
         if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-          print STDERR "    Term source " . $attribute->get_termsource()->to_string() . " not valid as it applies to attribute " . $attribute->to_string() . " of protocol " . $protocol->get_name() . "\n";
+          print STDERR "\n    Term source " . $attribute->get_termsource()->to_string() . " not valid as it applies to attribute " . $attribute->to_string() . " of protocol " . $protocol->get_name() . "\n    ";
           $success = 0;
         }
       }
       # Data
       my @data = (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()});
       foreach my $datum (@data) {
+        print STDERR ".";
         if ($datum->get_termsource() && !($self->is_valid($datum->get_termsource(), $datum->get_value()))) {
-          print STDERR "    Term source " . $datum->get_termsource()->to_string() . " not valid as it applies to datum " . $datum->to_string() . " of protocol " . $protocol->get_name() . "\n";
+          print STDERR "\n    Term source " . $datum->get_termsource()->to_string() . " not valid as it applies to datum " . $datum->to_string() . " of protocol " . $protocol->get_name() . "\n    ";
           $success = 0;
         }
         # Data attributes
         foreach my $attribute (@{$datum->get_attributes()}) {
+          print STDERR ".";
           if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-            print STDERR "    Term source " . $attribute->get_termsource()->to_string() . " not valid as it applies to attribute " . $attribute->to_string() . " of datum " . $datum->to_string() . " of protocol " . $protocol->get_name() . "\n";
+            print STDERR "\n    Term source " . $attribute->get_termsource()->to_string() . " not valid as it applies to attribute " . $attribute->to_string() . " of datum " . $datum->to_string() . " of protocol " . $protocol->get_name() . "\n    ";
             $success = 0;
           }
         }
       }
     }
   }
+  print STDERR "\n";
   print STDERR "    Done.\n";
   return $success;
 }

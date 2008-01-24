@@ -114,7 +114,13 @@ sub add_cv {
   # Parse the ontology file
   if ($cvurltype =~ m/^OBO$/i) {
     my $parser = new GO::Parser({ 'format' => 'obo_text', 'handler' => 'obj' });
+    # Disable warning outputs here
+    open OLDERR, ">&", \*STDERR or croak "Can't hide STDERR output from GO::Parser";
+    print STDERR "(Parsing $cv...)";
+    close STDERR;
     $parser->parse($cache_filename);
+    open STDERR, ">&", \*OLDERR or croak "Can't reopen STDERR output after closing before GO::Parser";
+    print STDERR "(Done.)";
     croak "Cannot parse '" . $cache_filename . "' using " . ref($parser) unless $parser->handler->graph;
     $newcv->{'nodes'} = $parser->handler->graph->get_all_nodes;
   } elsif ($cvurltype =~ m/^OWL$/i) {

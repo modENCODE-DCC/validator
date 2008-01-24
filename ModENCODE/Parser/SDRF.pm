@@ -36,7 +36,7 @@ sub BUILD {
                                                 if (ref $sub eq 'CODE') {
                                                   push @extra_inputs, &$sub($self, $line);
                                                 } else {
-                                                  print "Not a sub: $sub\n";
+                                                  print STDERR "Not a sub: $sub\n";
                                                 }
                                               }
 
@@ -46,7 +46,7 @@ sub BUILD {
                                                 if (ref $sub eq 'CODE') {
                                                   push @protocols, &$sub($self, $line);
                                                 } else {
-                                                  print "Not a sub: $sub\n";
+                                                  print STDERR "Not a sub: $sub\n";
                                                 }
                                               }
                                               if (scalar(@$line)) {

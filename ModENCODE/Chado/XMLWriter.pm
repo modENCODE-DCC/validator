@@ -48,6 +48,11 @@ sub write_chadoxml {
   # Write the experiment
   $self->println("<experiment>");
   $self->println("<description>" . HTML::Entities::encode_numeric($experiment->get_description()) . "</description>");
+  foreach my $experiment_property (@{$experiment->get_properties()}) {
+    $self->println("<experiment_prop_id>");
+    $self->write_experiment_prop($experiment_property);
+    $self->println("</experiment_prop_id>");
+  }
   foreach my $applied_protocol (@{$experiment->get_applied_protocols_at_slot(0)}) {
     $self->println("<experiment_applied_protocol>");
     $self->println("<first_applied_protocol_id>" . $applied_protocol->get_chadoxml_id() . "</first_applied_protocol_id>");
@@ -120,6 +125,26 @@ sub write_protocol : PRIVATE {
   }
 
   $self->println("</protocol>");
+}
+
+sub write_experiment_prop {
+  my ($self, $experiment_prop) = @_;
+  $self->println("<experiment_prop>");
+  $self->println("<name>" . HTML::Entities::encode_numeric($experiment_prop->get_name()) . "</name>");
+  $self->println("<value>" . HTML::Entities::encode_numeric($experiment_prop->get_value()) . "</value>");
+  $self->println("<rank>" . HTML::Entities::encode_numeric($experiment_prop->get_rank()) . "</rank>");
+  if ($experiment_prop->get_termsource()) {
+    $self->println("<dbxref_id>");
+    $self->write_dbxref($experiment_prop->get_termsource());
+    $self->println("</dbxref_id>");
+  }
+
+  if ($experiment_prop->get_type()) {
+    $self->println("<type_id>");
+    $self->write_cvterm($experiment_prop->get_type());
+    $self->println("</type_id>");
+  }
+  $self->println("</experiment_prop>");
 }
 
 sub write_datum {

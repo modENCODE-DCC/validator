@@ -402,6 +402,20 @@ sub load_experiment {
       'description' => $row->{'description'},
       'applied_protocol_slots' => $self->get_normalized_protocol_slots(),
     });
+  my $experiment_prop_sth = $self->get_dbh()->prepare("SELECT name, type_id, dbxref_id, value, rank FROM experiment_prop WHERE experiment_id = ?");
+  $experient_prop_sth->execute($experiment_id);
+  while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
+    my $property = new ModENCODE::Chado::ExperimentProp({
+        'name' => $row->{'name'},
+        'value' => $row->{'value'},
+        'rank' => $row->{'rank'},
+      });
+    my $termsource = $self->get_termsource($row->{'dbxref_id'};
+    $property->set_termsource($termsource) if $termsource;
+    my $type = $self->get_type($row->{'type_id'};
+    $property->set_type($type) if $type;
+    $experiment{ident $self}->add_property($property);
+  }
 }
 
 sub get_applied_protocol {
