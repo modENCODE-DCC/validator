@@ -5,14 +5,20 @@ use Class::Std;
 use Carp qw(croak);
 
 # Attributes
+my %name             :ATTR( :name<name> );
 my %value            :ATTR( :name<value>,               :default<''> );
 my %rank             :ATTR( :name<rank>,                :default<0> );
 
 # Relationships
+my %termsource       :ATTR( :get<termsource>,           :default<undef> );
 my %type             :ATTR( :get<type>,                 :default<undef> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
+  my $termsource = $args->{'termsource'};
+  if (defined($termsource)) {
+    $self->set_termsource($termsource);
+  }
   my $type = $args->{'type'};
   if (defined($type)) {
     $self->set_type($type);
@@ -25,18 +31,27 @@ sub set_type {
   $type{ident $self} = $type;
 }
 
+sub set_termsource {
+  my ($self, $this_termsource) = @_;
+  ($this_termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($this_termsource) . " as a termsource.");
+  $termsource{ident $self} = $this_termsource;
+}
+
 sub to_string {
   my ($self) = @_;
   my $string;
   $string .= $self->get_rank() . ":" if (defined($self->get_rank()));
-  $string .= $self->get_type()->to_string() . "=" if $self->get_type();
-  $string .= "'" . $self->get_value() . "'";
+  $string .= $self->get_name() if $self->get_name();
+  $string .= "<" . $self->get_type()->to_string() . ">" if $self->get_type();
+  $string .= $self->get_termsource()->to_string() if $self->get_termsource();
+  $string .= "='" . $self->get_value() . "'";
   return $string;
 }
 
 sub clone {
   my ($self) = @_;
   my $clone = new ModENCODE::Chado::ExperimentProp({
+      'name' => $self->get_name(),
       'value' => $self->get_value(),
       'rank' => $self->get_rank(),
     });

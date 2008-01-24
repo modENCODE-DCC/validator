@@ -230,7 +230,7 @@ sub BUILD {
                                           };
                                         }
 
-    array_data_file_header:             /Array *Data *Files?/i
+    array_data_file_header:             /(Derived)? *Array *Data *Files?/i
     array_data_file:                    array_data_file_header <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {

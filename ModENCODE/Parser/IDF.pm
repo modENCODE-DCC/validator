@@ -58,31 +58,27 @@ sub BUILD {
                                         {
                                           # Convert experiment hash into experiment properties
                                           my @experiment_properties;
-                                          my $modencode_cv = new ModENCODE::Chado::CV({'name' => 'modencode'});
                                           push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                               'value' => $experiment->{'Investigation Title'}->[0],
-                                              'type' => new ModENCODE::Chado::CVTerm({'name' => 'Investigation Title', 'cv' => $modencode_cv}),
-                                            });
-                                          push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                              'value' => $experiment->{'Experimental Design'}->[0],
-                                              'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Design', 'cv' => $modencode_cv}),
+                                              'name' => 'Investigation Title',
+                                              'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                             });
                                           if (defined($experiment->{'Experimental Design'})) {
                                             for (my $i = 0; $i < scalar(@{$experiment->{'Experimental Design'}}); $i++) {
                                               my $design_name = $experiment->{'Experimental Design'}->[$i];
                                               my $design_termsource = $experiment->{'Experimental Design Term Source REF'}->[$i];
                                               if (length($design_name)) {
+                                                my $design_name_type = new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})});
+                                                my $design_name_dbxref;
+                                                if (length($design_termsource)) {
+                                                  $design_name_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
+                                                  $design_name_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $design_termsource })});
+                                                }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                    'value' => $design_name,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Design', 'cv' => $modencode_cv}),
-                                                    'rank' => $i,
-                                                  });
-                                              }
-                                              if (length($design_termsource)) {
-                                                push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                    'value' => $design_termsource,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Design Term Source REF', 'cv' => $modencode_cv}),
-                                                    'rank' => $i,
+                                                    'value' => $experiment->{'Experimental Design'}->[0],
+                                                    'name' => 'Experimental Design',
+                                                    'termsource' => $design_name_dbxref,
+                                                    'type' => $design_name_type,
                                                   });
                                               }
                                             }
@@ -91,25 +87,27 @@ sub BUILD {
                                             for (my $i = 0; $i < scalar(@{$experiment->{'Experimental Factor Name'}}); $i++) {
                                               my $factor_name = $experiment->{'Experimental Factor Name'}->[$i];
                                               my $factor_type = $experiment->{'Experimental Factor Type'}->[$i];
-                                              my $factor_termsource = $experiment->{'Experimental Factor Term Source REF'}->[$i];
+                                              my $factor_type_termsource = $experiment->{'Experimental Factor Term Source REF'}->[$i];
                                               if (length($factor_name)) {
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $factor_name,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Factor Name', 'cv' => $modencode_cv}),
+                                                    'name' => 'Experimental Factor Name',
+                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                     'rank' => $i,
                                                   });
                                               }
                                               if (length($factor_type)) {
+                                                my $factor_type_type = new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})});
+                                                my $factor_type_dbxref;
+                                                if (length($factor_type_termsource)) {
+                                                  $factor_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
+                                                  $factor_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $factor_type_termsource})});
+                                                }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $factor_type,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Factor Type', 'cv' => $modencode_cv}),
-                                                    'rank' => $i,
-                                                  });
-                                              }
-                                              if (length($factor_termsource)) {
-                                                push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                    'value' => $factor_termsource,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experimental Factor Term Source REF', 'cv' => $modencode_cv}),
+                                                    'name' => 'Experimental Factor Type',
+                                                    'termsource' => $factor_type_dbxref,
+                                                    'type' => $factor_type_type,
                                                     'rank' => $i,
                                                   });
                                               }
@@ -174,18 +172,37 @@ sub BUILD {
                                         {
                                           # Convert contacts hash into experiment properties
                                           my @experiment_properties;
-                                          my $modencode_cv = new ModENCODE::Chado::CV({'name' => 'modencode'});
                                           if (defined($persons->{'Person Last Name'})) {
                                             for (my $i = 0; $i < scalar(@{$persons->{'Person Last Name'}}); $i++) {
                                               foreach my $person_attrib_name (keys(%$persons)) {
+                                                next if $person_attrib_name eq 'Person Roles';
+                                                next if $person_attrib_name eq 'Person Roles Term Source REF';
                                                 my $person_attrib_value = $persons->{$person_attrib_name}->[$i];
                                                 if (length($person_attrib_value)) {
                                                   push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                       'value' => $person_attrib_value,
-                                                      'type' => new ModENCODE::Chado::CVTerm({'name' => $person_attrib_name, 'cv' => $modencode_cv}),
+                                                      'name' => $person_attrib_name,
+                                                      'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                       'rank' => $i,
                                                     });
                                                 }
+                                              }
+                                              my $person_roles = $persons->{'Person Roles'}->[$i];
+                                              my $person_roles_termsource = $persons->{'Person Roles Term Source REF'}->[$i];
+                                              if (length($person_roles)) {
+                                                my $person_roles_type = new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})});
+                                                my $person_roles_dbxref;
+                                                if (length($person_roles_termsource)) {
+                                                  $person_roles_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
+                                                  $person_roles_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $person_roles_termsource})});
+                                                }
+                                                push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'value' => $person_roles,
+                                                    'name' => 'Person Roles',
+                                                    'termsource' => $person_roles_dbxref,
+                                                    'type' => $person_roles_type,
+                                                    'rank' => $i,
+                                                  });
                                               }
                                             }
                                           }
@@ -269,22 +286,22 @@ sub BUILD {
                                         {
                                           # Convert experiment instances hash into experiment properties
                                           my @experiment_properties;
-                                          my $modencode_cv = new ModENCODE::Chado::CV({'name' => 'modencode'});
                                           if (defined($instance->{'Quality Control Type'})) {
                                             for (my $i = 0; $i < scalar(@{$instance->{'Quality Control Type'}}); $i++) {
                                               my $qc_type = $instance->{'Quality Control Type'}->[$i];
-                                              my $qc_termsource = $instance->{'Quality Control Term Source REF'}->[$i];
+                                              my $qc_type_termsource = $instance->{'Quality Control Term Source REF'}->[$i];
                                               if (length($qc_type)) {
+                                                my $qc_type_type = new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})});
+                                                my $qc_type_dbxref;
+                                                if (length($qc_type_termsource)) {
+                                                  $qc_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
+                                                  $qc_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $qc_type_termsource})});
+                                                }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $qc_type,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Quality Control Type', 'cv' => $modencode_cv}),
-                                                    'rank' => $i,
-                                                  });
-                                                }
-                                              if (length($qc_termsource)) {
-                                                push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                    'value' => $qc_termsource,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Quality Control Term Source REF', 'cv' => $modencode_cv}),
+                                                    'name' => 'Quality Control Type',
+                                                    'termsource' => $qc_type_dbxref,
+                                                    'type' => $qc_type_type,
                                                     'rank' => $i,
                                                   });
                                               }
@@ -293,18 +310,19 @@ sub BUILD {
                                           if (defined($instance->{'Replicate Type'})) {
                                             for (my $i = 0; $i < scalar(@{$instance->{'Replicate Type'}}); $i++) {
                                               my $replicate_type = $instance->{'Replicate Type'}->[$i];
-                                              my $replicate_termsource = $instance->{'Replicate Term Source REF'}->[$i];
+                                              my $replicate_type_termsource = $instance->{'Replicate Term Source REF'}->[$i];
                                               if (length($replicate_type)) {
+                                                my $replicate_type_type = new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})});
+                                                my $replicate_type_dbxref;
+                                                if (length($replicate_type_termsource)) {
+                                                  $replicate_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
+                                                  $replicate_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $replicate_type_termsource})});
+                                                }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $replicate_type,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Replicate Type', 'cv' => $modencode_cv}),
-                                                    'rank' => $i,
-                                                  });
-                                                }
-                                              if (length($replicate_termsource)) {
-                                                push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                    'value' => $replicate_termsource,
-                                                    'type' => new ModENCODE::Chado::CVTerm({'name' => 'Replicate Term Source REF', 'cv' => $modencode_cv}),
+                                                    'name' => 'Replicate Type',
+                                                    'termsource' => $replicate_type_dbxref,
+                                                    'type' => $replicate_type_type,
                                                     'rank' => $i,
                                                   });
                                               }
@@ -352,29 +370,32 @@ sub BUILD {
                                         {
                                           # Convert experiment optional_metadatas hash into experiment properties
                                           my @experiment_properties;
-                                          my $modencode_cv = new ModENCODE::Chado::CV({'name' => 'modencode'});
                                           if (defined($optional_metadata->{'Date of Experiment'}) && length($optional_metadata->{'Date of Experiment'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                 'value' => $optional_metadata->{'Date of Experiment'}->[0],
-                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'Date of Experiment', 'cv' => $modencode_cv}),
+                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'date', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+                                                'name' => 'Date of Experiment',
                                               });
                                           }
                                           if (defined($optional_metadata->{'Public Release Date'}) && length($optional_metadata->{'Public Release Date'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                 'value' => $optional_metadata->{'Public Release Date'}->[0],
-                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'Public Release Date', 'cv' => $modencode_cv}),
+                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+                                                'name' => 'Public Release Date',
                                               });
                                           }
                                           if (defined($optional_metadata->{'PubMed ID'}) && length($optional_metadata->{'PubMed ID'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                 'value' => $optional_metadata->{'PubMed ID'}->[0],
-                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'PubMed ID', 'cv' => $modencode_cv}),
+                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+                                                'name' => 'PubMed ID',
                                               });
                                           }
                                           if (defined($optional_metadata->{'Experiment Description'}) && length($optional_metadata->{'Experiment Description'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                 'value' => $optional_metadata->{'Experiment Description'}->[0],
-                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'Experiment Description', 'cv' => $modencode_cv}),
+                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+                                                'name' => 'Experiment Description',
                                               });
                                           }
                                           $return = \@experiment_properties;
@@ -414,7 +435,6 @@ sub BUILD {
                                         {
                                           # Convert protocols hash into protocol objects
                                           my @protocols;
-                                          my $modencode_cv = new ModENCODE::Chado::CV({'name' => 'modencode'});
                                           if (defined($protocols->{'Protocol Name'})) {
                                             for (my $i = 0; $i < scalar(@{$protocols->{'Protocol Name'}}); $i++) {
                                               my $protocol_name = $protocols->{'Protocol Name'}->[$i];
@@ -426,12 +446,23 @@ sub BUILD {
                                                 $protocol_obj->set_description($protocol_description);
                                               }
 
+                                              ####################################################
                                               my $protocol_type = $protocols->{'Protocol Type'}->[$i];
+                                              my $protocol_type_termsource = $protocols->{'Protocol Type Term Source REF'}->[$i];
                                               if (length($protocol_type)) {
+                                                my $protocol_type_type = new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})});
+                                                my $protocol_type_dbxref;
+                                                if (length($protocol_type_termsource)) {
+                                                  $protocol_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
+                                                  $protocol_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $protocol_type_termsource})});
+                                                }
                                                 my $protocol_type_obj = new ModENCODE::Chado::Attribute({
                                                     'heading' => 'Protocol Type',
                                                     'value' => $protocol_type,
+                                                    'termsource' => $protocol_type_dbxref,
+                                                    'type' => $protocol_type_type,
                                                   });
+                                              ####################################################
                                                 $protocol_obj->add_attribute($protocol_type_obj);
                                               }
                                               my $protocol_parameters = $protocols->{'Protocol Parameters'}->[$i];
@@ -442,15 +473,6 @@ sub BUILD {
                                                   });
                                                 $protocol_obj->add_attribute($protocol_parameters_obj);
                                               }
-                                              my $protocol_type_termsource = $protocols->{'Protocol Type Term Source REF'}->[$i];
-                                              if (length($protocol_type_termsource)) {
-                                                my $protocol_type_termsource_obj = new ModENCODE::Chado::Attribute({
-                                                    'heading' => 'Protocol Type Term Source REF',
-                                                    'value' => $protocol_type_termsource,
-                                                  });
-                                                $protocol_obj->add_attribute($protocol_type_termsource_obj);
-                                              }
-
 
                                               push @protocols, $protocol_obj;
                                             }
@@ -517,7 +539,6 @@ sub BUILD {
                                         {
                                           # Convert term sources hash into dbxref objects
                                           my @dbxrefs;
-                                          my $modencode_cv = new ModENCODE::Chado::CV({'name' => 'modencode'});
                                           if (defined($term_sources->{'Term Source Name'})) {
                                             for (my $i = 0; $i < scalar(@{$term_sources->{'Term Source Name'}}); $i++) {
                                               my $term_source_name = $term_sources->{'Term Source Name'}->[$i];

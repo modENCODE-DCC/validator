@@ -9,6 +9,7 @@ use Carp qw(croak);
 my %name             :ATTR( :name<name>,                :default<''> );
 my %heading          :ATTR( :name<heading>,             :default<''> );
 my %value            :ATTR( :name<value>,               :default<''> );
+my %rank             :ATTR( :name<rank>,                :default<0> );
 
 # Relationships
 my %termsource       :ATTR( :get<termsource>,           :default<undef> );

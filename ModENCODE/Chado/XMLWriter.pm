@@ -158,6 +158,7 @@ sub write_attribute {
   $self->println("<name>" . HTML::Entities::encode_numeric($attribute->get_name()) . "</name>");
   $self->println("<heading>" . HTML::Entities::encode_numeric($attribute->get_heading()) . "</heading>");
   $self->println("<value>" . HTML::Entities::encode_numeric($attribute->get_value()) . "</value>");
+  $self->println("<rank>" . HTML::Entities::encode_numeric($attribute->get_rank()) . "</rank>");
 
   if ($attribute->get_termsource()) {
     $self->println("<dbxref_id>");
