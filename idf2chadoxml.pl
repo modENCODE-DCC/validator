@@ -7,6 +7,7 @@ use ModENCODE::Chado::XMLWriter;
 use ModENCODE::Validator::IDF_SDRF;
 use ModENCODE::Validator::Wiki;
 use ModENCODE::Validator::TermSources;
+use ModENCODE::Validator::CVHandler;
 
 
 print STDERR "Parsing IDF and SDRF...\n";
@@ -16,47 +17,58 @@ my $writer = new ModENCODE::Chado::XMLWriter();
 my ($experiment, $protocols, $sdrfs, $termsources) = @{$parser->parse($ARGV[0])};
 print STDERR "Done.\n";
 
-#print $experiment->to_string();
-#print STDERR "\nPROTOCOLS:\n" . join("\n", map { $_->to_string() } @$protocols) . "\n";
-#print STDERR "\nSDRF:\n" . join("\n", map { $_->to_string() } @$sdrfs) . "\n";
-#print STDERR "\nTERMSOURCES:\n  " . join("\n  ", map { $_->to_string() } @$termsources) . "\n";
+my $cvhandler = new ModENCODE::Validator::CVHandler();
+# Add some ontologies that get used for hardcoded cvterms (like MO:OntologyEntry or xsd:string or modencode:anonymous_datum)
+$cvhandler->add_cv(
+  'xsd',
+  'http://wiki.modencode.org/project/extensions/DBFields/ontologies/xsd.obo',
+  'OBO',
+);
+$cvhandler->add_cv(
+  'modencode',
+  'http://wiki.modencode.org/project/extensions/DBFields/ontologies/modencode-helper.obo',
+  'OBO',
+);
+$cvhandler->add_cv(
+  'MO',
+  'http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo',
+  'OBO',
+);
 
 # Validate IDF vs. SDRF
-print STDERR "Validating IDF vs SDRF...\n";
-my $idf_validator = new ModENCODE::Validator::IDF_SDRF({
-    'idf_experiment' => $experiment,
-    'protocols' => $protocols,
-    'termsources' => $termsources,
-  });
-my $merged_sdrf;
-foreach my $sdrf (@$sdrfs) {
+  print STDERR "Validating IDF vs SDRF...\n";
+  my $idf_validator = new ModENCODE::Validator::IDF_SDRF({
+      'idf_experiment' => $experiment,
+      'protocols' => $protocols,
+      'termsources' => $termsources,
+    });
+  my $sdrf = @$sdrfs->[0];
   my $success = $idf_validator->validate($sdrf);
-  if ($success) { 
-    $merged_sdrf = $idf_validator->merge($sdrf);
-  } else {
-    croak "Couldn't validate SDRF vs. IDF";
-  }
-}
-print STDERR "Done.\n";
+  $experiment = $idf_validator->merge($sdrf);
+  print STDERR "Done.\n";
 
-print STDERR "Validating IDF and SDRF vs wiki...\n";
-my $wiki_validator = new ModENCODE::Validator::Wiki({ 
-    'termsources' => $termsources 
-  });
-$wiki_validator->validate($merged_sdrf);
-print STDERR "Done.\n";
-print STDERR "Merging wiki data into experiment...\n";
-my $wiki_merged_experiment = $wiki_validator->merge($merged_sdrf);
-print STDERR "Done.\n";
-print STDERR "Validating term sources (DBXrefs) against known ontologies.\n";
-my $termsource_validator = new ModENCODE::Validator::TermSources({
-    'termsources' => $termsources,
-  });
-$termsource_validator->validate($wiki_merged_experiment);
-print STDERR "Done.\n";
-print STDERR "Merging missing accessions and/or term names from known ontologies.\n";
-my $termsource_merged_experiment = $termsource_validator->merge($wiki_merged_experiment);
-print STDERR "Done.\n";
+  print STDERR "Validating IDF and SDRF vs wiki...\n";
+  my $wiki_validator = new ModENCODE::Validator::Wiki({ 
+      'termsources' => $termsources,
+      'cvhandler' => $cvhandler,
+    });
+  $wiki_validator->validate($experiment);
+  print STDERR "Done.\n";
+  print STDERR "Merging wiki data into experiment...\n";
+  $experiment = $wiki_validator->merge($experiment);
+  print STDERR "Done.\n";
 
-$writer->write_chadoxml($termsource_merged_experiment);
-#print $termsource_merged_experiment->to_string();
+  print STDERR "Validating term sources (DBXrefs) against known ontologies.\n";
+  my $termsource_validator = new ModENCODE::Validator::TermSources({
+      'cvhandler' => $cvhandler,
+    });
+  $termsource_validator->validate($experiment);
+  print STDERR "Done.\n";
+  print STDERR "Merging missing accessions and/or term names from known ontologies.\n";
+  $experiment = $termsource_validator->merge($experiment);
+  print STDERR "Done.\n";
+
+#$writer->write_chadoxml($experiment);
+#print STDERR $experiment->to_string();
+
+

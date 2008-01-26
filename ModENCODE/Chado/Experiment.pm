@@ -7,6 +7,7 @@ use Carp qw(croak carp);
 
 # Attributes
 my %description             :ATTR( :name<description>,            :default<''> );
+my %chadoxml_id             :ATTR( :name<chadoxml_id>,         :default<undef> );
 
 # Relationships
 my %applied_protocol_slots  :ATTR( :get<applied_protocol_slots>,  :default<[]> );
@@ -46,7 +47,6 @@ sub add_applied_protocol_to_slot {
 
   my @matching_applied_protocols = grep { $_->equals($applied_protocol) } @{$applied_protocol_slots{ident $self}->[$slot]};
   if (scalar(@matching_applied_protocols)) {
-    carp "Not adding duplicate applied_protocol\n  " . $applied_protocol->to_string() . "\nto applied_protocol_slots";
     return;
   }
 
@@ -126,6 +126,7 @@ sub clone {
   my ($self) = @_;
   my $clone = new ModENCODE::Chado::Experiment({
       'description' => $self->get_description(),
+      'chadoxml_id' => $self->get_chadoxml_id(),
     });
   my $applied_protocol_slots = $self->get_applied_protocol_slots();
   for (my $i = 0; $i < scalar(@{$applied_protocol_slots}); $i++) {

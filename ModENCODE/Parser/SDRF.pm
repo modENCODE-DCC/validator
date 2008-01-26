@@ -231,24 +231,24 @@ sub BUILD {
                                         }
 
     array_data_file_header:             /(Derived)? *Array *Data *Files?/i
-    array_data_file:                    array_data_file_header <skip:'[ "]*\t[ "]*'> attribute(s?)
+    array_data_file:                    array_data_file_header <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = 'mage:datafile';
-                                            return $self->create_input($item[1], $value, undef, $type, undef, $item[3], $values);
+                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[5], $values);
                                           };
                                         }
 
     array_matrix_data_file_header:      /Array *Matrix *Data *Files?/i
-    array_matrix_data_file:             array_matrix_data_file_header <skip:'[ "]*\t[ "]*'> attribute(s?)
+    array_matrix_data_file:             array_matrix_data_file_header <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = 'mage:datafile';
-                                            return $self->create_input($item[1], $value, undef, $type, undef, $item[3], $values);
+                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[5], $values);
                                           };
                                         }
 

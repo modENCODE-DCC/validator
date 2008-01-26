@@ -16,6 +16,7 @@ my %anonymous        :ATTR( :set<anonymous>,            :init_arg<anonymous>,   
 my %attributes       :ATTR( :get<attributes>,           :default<[]> );
 my %termsource       :ATTR( :get<termsource>,           :default<undef> );
 my %type             :ATTR( :get<type>,                 :default<undef> );
+my %feature          :ATTR( :get<feature>,              :default<undef> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -26,6 +27,10 @@ sub BUILD {
   my $type = $args->{'type'};
   if (defined($type)) {
     $self->set_type($type);
+  }
+  my $feature = $args->{'feature'};
+  if (defined($feature)) {
+    $self->set_feature($feature);
   }
   my $attributes = $args->{'attributes'};
   if (defined($attributes)) {
@@ -41,6 +46,12 @@ sub BUILD {
 sub is_anonymous {
   my ($self) = @_;
   return $anonymous{ident $self};
+}
+
+sub set_feature {
+  my ($self, $feature) = @_;
+  ($feature->isa('ModENCODE::Chado::Feature')) or croak("Can't add a " . ref($feature) . " as a feature.");
+  $feature{ident $self} = $feature;
 }
 
 sub set_type {
@@ -113,8 +124,8 @@ sub clone {
   foreach my $attribute (@{$self->get_attributes()}) {
     $clone->add_attribute($attribute->clone());
   }
-  $clone->set_termsource($self->get_termsource()->clone());
-  $clone->set_type($self->get_type()->clone());
+  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
+  $clone->set_type($self->get_type()->clone()) if $self->get_type();
   return $clone;
 }
 

@@ -55,7 +55,8 @@ sub clone {
       'value' => $self->get_value(),
       'rank' => $self->get_rank(),
     });
-  $clone->set_type($self->get_type()->clone());
+  $clone->set_type($self->get_type()->clone()) if $self->get_type();
+  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
   return $clone;
 }
 

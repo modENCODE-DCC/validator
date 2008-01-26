@@ -21,6 +21,11 @@ sub get_url : PRIVATE {
   return $useragent{ident $self}->request(new HTTP::Request('GET' => $url));
 }
 
+sub mirror_url : PRIVATE {
+  my ($self, $url, $file) = @_;
+  return $useragent{ident $self}->mirror($url, $file);
+}
+
 sub parse_term {
   my ($self, $term) = @_;
   my ($name, $cv, $term) = (undef, split(/:/, $term));
@@ -89,7 +94,7 @@ sub add_cv {
   $newcv->{'urltype'} = $cvurltype;
   $newcv->{'names'} = [ $cv ];
 
-  if ($cvurltype =~ m/^URL$/i) {
+  if ($cvurltype =~ m/^URL/i) {
     # URL-type controlled vocabs
     $cvs{ident $self}->{$cvurl} = $newcv;
     return 1;
@@ -99,16 +104,19 @@ sub add_cv {
   my $cache_filename = $cvurl . "." . $cvurltype;
   $cache_filename =~ s/\//!/g;
   $cache_filename = "ontology_cache/" . $cache_filename;
-  if (!(-r $cache_filename)) {
-    # No, fetch it
-    my $res = $self->get_url($cvurl);
-    if (!$res->is_success) {
-      carp "Couldn't fetch canonical source file" . $newcv->{'url'} . ", and no cached copy found: " . $res->status_line;
-      return 0;
+
+  # Fetch the file (mirror uses the If-Modified-Since header so we only fetch if needed)
+  my $res = $self->mirror_url($cvurl, $cache_filename);
+  if (!$res->is_success) {
+    if ($res->code == 304) {
+      print STDERR "    Using cached copy of CV for $cv; no change on server.\n";
+    } else {
+      carp "Can't fetch or check age of canonical CV source file for '$cv' at url '" . $newcv->{'url'} . "': " . $res->status_line;
+      if (!(-r $cache_filename)) {
+        carp "Couldn't fetch canonical source file '" . $newcv->{'url'} . "', and no cached copy found";
+        return 0;
+      }
     }
-    open FH, ">", $cache_filename or croak "Couldn't open ontology cache file $cache_filename for writing";
-    print FH $res->content;
-    close FH;
   }
 
   # Parse the ontology file
@@ -125,6 +133,8 @@ sub add_cv {
     $newcv->{'nodes'} = $parser->handler->graph->get_all_nodes;
   } elsif ($cvurltype =~ m/^OWL$/i) {
     croak "Can't parse OWL files yet, sorry. Please update your IDF to point to an OBO file.";
+  } elsif ($cvurl =~ m/^\s*$/ || $cvurltype =~ m/^\s*$/) {
+    return 0;
   } else {
     croak "Don't know how to parse the CV at URL: '" . $cvurl . "' of type: '" . $cvurltype . "'";
   }
@@ -140,14 +150,14 @@ sub is_valid_term {
     # This CV isn't loaded, so attempt to load it
     my $cv_exists = $self->add_cv($cvname);
     if (!$cv_exists) {
-      print STDERR "Cannot find the '$cvname' ontology, so $term is not valid.\n";
+      print STDERR "Cannot find the '$cvname' ontology, so '$term' is not valid.\n";
       return 0;
     }
     $cv = $self->get_cv_by_name($cvname);
   }
   if (!$cv->{'terms'}->{$term}) {
     # Haven't validated this term one way or the other
-    if ($cv->{'urltype'} =~ m/^URL$/) {
+    if ($cv->{'urltype'} =~ m/^URL/) {
       # URL term; have to try to get it
       my $res = $self->get_url($cv->{'url'} . $term);
       if ($res->is_success) {
@@ -193,7 +203,7 @@ sub get_accession_for_term {
   my ($self, $cvname, $term) = @_;
   my $cv = $self->get_cv_by_name($cvname);
   croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
-  if ($cv->{'urltype'} =~ m/^URL$/i) {
+  if ($cv->{'urltype'} =~ m/^URL/i) {
     return $term; # No accession other than the term for URL-based ontologies
   }
   my ($matching_node) = grep { $_->name =~ m/:?\Q$term\E$/ || $_->acc =~ m/:\Q$term\E$/ } @{$cv->{'nodes'}};
@@ -207,7 +217,7 @@ sub get_term_for_accession {
   my ($self, $cvname, $accession) = @_;
   my $cv = $self->get_cv_by_name($cvname);
   croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
-  if ($cv->{'urltype'} =~ m/^URL$/i) {
+  if ($cv->{'urltype'} =~ m/^URL/i) {
     return $accession; # No term other than the accession for URL-based ontologies
   }
   my ($matching_node) = grep { $_->acc =~ m/:\Q$accession\E$/ }  @{$cv->{'nodes'}};

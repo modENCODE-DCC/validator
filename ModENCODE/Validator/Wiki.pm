@@ -12,11 +12,17 @@ use HTML::Entities ();
 
 my %protocol_defs_by_name       :ATTR( :default<undef> );
 my %protocol_defs_by_url        :ATTR( :default<undef> );
-my %cv_name_mappings            :ATTR( :default<undef> );
 my %termsources                 :ATTR( :name<termsources> );
 my %cvhandler                   :ATTR;
 
 sub BUILD {
+  my ($self, $ident, $args) = @_;
+  my $cvhandler = $args->{'cvhandler'};
+  if (ref($cvhandler) ne 'ModENCODE::Validator::CVHandler') {
+    croak "Cannot create a ModENCODE::Validator::Wiki without a cvhandler of type ModENCODE::Validator::CVHandler";
+  }
+  $cvhandler{ident $self} = $cvhandler;
+
   # HACKY FIX TO MISSING "can('as_$typename')"
   my $old_generate_stub = *SOAP::Schema::generate_stub;
   my $new_generate_stub = sub {
@@ -65,24 +71,26 @@ sub merge {
       # Since we've validated, there can be at most one anonymous datum
       foreach my $input_datum (@{$applied_protocol->get_input_data()}) {
         my ($wiki_input_def) = grep { $_->{'name'} eq $input_datum->get_name() } @$input_type_defs_terms;
-        if (!$wiki_input_def && !($input_datum->get_name())) { 
+        if (!$wiki_input_def) { 
           ($wiki_input_def) = grep { $_->{'name'} =~ /^\s*$/ || !defined($_->{'name'}) } @$input_type_defs_terms;
           if (!$wiki_input_def && $input_datum->is_anonymous()) {
             # An automatically added anonymous datum w/ no type; leave it alone since
             # it will be used to tie together applied protocols
             next;
+          } else {
+            print STDERR "    Warning: input term '" . $input_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.\n" if ($input_datum->get_name());
           }
         }
         if (!$wiki_input_def) {
-          croak "Couldn't find the wiki definition for input '" . $input_datum->get_name() . "' in protocol " . $protocol->get_name() . " even though everything validated" 
+          croak "Couldn't find the wiki definition for input '" . $input_datum->get_name() . "' in protocol " . $protocol->get_name() . " even though everything validated";
         }
         my $cv = $wiki_input_def->{'cv'};
         my $term = $wiki_input_def->{'term'};
-        my $idf_cv = $cv_name_mappings{ident $self}->{$cv}->{'idf_cv'};
+        my $canonical_cvname = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
         $input_datum->set_type(new ModENCODE::Chado::CVTerm({
               'name' => $term,
               'cv' => new ModENCODE::Chado::CV({
-                  'name' => $idf_cv,
+                  'name' => $canonical_cvname,
                 }),
             })
         );
@@ -103,24 +111,26 @@ sub merge {
       # Since we've validated, there can be at most one anonymous datum
       foreach my $output_datum (@{$applied_protocol->get_output_data()}) {
         my ($wiki_output_def) = grep { $_->{'name'} eq $output_datum->get_name() } @$output_type_defs_terms;
-        if (!$wiki_output_def && !($output_datum->get_name())) { 
+        if (!$wiki_output_def) { 
           ($wiki_output_def) = grep { $_->{'name'} =~ /^\s*$/ || !defined($_->{'name'}) } @$output_type_defs_terms;
           if (!$wiki_output_def && $output_datum->is_anonymous()) {
             # An automatically added anonymous datum w/ no type; leave it alone since
             # it will be used to tie together applied protocols
             next;
+          } else {
+            print STDERR "    Warning: output term '" . $output_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.\n" if ($output_datum->get_name());
           }
         }
         if (!$wiki_output_def) {
-          croak "Couldn't find the wiki definition for output '" . $output_datum->get_name() . "' in protocol " . $protocol->get_name() . " even though everything validated" 
+          croak "Couldn't find the wiki definition for output '" . $output_datum->get_name() . "' in protocol " . $protocol->get_name() . " even though everything validated";
         }
         my $cv = $wiki_output_def->{'cv'};
         my $term = $wiki_output_def->{'term'};
-        my $idf_cv = $cv_name_mappings{ident $self}->{$cv}->{'idf_cv'};
+        my $canonical_cvname = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
         $output_datum->set_type(new ModENCODE::Chado::CVTerm({
               'name' => $term,
               'cv' => new ModENCODE::Chado::CV({
-                  'name' => $idf_cv,
+                  'name' => $canonical_cvname,
                 }),
             })
         );
@@ -173,11 +183,11 @@ sub merge {
             }
             # TODO: Map the CV to a Chado CV if possible
             # Set the type_id of the attribute to this term
-            my $idf_cv = $cv_name_mappings{ident $self}->{$cv}->{'idf_cv'};
+            my $canonical_cvname = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
             $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
                   'name' => $term,
                   'cv' => new ModENCODE::Chado::CV({
-                      'name' => $idf_cv,
+                      'name' => $canonical_cvname,
                     }),
                 })
             );
@@ -186,7 +196,7 @@ sub merge {
             $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({
-                      'name' => 'modencode' 
+                      'name' => 'xsd' 
                     }),
                 })
             );
@@ -197,6 +207,7 @@ sub merge {
       }
     }
   }
+
   print STDERR "  Done.\n";
   return $experiment;
 }
@@ -291,11 +302,9 @@ sub validate {
         croak "Couldn't find definition for protocol '" . $protocol->get_name() . "' with wiki-link '" . $protocol->get_description() . "'";
       }
       # First, any wiki field with a CV needs to be validated
-      if (!$cvhandler{ident $self}) { $cvhandler{ident $self} = new ModENCODE::Validator::CVHandler(); }
       foreach my $wiki_protocol_attr (@{$wiki_protocol_def->get_values()}) {
         if (scalar(@{$wiki_protocol_attr->get_types()}) && scalar(@{$wiki_protocol_attr->get_values()})) {
           foreach my $value (@{$wiki_protocol_attr->get_values()}) {
-            print STDERR ".";
             my ($cv, $term, $name) = $cvhandler{ident $self}->parse_term($value);
             if (!defined($cv)) { $cv = $wiki_protocol_attr->get_types()->[0]; }
             if (!$cvhandler{ident $self}->is_valid_term($cv, $term)) {

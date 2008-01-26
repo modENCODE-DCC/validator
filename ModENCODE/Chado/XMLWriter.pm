@@ -46,13 +46,9 @@ sub write_chadoxml {
   }
 
   # Write the experiment
-  $self->println("<experiment>");
+  $experiment->set_chadoxml_id($self->generate_uniqid("Experiment"));
+  $self->println("<experiment id=\"" . $experiment->get_chadoxml_id() . "\">");
   $self->println("<description>" . HTML::Entities::encode_numeric($experiment->get_description()) . "</description>");
-  foreach my $experiment_property (@{$experiment->get_properties()}) {
-    $self->println("<experiment_prop_id>");
-    $self->write_experiment_prop($experiment_property);
-    $self->println("</experiment_prop_id>");
-  }
   foreach my $applied_protocol (@{$experiment->get_applied_protocols_at_slot(0)}) {
     $self->println("<experiment_applied_protocol>");
     $self->println("<first_applied_protocol_id>" . $applied_protocol->get_chadoxml_id() . "</first_applied_protocol_id>");
@@ -60,6 +56,10 @@ sub write_chadoxml {
   }
   
   $self->println("</experiment>");
+  # Write the experiment properties
+  foreach my $experiment_property (@{$experiment->get_properties()}) {
+    $self->write_experiment_prop($experiment_property, $experiment);
+  }
   $self->println("</chadoxml>");
 }
 
@@ -128,8 +128,9 @@ sub write_protocol : PRIVATE {
 }
 
 sub write_experiment_prop {
-  my ($self, $experiment_prop) = @_;
+  my ($self, $experiment_prop, $experiment) = @_;
   $self->println("<experiment_prop>");
+  $self->println("<experiment_id>" . $experiment->get_chadoxml_id() . "</experiment_id>");
   $self->println("<name>" . HTML::Entities::encode_numeric($experiment_prop->get_name()) . "</name>");
   $self->println("<value>" . HTML::Entities::encode_numeric($experiment_prop->get_value()) . "</value>");
   $self->println("<rank>" . HTML::Entities::encode_numeric($experiment_prop->get_rank()) . "</rank>");
@@ -166,6 +167,12 @@ sub write_datum {
     $self->println("</type_id>");
   }
 
+  if ($datum->get_feature()) {
+    $self->println("<type_id>");
+    $self->write_feature($datum->get_feature());
+    $self->println("</type_id>");
+  }
+
   foreach my $attribute (@{$datum->get_attributes()}) {
     $self->println("<data_attribute>");
     $self->println("<attribute_id>");
@@ -175,6 +182,11 @@ sub write_datum {
   }
 
   $self->println("</data>");
+}
+
+sub write_feature {
+  my ($self, $feature) = @_;
+  croak "Don't know how to write a feature object yet";
 }
 
 sub write_attribute {

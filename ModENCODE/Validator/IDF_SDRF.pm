@@ -12,6 +12,16 @@ my %termsources      :ATTR( :name<termsources> );
 sub merge {
   my ($self, $sdrf_experiment) = @_;
   $sdrf_experiment = $sdrf_experiment->clone(); # Don't actually change the SDRF that was passed in
+  croak "Can't merge IDF & SDRF unless they validated" unless $self->validate($sdrf_experiment);
+
+  # Update IDF experiment properties with full term sources instead of just term source names
+  foreach my $experiment_prop (@{$self->get_idf_experiment()->get_properties()}) {
+    if ($experiment_prop->get_termsource()) {
+      my ($full_termsource) = grep { $_->get_db()->get_name() eq $experiment_prop->get_termsource()->get_db()->get_name() } @{$self->get_termsources()};
+      $experiment_prop->get_termsource()->set_db($full_termsource->get_db());
+      $experiment_prop->get_termsource()->set_version($full_termsource->get_version());
+    }
+  }
 
   # Copy basic experiment attributes from IDF experiment object to SDRF experiment object
   $sdrf_experiment->add_properties($self->get_idf_experiment()->get_properties());
@@ -39,16 +49,17 @@ sub merge {
     my $sdrf_protocol = $sdrf_applied_protocol->get_protocol();
     my ($idf_protocol) = grep { $_->get_name() eq $sdrf_protocol->get_name() } @{$self->get_protocols()};
     my ($parameters) = grep { $_->get_heading() =~ m/^\s*Protocol Parameters?\s*$/ } @{$idf_protocol->get_attributes()};
-    my @idf_params; @idf_params = split /\s*;\s*/, $parameters->get_value() if (defined($parameters));
+    my @idf_params; @idf_params = split /;/, $parameters->get_value() if (defined($parameters));
+    for (my $i = 0; $i < scalar(@idf_params); $i++) {
+      $idf_params[$i] =~ s/^\s*|\s*$//g;
+    }
     my @remove_these_data;
     foreach my $datum (@{$sdrf_applied_protocol->get_input_data()}) {
       if (defined($datum->get_name()) && length($datum->get_name())) {
         my @matching_params = grep { $_ eq $datum->get_name() } @idf_params;;
         if (!scalar(@matching_params)) {
-          print $sdrf_applied_protocol->to_string() . "\n";
           print STDERR "Removing datum '" . $datum->get_name . "' as input from '" . $sdrf_protocol->get_name() . "'; not found in IDF's Protocol Parameters.\n";
           $sdrf_applied_protocol->remove_input_datum($datum);
-          print $sdrf_applied_protocol->to_string() . "\n";
         }
       }
     }
@@ -142,7 +153,10 @@ sub validate {
   }
   foreach my $idf_protocol (@{$self->get_protocols()}) {
     my ($parameters) = grep { $_->get_heading() =~ m/^\s*Protocol Parameters?\s*$/ } @{$idf_protocol->get_attributes()};
-    my @idf_params; @idf_params = split /\s*;\s*/, $parameters->get_value() if (defined($parameters));
+    my @idf_params; @idf_params = split /;/, $parameters->get_value() if (defined($parameters));
+    for (my $i = 0; $i < scalar(@idf_params); $i++) {
+      $idf_params[$i] =~ s/^\s*|\s*$//g;
+    }
     my @sdrf_params = defined($named_fields{$idf_protocol->get_name()}) ? @{$named_fields{$idf_protocol->get_name()}} : ();
     # Make sure all IDF params are in the SDRF
     foreach my $idf_param (@idf_params) {
