@@ -82,7 +82,7 @@ sub clone {
   foreach my $attribute (@{$self->get_attributes()}) {
     $clone->add_attribute($attribute->clone());
   }
-  $clone->set_termsource($self->get_termsource()->clone());
+  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
   return $clone;
 }
 

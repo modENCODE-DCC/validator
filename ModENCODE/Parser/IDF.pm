@@ -449,22 +449,55 @@ sub BUILD {
                                               ####################################################
                                               my $protocol_type = $protocols->{'Protocol Type'}->[$i];
                                               my $protocol_type_termsource = $protocols->{'Protocol Type Term Source REF'}->[$i];
-                                              if (length($protocol_type)) {
-                                                my $protocol_type_type = new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})});
-                                                my $protocol_type_dbxref;
-                                                if (length($protocol_type_termsource)) {
-                                                  $protocol_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
-                                                  $protocol_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $protocol_type_termsource})});
-                                                }
-                                                my $protocol_type_obj = new ModENCODE::Chado::Attribute({
-                                                    'heading' => 'Protocol Type',
-                                                    'value' => $protocol_type,
-                                                    'termsource' => $protocol_type_dbxref,
-                                                    'type' => $protocol_type_type,
-                                                  });
-                                              ####################################################
-                                                $protocol_obj->add_attribute($protocol_type_obj);
+                                              if (!length($protocol_type)) {
+                                                print STDERR "The Protocol Type field for $protocol_name is missing from the IDF";
+                                                return;
                                               }
+                                              if (!length($protocol_type_termsource)) {
+                                                print STDERR "The Protocol (Type) Term Source REF field for $protocol_name is missing from the IDF";
+                                                return;
+                                              }
+                                              my @protocol_types = split(/[;,]+/, $protocol_type);
+                                              for (my $i = 0; $i < scalar(@protocol_types); $i++) { $protocol_types[$i] =~ s/^\s*|\s*$//g; }
+                                              my @protocol_type_types = split(/[;,]+/, $protocol_type_termsource);
+                                              for (my $i = 0; $i < scalar(@protocol_type_types); $i++) { $protocol_type_types[$i] =~ s/^\s*|\s*$//g; }
+                                              if (scalar(@protocol_types) >= 1) {
+                                                my $rank = 0;
+                                                foreach my $protocol_type (@protocol_types) {
+                                                  my ($cv, $name) = split(/:/, $protocol_type);
+                                                  if (!$name) {
+                                                    if (scalar(@protocol_type_types) == 1) {
+                                                      $name = $cv;
+                                                      $cv = $protocol_type_types[0];
+                                                      if (scalar(@protocol_types) > 1) {
+                                                        print STDERR "Warning: Each term in Protocol Type REALLY SHOULD have a prefix if there is more than one type, even if there is only one term source ref (e.g. $cv:$name)\n";
+                                                      }
+                                                    } else {
+                                                      print STDERR "Each term in Protocol Type must have a prefix if there is more than one term source (e.g. MO:grow, SO:gene)\n";
+                                                      return;
+                                                    }
+                                                  }
+                                                  my @matching_source = grep { $_ eq $cv } @protocol_type_types;
+                                                  if (!scalar(@matching_source)) {
+                                                    print STDERR "The term source $cv for Protocol Type '$protocol_type' is not mentioned in the Protocol Term Source REF field";
+                                                    return;
+                                                  } else {
+                                                    my $protocol_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
+                                                    my $protocol_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $cv})});
+                                                    my $protocol_type_obj = new ModENCODE::Chado::Attribute({
+                                                        'heading' => 'Protocol Type',
+                                                        'value' => $name,
+                                                        'termsource' => $protocol_type_dbxref,
+                                                        'type' => $protocol_type_type,
+                                                        'rank' => $rank,
+                                                      });
+                                                    $protocol_obj->add_attribute($protocol_type_obj);
+                                                  }
+                                                  $rank++;
+                                                }
+                                              }
+                                              ####################################################
+
                                               my $protocol_parameters = $protocols->{'Protocol Parameters'}->[$i];
                                               if (length($protocol_parameters)) {
                                                 my $protocol_parameters_obj = new ModENCODE::Chado::Attribute({
@@ -617,6 +650,9 @@ sub parse {
     croak "Can't find file '$document'";
   }
   $document =~ s/\A [" ]*/\t/gxms;
+  $document =~ s/\t"/\t/gxms;
+  $document =~ s/"\t/\t/gxms;
+  $document =~ s/^"|"$//gxms;
   my $parser = $self->_get_parser();
   
   return $parser->IDF($document);

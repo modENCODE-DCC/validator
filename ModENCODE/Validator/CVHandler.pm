@@ -40,9 +40,37 @@ sub parse_term {
 
 sub add_cv_synonym_for_url {
   my ($self, $synonym, $url) = @_;
+  my $existing_url = $self->get_url_for_cv_name($synonym);
+  # might need to add a new name/synonym for this url
   my $cv = $cvs{ident $self}->{$url};
-  croak "Can't add synonym '$synonym' for missing CV identified by $url" unless $cv;
-  push @{$cvs{ident $self}->{$url}->{'names'}}, $synonym;
+  if (!$existing_url) {
+    push @{$cvs{ident $self}->{$url}->{'names'}}, $synonym;
+    return 1;
+  } elsif ($existing_url ne $url) {
+    print STDERR "  The CV name $synonym is already used for $existing_url, but at attempt has been made to redefine it for $url. Please check your IDF.\n";
+    print STDERR "  Also, please note that 'xsd', 'modencode', and 'MO' may already be predefined to refer to URLs:\n";
+    print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/xsd.obo\n";
+    print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/modencode-helper.obo\n";
+    print STDERR "    http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo\n";
+    return 0;
+  } else {
+    croak "Can't add synonym '$synonym' for missing CV identified by $url" unless $cv;
+  }
+}
+
+sub get_db_object_by_cv_name {
+  my ($self, $name) = @_;
+  foreach my $cvurl (keys(%{$cvs{ident $self}})) {
+    my @names = @{$cvs{ident $self}->{$cvurl}->{'names'}};
+    if (scalar(grep { $_ eq $name } @names)) {
+      my $db = new ModENCODE::Chado::DB({
+          'name' => $cvs{ident $self}->{$cvurl}->{'names'}->[0],
+          'url' => $cvs{ident $self}->{$cvurl}->{'url'},
+          'description' => $cvs{ident $self}->{$cvurl}->{'urltype'},
+        });
+      return $db;
+    }
+  }
 }
 
 sub get_cv_by_name {
@@ -78,13 +106,24 @@ sub add_cv {
     ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/);
   }
 
+  if ($cvurl && $cv) {
+    my $existing_cv = $self->get_cv_by_name($cv);
+    if ($existing_cv->{'url'} && $existing_cv->{'url'} ne $cvurl) {
+      print STDERR "  The CV name $cv is already used for " . $existing_cv->{'url'} . ", but at attempt has been made to redefine it for $cvurl. Please check your IDF.\n";
+      print STDERR "  Also, please note that 'xsd', 'modencode', and 'MO' may already be predefined to refer to URLs:\n";
+      print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/xsd.obo\n";
+      print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/modencode-helper.obo\n";
+      print STDERR "    http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo\n";
+      return 0;
+    }
+  }
+
+
   if ($cvs{ident $self}->{$cvurl}) {
     # Already loaded
     if ($cv) {
       # Might need to add a new name/synonym for this URL
-      if (!$self->get_url_for_cv_name($cv)) {
-        $self->add_cv_synonym_for_url($cv, $cvurl);
-      }
+      return $self->add_cv_synonym_for_url($cv, $cvurl);
     }
     return 1;
   }
@@ -101,9 +140,11 @@ sub add_cv {
   }
 
   # Have we already fetched this URL?
+  my $root_dir = $0;
+  $root_dir =~ s#/[^/]*$#/#;
   my $cache_filename = $cvurl . "." . $cvurltype;
   $cache_filename =~ s/\//!/g;
-  $cache_filename = "ontology_cache/" . $cache_filename;
+  $cache_filename = $root_dir . "ontology_cache/" . $cache_filename;
 
   # Fetch the file (mirror uses the If-Modified-Since header so we only fetch if needed)
   my $res = $self->mirror_url($cvurl, $cache_filename);
@@ -182,10 +223,11 @@ sub is_valid_accession {
   if (!$cv) {
     # This CV isn't loaded, so attempt to load it
     my $cv_exists = $self->add_cv($cvname);
-    if (!$cv_exists) {
+    if ($cv_exists == 0) {
       print STDERR "Cannot find the '$cvname' ontology, so accession $accession is not valid.\n";
       return 0;
     }
+
     $cv = $self->get_cv_by_name($cvname);
   }
   if (!$cv->{'accessions'}->{$accession}) {

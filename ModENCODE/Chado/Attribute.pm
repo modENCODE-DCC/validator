@@ -72,8 +72,8 @@ sub clone {
       'heading' => $self->get_heading(),
       'value' => $self->get_value(),
     });
-  $clone->set_termsource($self->get_termsource()->clone());
-  $clone->set_type($self->get_type()->clone());
+  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
+  $clone->set_type($self->get_type()->clone()) if $self->get_type();
   return $clone;
 }
 

@@ -9,7 +9,6 @@ use ModENCODE::Validator::Wiki;
 use ModENCODE::Validator::TermSources;
 use ModENCODE::Validator::CVHandler;
 
-
 print STDERR "Parsing IDF and SDRF...\n";
 my $parser = new ModENCODE::Parser::IDF();
 my $writer = new ModENCODE::Chado::XMLWriter();
@@ -68,7 +67,7 @@ $cvhandler->add_cv(
   $experiment = $termsource_validator->merge($experiment);
   print STDERR "Done.\n";
 
-#$writer->write_chadoxml($experiment);
-#print STDERR $experiment->to_string();
+$writer->write_chadoxml($experiment);
+#print $experiment->to_string();
 
 

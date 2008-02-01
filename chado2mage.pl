@@ -18,7 +18,7 @@ my $dbh; # = DBI->connect("dbi:Pg:dbname=mepipe;host=localhost", "db_public", "l
 my $experiment_id = $ARGV[0];
 
 my $reader = new ModENCODE::Parser::Chado({ 
-    'db' => 'mepipe' ,
+    'dbname' => 'mepipe' ,
     'host' => 'localhost',
     'username' => 'db_public',
     'password' => 'limecat',

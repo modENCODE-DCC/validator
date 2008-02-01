@@ -7,6 +7,7 @@ use Data::Dumper;
 
 use DBI;
 use ModENCODE::Chado::Experiment;
+use ModENCODE::Chado::ExperimentProp;
 use ModENCODE::Chado::AppliedProtocol;
 use ModENCODE::Chado::Protocol;
 use ModENCODE::Chado::Data;
@@ -19,15 +20,16 @@ use ModENCODE::Chado::Attribute;
 my %dbh             :ATTR(                          :default<undef> );
 my %host            :ATTR( :name<host>,             :default<undef> );
 my %port            :ATTR( :name<port>,             :default<undef> );
-my %db              :ATTR( :name<db>,               :default<undef> );
+my %dbname          :ATTR( :name<dbname>,           :default<undef> );
 my %username        :ATTR( :name<username>,         :default<''> );
 my %password        :ATTR( :name<password>,         :default<''> );
+my %cache           :ATTR( :get<cache>              :default<{}> );
 my %protocol_slots  :ATTR(                          :default<[]> );
 my %experiment      :ATTR(                          :default<undef> );
 
 sub START {
   my ($self, $ident, $args) = @_;
-  if (defined($self->get_db())) {
+  if (defined($self->get_dbname())) {
     $self->get_dbh(1); # Try to pre-connect to the database; suppress warnings
   }
 }
@@ -102,19 +104,22 @@ sub get_tsv {
   my ($self, $columns) = @_;
   if (ref($columns) ne 'ARRAY') {
     $columns = $self->get_tsv_columns();
-  } else {
-    # This requires that the @$columns array is rectangular; i.e. all columns 
-    # are the same length (like breakout before you start playing, not after).
-    if (ref($columns->[0]) ne "ARRAY") {
-      carp "Cannot print_tsv a \@columns array that is not an array of arrays";
-      return;
-    }
-    my $expected_length = scalar(@{$columns->[0]});
-    foreach my $column (@$columns) {
-      if (scalar(@$column) ne $expected_length) {
-        carp "Cannot print_tsv a \@columns array that is not an array of arrays";
-        return;
+  }
+  # This requires that the @$columns array is rectangular; i.e. all columns 
+  # are the same length (like breakout before you start playing, not after).
+  if (ref($columns->[0]) ne "ARRAY") {
+    carp "Cannot print_tsv a \@columns array that is not an array of arrays";
+    return;
+  }
+  my $expected_length = scalar(@{$columns->[0]});
+  foreach my $column (@$columns) {
+    if (scalar(@$column) != $expected_length) {
+      foreach my $col (@$columns) {
+        print STDERR scalar(@$col) . "\t";
       }
+      print STDERR "\n";
+      carp "Cannot print_tsv a \@columns array that is not a rectangular array of arrays: column " . $column->[0] . " has " . scalar(@$column) . " rows, when $expected_length were expected";
+      return;
     }
   }
   my $column_length = scalar(@{$columns->[0]});
@@ -132,10 +137,22 @@ sub get_tsv_columns {
     print STDERR "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
     return [];
   }
-  my @protocol_slots = ($protocol_slots{ident $self}->[0]);
+#  my @protocol_slots = ($protocol_slots{ident $self}->[0]);
+  my @protocol_slots = ([]);
+#  for (my $i = 0; $i < scalar(@{$protocol_slots{ident $self}}); $i++) {
+#    my $applied_protocols = $protocol_slots{ident $self}->[$i];
+#    print STDERR "Protocol Slots[$i] is " . scalar(@{$applied_protocols}) . " deep.\n";
+#  }
   foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
-    denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@protocol_slots);
+    my $num_duplicate_first_ap = scalar(denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@protocol_slots));
+    for (my $i = 0; $i < $num_duplicate_first_ap; $i++) {
+      push @{$protocol_slots[0]}, $first_applied_protocol;
+    }
   }
+#  for (my $i = 0; $i < scalar(@protocol_slots); $i++) {
+#    my $applied_protocols = $protocol_slots[$i];
+#    print STDERR "Busted Protocol Slots[$i] is " . scalar(@{$applied_protocols}) . " deep.\n";
+#  }
   my @columns;
 
   # Use seen_data to keep from re-printing out as inputs of the next
@@ -188,7 +205,7 @@ sub get_tsv_columns {
         }
         # Protocol attributes
         foreach my $attribute (@{$protocol->get_attributes()}) {
-          push @columns, $self->flatten_attribute($attribute);
+          push @protocol_columns, $self->flatten_attribute($attribute);
         }
       }
       my $cur_column = 0;
@@ -251,13 +268,15 @@ sub get_tsv_columns {
 
 sub flatten_data : PRIVATE {
   my ($self, $data_columns, $datum) = @_;
-  if (
-    $datum->get_type() && $datum->get_type()->get_name() eq "anonymous_datum" &&
-    $datum->get_type()->get_cv() && $datum->get_type()->get_cv()->get_name eq "modencode"
-  ) { 
-    # Skip "anonymous" data
-    return; 
-  }
+#  if (
+#    $datum->get_type() && $datum->get_type()->get_name() eq "anonymous_datum" &&
+#    $datum->get_type()->get_cv() && $datum->get_type()->get_cv()->get_name eq "modencode"
+#    $datum->get_heading() =~ /^Anonymous Datum/
+#  ) { 
+#    # Skip "anonymous" data
+#    return; 
+#  }
+
   if (!scalar(@$data_columns)) {
     push @$data_columns, $self->get_data_column_headings($datum);
   }
@@ -274,14 +293,15 @@ sub flatten_data : PRIVATE {
 
 sub get_data_column_headings : PRIVATE {
   my ($self, $datum) = @_;
+#  if (
+#    $datum->get_type() && $datum->get_type()->get_name() eq "anonymous_datum" &&
+#    $datum->get_type()->get_cv() && $datum->get_type()->get_cv()->get_name eq "modencode"
+#    $datum->get_heading() =~ /^Anonymous Datum/
+#  ) { 
+#    # Skip "anonymous" data
+#    return; 
+#  }
   my @columns;
-  if (
-    $datum->get_type() && $datum->get_type()->get_name() eq "anonymous_datum" &&
-    $datum->get_type()->get_cv() && $datum->get_type()->get_cv()->get_name eq "modencode"
-  ) { 
-    # Skip "anonymous" data
-    return; 
-  }
   # Datum heading and name
   my $datum_heading = $datum->get_heading();
   if (length($datum->get_name())) {
@@ -403,16 +423,16 @@ sub load_experiment {
       'applied_protocol_slots' => $self->get_normalized_protocol_slots(),
     });
   my $experiment_prop_sth = $self->get_dbh()->prepare("SELECT name, type_id, dbxref_id, value, rank FROM experiment_prop WHERE experiment_id = ?");
-  $experient_prop_sth->execute($experiment_id);
+  $experiment_prop_sth->execute($experiment_id);
   while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
     my $property = new ModENCODE::Chado::ExperimentProp({
         'name' => $row->{'name'},
         'value' => $row->{'value'},
         'rank' => $row->{'rank'},
       });
-    my $termsource = $self->get_termsource($row->{'dbxref_id'};
+    my $termsource = $self->get_termsource($row->{'dbxref_id'});
     $property->set_termsource($termsource) if $termsource;
-    my $type = $self->get_type($row->{'type_id'};
+    my $type = $self->get_type($row->{'type_id'});
     $property->set_type($type) if $type;
     $experiment{ident $self}->add_property($property);
   }
@@ -420,6 +440,9 @@ sub load_experiment {
 
 sub get_applied_protocol {
   my ($self, $applied_protocol_id) = @_;
+  if (my $cached_applied_protocol = $self->get_cache()->{'applied_protocol'}->{$applied_protocol_id}) {
+    return $cached_applied_protocol;
+  }
   my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 'chadoxml_id' => $applied_protocol_id });
   my $sth = $self->get_dbh()->prepare("SELECT protocol_id FROM applied_protocol WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
@@ -435,11 +458,15 @@ sub get_applied_protocol {
       $applied_protocol->add_output_datum($self->get_datum($row->{'data_id'}));
     }
   }
+  $self->get_cache()->{'applied_protocol'}->{$applied_protocol_id} = $applied_protocol;
   return $applied_protocol;
 }
 
 sub get_protocol {
   my ($self, $protocol_id) = @_;
+  if (my $cached_protocol = $self->get_cache()->{'protocol'}->{$protocol_id}) {
+    return $cached_protocol;
+  }
   my $protocol = new ModENCODE::Chado::Protocol({ 'chadoxml_id' => $protocol_id });
   my $sth = $self->get_dbh()->prepare("SELECT name, description, dbxref_id FROM protocol WHERE protocol_id = ?");
   $sth->execute($protocol_id);
@@ -453,11 +480,15 @@ sub get_protocol {
   while (my ($attr_id) = $sth->fetchrow_array()) {
     $protocol->add_attribute($self->get_attribute($attr_id));
   }
+  $self->get_cache()->{'protocol'}->{$protocol_id} = $protocol;
   return $protocol;
 }
 
 sub get_datum {
   my ($self, $datum_id) = @_;
+  if (my $cached_datum = $self->get_cache()->{'datum'}->{$datum_id}) {
+    return $cached_datum;
+  }
   my $datum = new ModENCODE::Chado::Data({ 'chadoxml_id' => $datum_id });
   my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
@@ -474,25 +505,51 @@ sub get_datum {
   while (my ($attr_id) = $sth->fetchrow_array()) {
     $datum->add_attribute($self->get_attribute($attr_id));
   }
+  $self->get_cache()->{'datum'}->{$datum_id} = $datum;
   return $datum;
 }
 
 sub get_termsource {
   my ($self, $dbxref_id) = @_;
+  if (my $cached_dbxref = $self->get_cache()->{'dbxref'}->{$dbxref_id}) {
+    return $cached_dbxref;
+  }
   return 0 unless($dbxref_id);
-  my $sth = $self->get_dbh()->prepare("SELECT dbx.accession, dbx.version, db.name FROM dbxref dbx INNER JOIN db ON dbx.db_id = db.db_id WHERE dbxref_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT accession, version, db_id FROM dbxref WHERE dbxref_id = ?");
   $sth->execute($dbxref_id);
   my $row = $sth->fetchrow_hashref();
   my $dbxref = new ModENCODE::Chado::DBXref({
       'accession' => $row->{'accession'},
       'version' => $row->{'version'},
-      'db' => new ModENCODE::Chado::DB({ 'name' => $row->{'name'} }),
+      'db' => $self->get_db($row->{'db_id'}),
     });
+  $self->get_cache()->{'dbxref'}->{$dbxref_id} = $dbxref;
   return $dbxref;
+}
+
+sub get_db {
+  my($self, $db_id) = @_;
+  if (my $cached_db = $self->get_cache()->{'db'}->{$db_id}) {
+    return $cached_db;
+  }
+  return 0 unless ($db_id);
+  my $sth = $self->get_dbh()->prepare("SELECT name, url, description FROM db WHERE db_id = ?");
+  $sth->execute($db_id);
+  my $row = $sth->fetchrow_hashref();
+  my $db = new ModENCODE::Chado::DB({
+      'name' => $row->{'name'},
+      'url' => $row->{'url'},
+      'description' => $row->{'description'},
+    });
+  $self->get_cache()->{'db'}->{$db_id} = $db;
+  return $db;
 }
 
 sub get_type {
   my ($self, $cvterm_id) = @_;
+  if (my $cached_cvterm = $self->get_cache()->{'cvterm'}->{$cvterm_id}) {
+    return $cached_cvterm;
+  }
   return 0 unless($cvterm_id);
   my $sth = $self->get_dbh()->prepare("SELECT cvt.name, cvt.definition, cvt.dbxref_id, cv.name as cvname, cv.definition as cvdefinition FROM cvterm cvt INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE cvterm_id = ?");
   $sth->execute($cvterm_id);
@@ -504,11 +561,15 @@ sub get_type {
     });
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
   $cvterm->set_dbxref($termsource) if $termsource;
+  $self->get_cache()->{'cvterm'}->{$cvterm_id} = $cvterm;
   return $cvterm;
 }
 
 sub get_attribute {
   my ($self, $attribute_id) = @_;
+  if (my $cached_attribute = $self->get_cache()->{'attribute'}->{$attribute_id}) {
+    return $cached_attribute;
+  }
   my $attribute = new ModENCODE::Chado::Attribute({ 'chadoxml_id' => $attribute_id });
   my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
   $sth->execute($attribute_id);
@@ -520,12 +581,13 @@ sub get_attribute {
   $attribute->set_termsource($termsource) if $termsource;
   my $type = $self->get_type($row->{'type_id'});
   $attribute->set_type($type) if $type;
+  $self->get_cache()->{'attribute'}->{$attribute_id} = $attribute;
   return $attribute;
 }
 
 sub denormalize_applied_protocol {
   my ($applied_protocol, $protocol_slots, $new_protocol_slots, $slotnum) = @_;
-  $slotnum ||= 1;
+  $slotnum ||= 1; # don't start at the 0th slot; that one doesn't have any previous protocols
   if (!defined($protocol_slots->[$slotnum])) {
     return (1);
   }
@@ -533,13 +595,18 @@ sub denormalize_applied_protocol {
   my $previous_applied_protocol_id = $applied_protocol->{'applied_protocol'}->get_chadoxml_id();
   my @these_protocols;
 
+  # For each applied protocol in the current slot
   foreach my $next_applied_protocol (@$next_applied_protocols) {
-    foreach my $next_prev_applied_protocol_id (@{$next_applied_protocol->{'previous_applied_protocol_id'}}) {
-      if ( $next_prev_applied_protocol_id == $previous_applied_protocol_id) {
-        my @next_rows = denormalize_applied_protocol($next_applied_protocol, $protocol_slots, $new_protocol_slots, $slotnum+1);
-        for (my $i = 0; $i < scalar(@next_rows); $i++) {
-          push @these_protocols, $next_applied_protocol;
-        }
+    my $this_ap_follows_prev_ap = scalar(grep { $previous_applied_protocol_id == $_} @{$next_applied_protocol->{'previous_applied_protocol_id'}});
+    if (scalar(@{$next_applied_protocol->{'previous_applied_protocol_id'}}) > 1 && $this_ap_follows_prev_ap) {
+      print STDERR $next_applied_protocol->{'applied_protocol'}->to_string() . " comes from:\n";
+      print STDERR $applied_protocol->{'applied_protocol'}->to_string() . "\n\n";
+    }
+    # Get the IDs of applied protocols in the previous slot that have data used in this one
+    if ($this_ap_follows_prev_ap) {
+      my @next_rows = denormalize_applied_protocol($next_applied_protocol, $protocol_slots, $new_protocol_slots, $slotnum+1);
+      for (my $i = 0; $i < scalar(@next_rows); $i++) {
+        push @these_protocols, $next_applied_protocol;
       }
     }
   }
@@ -552,8 +619,8 @@ sub get_dbh : PRIVATE {
   my ($self, $suppress_warnings) = @_;
   
   if (!defined($dbh{ident $self}) || !$dbh{ident $self} || ($dbh{ident $self} && !($dbh{ident $self}->{Active}))) {
-    return undef unless defined($self->get_db());
-    my $dsn = "dbi:Pg:dbname=" . $self->get_db();
+    return undef unless defined($self->get_dbname());
+    my $dsn = "dbi:Pg:dbname=" . $self->get_dbname();
     $dsn .= ";host=" . $self->get_host() if defined($self->get_host());
     $dsn .= ";port=" . $self->get_port() if defined($self->get_port());
     eval {

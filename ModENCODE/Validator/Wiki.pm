@@ -331,16 +331,49 @@ sub validate {
       my ($output_type_defs) = grep { $_->get_name() =~ /^\s*output *types?\s*$/i } @{$wiki_protocol_def->get_values()};
 
       # PROTOCOL TYPE
-      my ($wiki_protocol_type) = grep { $_->get_name() =~ /^\s*protocol *types?$/i } @{$wiki_protocol_def->get_values()};
-      $wiki_protocol_type = $wiki_protocol_type->get_values()->[0];
-      $wiki_protocol_type =~ s/.*://;
-      my ($idf_protocol_type) = grep { $_->get_heading() =~ /^\s*Protocol *Types?$/i } @{$protocol->get_attributes()};
-      $idf_protocol_type = $idf_protocol_type->get_value();
-      if (length($wiki_protocol_type) && $wiki_protocol_type ne $idf_protocol_type) {
-        print STDERR "The protocol type defined in the wiki ($wiki_protocol_type) does not match the protocol type defined in the IDF ($idf_protocol_type) for " . $protocol->get_name() . ".\n";
+      my ($wiki_protocol_type_def) = grep { $_->get_name() =~ /^\s*protocol *types?$/i } @{$wiki_protocol_def->get_values()};
+      my @wiki_protocol_types = @{$wiki_protocol_type_def->get_values()};
+      for (my $i = 0; $i < scalar(@wiki_protocol_types); $i++) { $wiki_protocol_types[$i] =~ s/^\s*|\s*$//; }
+      my @idf_protocol_types = grep { $_->get_heading() =~ /^\s*Protocol *Types?$/i } @{$protocol->get_attributes()};
+      if (!scalar(@idf_protocol_types)) {
+        print STDERR "Warning: Protocol '" . $protocol->get_name() . "' has no protocol type definition in the IDF.\n";
+      } 
+      if (scalar(@wiki_protocol_types) != scalar(@idf_protocol_types)) {
+        print STDERR "The protocol '" . $protocol->get_name() . "' has " . scalar(@wiki_protocol_types) . " Protocol Types in the wiki, and " . scalar(@idf_protocol_types) . " in the IDF.\n";
         $success = 0;
+        next;
       }
 
+      foreach my $idf_protocol_type (@idf_protocol_types) {
+        my ($idf_type_cv, $idf_type_term, undef) = $cvhandler{ident $self}->parse_term($idf_protocol_type->get_value());
+        if (!$idf_type_cv) { $idf_type_cv = $idf_protocol_type->get_termsource()->get_db()->get_name(); }
+        if (!$cvhandler{ident $self}->get_cv_by_name($idf_type_cv)) {
+          my $idf_type_url = $idf_protocol_type->get_termsource()->get_db()->get_url();
+          my $idf_type_url_type = $idf_protocol_type->get_termsource()->get_db()->get_description();
+          $cvhandler{ident $self}->add_cv($idf_type_cv, $idf_type_url, $idf_type_url_type);
+        }
+        if (!$cvhandler{ident $self}->get_cv_by_name($idf_type_cv)) {
+          print STDERR "Could not find a canonical URL for the controlled vocabulary $idf_type_cv when validating term " . $idf_protocol_type->get_value() . ".\n";
+          $success = 0;
+          next;
+        }
+        my $idf_type_cv = $cvhandler{ident $self}->get_cv_by_name($idf_type_cv)->{'names'}->[0];
+        my $valid = 0;
+        for (my $i = 0; $i < @wiki_protocol_types; $i++) {
+          my $wiki_protocol_type = $wiki_protocol_types[$i];
+          my ($cv, $term, $name) = $cvhandler{ident $self}->parse_term($wiki_protocol_type);
+          if (!defined($cv)) { $cv = $wiki_protocol_type_def->get_types()->[0]; }
+          my $cv = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
+          if ($cv eq $idf_type_cv && $term eq $idf_type_term) {
+            $valid = 1;
+            last;
+          }
+        }
+        if (!$valid) {
+          print STDERR "Could not find the protocol type $idf_type_cv:$idf_type_term defined in the wiki for " . $protocol->get_name() . "\n";
+          $success = 0;
+        }
+      }
       # INPUTS
       my $input_type_defs_terms = [];
       foreach my $value (@{$input_type_defs->get_values()}) {

@@ -100,11 +100,11 @@ sub BUILD {
 
     output:                             result 
                                           { $return = sub { return { 'direction' => 'output', 'datum' => &{$item[1]}(@_) } } }
+                                        | array_data_file 
+                                          { $return = sub { return { 'direction' => 'output', 'datum' => &{$item[1]}(@_) } } }
                                         | biomaterial
                                           { $return = sub { return { 'direction' => 'output', 'datum' => &{$item[1]}(@_) } } }
                                         | data_file 
-                                          { $return = sub { return { 'direction' => 'output', 'datum' => &{$item[1]}(@_) } } }
-                                        | array_data_file 
                                           { $return = sub { return { 'direction' => 'output', 'datum' => &{$item[1]}(@_) } } }
                                         | array_matrix_data_file
                                           { $return = sub { return { 'direction' => 'output', 'datum' => &{$item[1]}(@_) } } }
@@ -368,21 +368,39 @@ sub parse {
         foreach my $datum (@$data) {
           $next_applied_protocol->add_input_datum($datum);
         }
-      } else {
+      }
+    }
+  }
+  my @anonymous_data_by_applied_protocol; # = [ { 'anonymous_datum' => datum, 'applied_protocol' => previous_applied_protocol }  ]
+  for (my $i = 0; $i < $num_applied_protocols-1; $i++) {
+    for (my $j = 0; $j < scalar(@{$applied_protocol_slots[$i]}); $j++) {
+      my $previous_applied_protocol = $applied_protocol_slots[$i][$j];
+      my $next_applied_protocol = $applied_protocol_slots[$i+1][$j];
+      my $data = $previous_applied_protocol->get_output_data();
+      if (!scalar(@$data)) {
         # No outputs, so we need to create an anonymous link
-        my $type = new ModENCODE::Chado::CVTerm({
-            'name' => 'anonymous_datum',
-            'cv' => new ModENCODE::Chado::CV({
-                'name' => 'modencode'
-              }),
-          });
-        my $anonymous_datum = new ModENCODE::Chado::Data({
-            'heading' => "Anonymous Datum #" . $anonymous_data_num++,
-            'type' => $type,
-            'anonymous' => 1,
-          });
-        $previous_applied_protocol->add_output_datum($anonymous_datum);
-        $next_applied_protocol->add_input_datum($anonymous_datum);
+        grep { $previous_applied_protocol->equals($_->{'applied_protocol'}) } @anonymous_data_by_applied_protocol;
+        my ($existing_anonymous_datum) = map { $_->{'anonymous_datum'} } grep { $previous_applied_protocol->equals($_->{'applied_protocol'}) } @anonymous_data_by_applied_protocol;
+        # Don't create a new anonymous datum if it's to be the output of an identical previous protocol
+        if (!$existing_anonymous_datum) {
+          my $type = new ModENCODE::Chado::CVTerm({
+              'name' => 'anonymous_datum',
+              'cv' => new ModENCODE::Chado::CV({
+                  'name' => 'modencode'
+                }),
+            });
+          my $anonymous_datum = new ModENCODE::Chado::Data({
+              'heading' => "Anonymous Datum #" . $anonymous_data_num++,
+              'type' => $type,
+              'anonymous' => 1,
+            });
+          push @anonymous_data_by_applied_protocol, { 'anonymous_datum' => $anonymous_datum, 'applied_protocol' => $previous_applied_protocol->clone() };
+          $previous_applied_protocol->add_output_datum($anonymous_datum);
+          $next_applied_protocol->add_input_datum($anonymous_datum);
+        } else {
+          $previous_applied_protocol->add_output_datum($existing_anonymous_datum);
+          $next_applied_protocol->add_input_datum($existing_anonymous_datum);
+        }
       }
     }
   }

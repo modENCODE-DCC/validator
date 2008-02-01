@@ -89,6 +89,7 @@ sub to_string {
   $string .= "]\n  has applied_protocols:\n";
   my @proto_slots = @{$self->get_applied_protocol_slots()};
   for (my $i = 0; $i < scalar(@proto_slots); $i++) {
+    $string .= "------------------------------ROUND $i OF PROTOCOLS------------------------------\n";
     foreach my $applied_protocol (@{$proto_slots[$i]}) {
       $string .= "    " . $applied_protocol->to_string() . "\n";
     }

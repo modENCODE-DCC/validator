@@ -64,14 +64,14 @@ sub merge {
     if ($experiment_prop->get_type()) {
       $experiment_prop->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($experiment_prop->get_type()->get_cv()->get_name())->{'names'}->[0]);
       if ($experiment_prop->get_type->get_dbxref()) {
-        $experiment_prop->get_type()->get_dbxref->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($experiment_prop->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0]);
+        $experiment_prop->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($experiment_prop->get_type()->get_dbxref->get_db()->get_name()));
       } else {
         my $dbname = $cvhandler{ident $self}->get_cv_by_name($experiment_prop->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
         $experiment_prop->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $experiment_prop->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
       }
     }
     if ($experiment_prop->get_termsource()) {
-      $experiment_prop->get_termsource()->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($experiment_prop->get_termsource()->get_db()->get_name())->{'names'}->[0]);
+      $experiment_prop->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($experiment_prop->get_termsource()->get_db()->get_name()));
     }
   }
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
@@ -79,21 +79,21 @@ sub merge {
       my $protocol = $applied_protocol->get_protocol();
       # protocol (dbxref)
       if ($protocol->get_termsource()) {
-        $protocol->get_termsource()->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($protocol->get_termsource()->get_db()->get_name())->{'names'}->[0]);
+        $protocol->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($protocol->get_termsource()->get_db()->get_name()));
       }
       # protocol attributes (dbxref, type)
       foreach my $attribute (@{$protocol->get_attributes()}) {
         if ($attribute->get_type()) {
           $attribute->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_cv()->get_name())->{'names'}->[0]);
           if ($attribute->get_type->get_dbxref()) {
-            $attribute->get_type()->get_dbxref->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0]);
+            $attribute->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_type()->get_dbxref->get_db()->get_name()));
           } else {
             my $dbname = $cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
             $attribute->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $attribute->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
           }
         }
         if ($attribute->get_termsource()) {
-          $attribute->get_termsource()->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_termsource()->get_db()->get_name())->{'names'}->[0]);
+          $attribute->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
         }
       }
       # data (dbxref, type)
@@ -101,28 +101,28 @@ sub merge {
         if ($datum->get_type()) {
           $datum->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($datum->get_type()->get_cv()->get_name())->{'names'}->[0]);
           if ($datum->get_type->get_dbxref()) {
-            $datum->get_type()->get_dbxref->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($datum->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0]);
+            $datum->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($datum->get_type()->get_dbxref->get_db()->get_name()));
           } else {
             my $dbname = $cvhandler{ident $self}->get_cv_by_name($datum->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
             $datum->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $datum->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
           }
         }
         if ($datum->get_termsource()) {
-          $datum->get_termsource()->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($datum->get_termsource()->get_db()->get_name())->{'names'}->[0]);
+          $datum->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($datum->get_termsource()->get_db()->get_name()));
         }
         # data attributes (dbxref, type)
         foreach my $attribute (@{$datum->get_attributes()}) {
           if ($attribute->get_type()) {
             $attribute->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_cv()->get_name())->{'names'}->[0]);
             if ($attribute->get_type->get_dbxref()) {
-              $attribute->get_type()->get_dbxref->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0]);
+              $attribute->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_type()->get_dbxref->get_db()->get_name()));
             } else {
               my $dbname = $cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
               $attribute->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $attribute->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
             }
           }
           if ($attribute->get_termsource()) {
-            $attribute->get_termsource()->get_db()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_termsource()->get_db()->get_name())->{'names'}->[0]);
+            $attribute->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
           }
         }
       }
@@ -284,11 +284,13 @@ sub is_valid : PRIVATE {
       return 0;
     }
   }
-  $cvhandler{ident $self}->add_cv(
+  if (!$cvhandler{ident $self}->add_cv(
     $termsource->get_db()->get_name(),
     $termsource->get_db()->get_url(),
     $termsource->get_db()->get_description(),
-  );
+  )) {
+    $valid = 0;
+  }
   if ($accession) {
     if (!$cvhandler{ident $self}->is_valid_accession($termsource->get_db()->get_name(), $accession)) {
       $valid = 0;

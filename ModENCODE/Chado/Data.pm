@@ -17,6 +17,7 @@ my %attributes       :ATTR( :get<attributes>,           :default<[]> );
 my %termsource       :ATTR( :get<termsource>,           :default<undef> );
 my %type             :ATTR( :get<type>,                 :default<undef> );
 my %feature          :ATTR( :get<feature>,              :default<undef> );
+my %wiggle_data      :ATTR( :get<wiggle_data>,          :default<undef> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -31,6 +32,10 @@ sub BUILD {
   my $feature = $args->{'feature'};
   if (defined($feature)) {
     $self->set_feature($feature);
+  }
+  my $wiggle_data = $args->{'wiggle_data'};
+  if (defined($wiggle_data)) {
+    $self->set_wiggle_data($wiggle_data);
   }
   my $attributes = $args->{'attributes'};
   if (defined($attributes)) {
@@ -52,6 +57,12 @@ sub set_feature {
   my ($self, $feature) = @_;
   ($feature->isa('ModENCODE::Chado::Feature')) or croak("Can't add a " . ref($feature) . " as a feature.");
   $feature{ident $self} = $feature;
+}
+
+sub set_wiggle_data {
+  my ($self, $wiggle_data) = @_;
+  ($wiggle_data->isa('ModENCODE::Chado::Wiggle_Data')) or croak("Can't add a " . ref($wiggle_data) . " as a wiggle_data.");
+  $wiggle_data{ident $self} = $wiggle_data;
 }
 
 sub set_type {
