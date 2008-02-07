@@ -143,7 +143,7 @@ sub add_cv {
 
   # Have we already fetched this URL?
   my $root_dir = $0;
-  $root_dir =~ s/\/[^\/]*$/\//;
+  $root_dir =~ s/[^\/]*$//;
   $root_dir = "./" unless $root_dir =~ /\//;
   my $cache_filename = $cvurl . "." . $cvurltype;
   $cache_filename =~ s/\//!/g;
