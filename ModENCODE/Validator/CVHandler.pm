@@ -6,10 +6,12 @@ use Carp qw(croak carp);
 use LWP::UserAgent;
 use URI::Escape ();
 use GO::Parser;
+use ModENCODE::Validator::Wiki::URLValidator;
 
 my %useragent                   :ATTR;
 my %cvs                         :ATTR( :default<{}> );
 my %cv_synonyms                 :ATTR( :default<{}> );
+my %mediawiki_url_validator     :ATTR;
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -141,10 +143,16 @@ sub add_cv {
 
   # Have we already fetched this URL?
   my $root_dir = $0;
-  $root_dir =~ s#/[^/]*$#/#;
+  $root_dir =~ s#/[^/]*#/#;
+  $root_dir = "./" unless $root_dir =~ /\//;
   my $cache_filename = $cvurl . "." . $cvurltype;
   $cache_filename =~ s/\//!/g;
   $cache_filename = $root_dir . "ontology_cache/" . $cache_filename;
+
+  if (!(-d $root_dir . "ontology_cache/")) {
+    mkdir $root_dir . "ontology_cache" or croak "Couldn't create cache directory ${root_dir}ontology_cache/ for caching ontology files";
+  }
+
 
   # Fetch the file (mirror uses the If-Modified-Since header so we only fetch if needed)
   my $res = $self->mirror_url($cvurl, $cache_filename);
@@ -200,11 +208,30 @@ sub is_valid_term {
     # Haven't validated this term one way or the other
     if ($cv->{'urltype'} =~ m/^URL/) {
       # URL term; have to try to get it
-      my $res = $self->get_url($cv->{'url'} . $term);
-      if ($res->is_success) {
-        $cv->{'terms'}->{$term} = 1;
-      } else {
+      if ($cv->{'urltype'} =~ m/^URL$/) {
+        my $res = $self->get_url($cv->{'url'} . $term);
+        if ($res->is_success) {
+          $cv->{'terms'}->{$term} = 1;
+        } else {
+          $cv->{'terms'}->{$term} = 0;
+        }
+      } elsif ($cv->{'urltype'} =~ m/^URL_mediawiki$/) {
+        if (!$mediawiki_url_validator{ident $self}) {
+          $mediawiki_url_validator{ident $self} = new ModENCODE::Validator::Wiki::URLValidator({
+              'username' => 'Yostinso',
+              'password' => 'Hella99',
+              'domain' => 'modencode_wiki',
+            });
+        }
+        my $res = $mediawiki_url_validator{ident $self}->get_url($cv->{'url'} . $term);
         $cv->{'terms'}->{$term} = 0;
+        if ($res->is_success) {
+          if ($res->content !~ m/div class="noarticletext"/ && $res->content !~ m/<title>Error<\/title>/) {
+            $cv->{'terms'}->{$term} = 1;
+          }
+        }
+      } else {
+        croak "Don't know how to parse the CV at URL: '" . $cv->{'url'} . "' of type: '" . $cv->{'urltype'} . "'";
       }
     } else {
       if (scalar(grep { $_->name =~ m/:?\Q$term\E$/ || $_->acc =~ m/:\Q$term\E$/ }  @{$cv->{'nodes'}})) {

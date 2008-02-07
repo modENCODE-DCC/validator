@@ -50,6 +50,16 @@ sub add_output_datum {
   push @{$output_data{ident $self}}, $output_datum;
 }
 
+sub remove_output_datum {
+  my ($self, $output_datum) = @_;
+  for (my $i = 0; $i < scalar(@{$output_data{ident $self}}); $i++) {
+    my $existing_datum = $output_data{ident $self}->[$i];
+    if ($existing_datum->equals($output_datum)) {
+      splice(@{$output_data{ident $self}}, $i, 1);
+    }
+  }
+}
+
 sub remove_input_datum {
   my ($self, $input_datum) = @_;
   for (my $i = 0; $i < scalar(@{$input_data{ident $self}}); $i++) {

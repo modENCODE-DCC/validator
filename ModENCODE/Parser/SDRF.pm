@@ -318,7 +318,7 @@ sub parse {
     croak "Can't find file '$document'";
   }
   $document =~ s/\A [" ]*/\t/gxms;
-  $document =~ s/\015[^\012]/\n/g; # Replace old-style Mac CR endings with LFs like a regular OS
+  $document =~ s/\015(?![\012])/\n/g; # Replace old-style (thanks, Excel) Mac CR endings with LFs
   my $parser = $self->_get_parser();
   open DOC, '<', \$document;
 
@@ -554,6 +554,7 @@ sub create_protocol {
 sub create_termsource {
   my ($self, $termsource_ref, $accession, $values) = @_;
   $termsource_ref = &$termsource_ref($self, $values);
+  return undef unless length($termsource_ref);
   ($accession) = map { &$_($self, $values) } @$accession;
   my $db = new ModENCODE::Chado::DB({
       'name' => $termsource_ref,

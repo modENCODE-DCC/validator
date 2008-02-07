@@ -96,7 +96,11 @@ sub to_string {
     $string .= ">";
   }
   $string .= $self->get_type()->to_string() if $self->get_type();
-  $string .= "=" . $self->get_value();
+  $string .= "=" if ($self->get_value() || $self->get_feature() || $self->get_wiggle_data());
+  $string .= $self->get_value();
+  $string .= "," . $self->get_feature()->to_string() if $self->get_feature();
+  $string .= "," . $self->get_wiggle_data()->to_string() if $self->get_wiggle_data();
+  return $string;
 }
 
 sub equals {
@@ -119,6 +123,14 @@ sub equals {
     return 0 unless $other->get_type();
     return 0 unless $self->get_type()->equals($other->get_type());
   }
+  if ($self->get_feature()) {
+    return 0 unless $other->get_feature();
+    return 0 unless $self->get_feature()->equals($other->get_feature());
+  }
+  if ($self->get_wiggle_data()) {
+    return 0 unless $other->get_wiggle_data();
+    return 0 unless $self->get_wiggle_data()->equals($other->get_wiggle_data());
+  }
 
   return 1;
 }
@@ -137,7 +149,32 @@ sub clone {
   }
   $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
   $clone->set_type($self->get_type()->clone()) if $self->get_type();
+  $clone->set_feature($self->get_feature()->clone()) if $self->get_feature();
+  $clone->set_wiggle_data($self->get_wiggle_data()->clone()) if $self->get_wiggle_data();
   return $clone;
 }
+
+sub mimic {
+  my ($self, $other) = @_;
+  croak "Datum " . $self->to_string() . " cannot mimic an object of type " . ref($other) if (ref($self) ne ref($other));
+  $self->set_name($other->get_name());
+  $self->set_heading($other->get_heading());
+  $self->set_value($other->get_value());
+  $self->set_chadoxml_id($other->get_chadoxml_id());
+  $self->set_anonymous($other->is_anonymous());
+  $attributes{ident $self} = [];
+  foreach my $attribute (@{$other->get_attributes()}) {
+    $self->add_attribute($attribute->clone());
+  }
+  $termsource{ident $self} = undef;
+  $type{ident $self} = undef;
+  $feature{ident $self} = undef;
+  $wiggle_data{ident $self} = undef;
+  $self->set_termsource($other->get_termsource()->clone()) if $other->get_termsource();
+  $self->set_type($other->get_type()->clone()) if $other->get_type();
+  $self->set_feature($other->get_feature()->clone()) if $other->get_feature();
+  $self->set_wiggle_data($other->get_wiggle_data()->clone()) if $other->get_wiggle_data();
+}
+
 
 1;

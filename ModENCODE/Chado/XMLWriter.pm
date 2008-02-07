@@ -168,9 +168,25 @@ sub write_datum {
   }
 
   if ($datum->get_feature()) {
-    $self->println("<type_id>");
-    $self->write_feature($datum->get_feature());
-    $self->println("</type_id>");
+    if ($datum->get_feature()->get_chadoxml_id()) {
+      $self->println("<feature_id>" . $datum->get_feature()->get_chadoxml_id() . "</feature_id>");
+    } else {
+      $datum->get_feature()->set_chadoxml_id($self->generate_uniqid("Wiggle_Data"));
+      $self->println("<feature_id>");
+      $self->write_feature($datum->get_feature());
+      $self->println("</feature_id>");
+    }
+  }
+
+  if ($datum->get_wiggle_data()) {
+    if ($datum->get_wiggle_data()->get_chadoxml_id()) {
+      $self->println("<wiggle_data_id>" . $datum->get_wiggle_data()->get_chadoxml_id() . "</wiggle_data_id>");
+    } else {
+      $datum->get_wiggle_data()->set_chadoxml_id($self->generate_uniqid("Wiggle_Data"));
+      $self->println("<wiggle_data_id>");
+      $self->write_wiggle_data($datum->get_wiggle_data());
+      $self->println("</wiggle_data_id>");
+    }
   }
 
   foreach my $attribute (@{$datum->get_attributes()}) {
@@ -187,6 +203,28 @@ sub write_datum {
 sub write_feature {
   my ($self, $feature) = @_;
   croak "Don't know how to write a feature object yet";
+}
+
+sub write_wiggle_data {
+  my ($self, $wiggle_data) = @_;
+  $self->println("<wiggle_data id=\"" . $wiggle_data->get_chadoxml_id() . "\">");
+  $self->println("<type>" . $wiggle_data->get_type() . "</type>");
+  $self->println("<name>" . $wiggle_data->get_name() . "</name>");
+  $self->println("<visibility>" . $wiggle_data->get_visibility() . "</visibility>");
+  $self->println("<color>(" . join(", ", @{$wiggle_data->get_color()}) . ")</color>");
+  $self->println("<altColor>(" . join(", ", @{$wiggle_data->get_altColor()}) . ")</altColor>");
+  $self->println("<priority>" . $wiggle_data->get_priority() . "</priority>");
+  $self->println("<autoscale>" . $wiggle_data->get_autoscale() . "</autoscale>");
+  $self->println("<gridDefault>" . $wiggle_data->get_gridDefault() . "</gridDefault>");
+  $self->println("<maxHeightPixels>(" . join(", ", @{$wiggle_data->get_maxHeightPixels()}) . ")</maxHeightPixels>");
+  $self->println("<graphType>" . $wiggle_data->get_graphType() . "</graphType>");
+  $self->println("<viewLimits>(" . join(", ", @{$wiggle_data->get_viewLimits()}) . ")</viewLimits>");
+  $self->println("<yLineMark>" . $wiggle_data->get_yLineMark() . "</yLineMark>");
+  $self->println("<yLineOnOff>" . $wiggle_data->get_yLineOnOff() . "</yLineOnOff>");
+  $self->println("<windowingFunction>" . $wiggle_data->get_windowingFunction() . "</windowingFunction>");
+  $self->println("<smoothingWindow>" . $wiggle_data->get_smoothingWindow() . "</smoothingWindow>");
+  $self->println("<data>" . $wiggle_data->get_data() . "</data>");
+  $self->println("</wiggle_data>");
 }
 
 sub write_attribute {
