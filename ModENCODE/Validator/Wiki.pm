@@ -9,6 +9,7 @@ use ModENCODE::Validator::Wiki::FormValues;
 use ModENCODE::Validator::Wiki::LoginResult;
 use ModENCODE::Validator::CVHandler;
 use HTML::Entities ();
+use ModENCODE::ErrorHandler qw(log_error);
 
 my %protocol_defs_by_name       :ATTR( :default<undef> );
 my %protocol_defs_by_url        :ATTR( :default<undef> );
@@ -44,10 +45,11 @@ sub BUILD {
 sub merge {
   my ($self, $experiment) = @_;
   $experiment = $experiment->clone();
-  print STDERR "  (Re)validating experiment vs. wiki:\n";
+  log_error "(Re)validating experiment vs. wiki:", "notice", ">";
   $self->validate($experiment) or croak "Can't merge wiki data if it doesn't validate!"; # Cache all the protocol definitions and stuff if they aren't already
+  log_error "Done.", "notice", "<";
 
-  print STDERR "  Adding types from the wiki to input and output parameters.\n";
+  log_error "Adding types from the wiki to input and output parameters.", "notice", ">";
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
@@ -78,7 +80,7 @@ sub merge {
             # it will be used to tie together applied protocols
             next;
           } else {
-            print STDERR "    Warning: input term '" . $input_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.\n" if ($input_datum->get_name());
+            log_error "input term '" . $input_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.", "warning" if ($input_datum->get_name());
           }
         }
         if (!$wiki_input_def) {
@@ -118,7 +120,7 @@ sub merge {
             # it will be used to tie together applied protocols
             next;
           } else {
-            print STDERR "    Warning: output term '" . $output_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.\n" if ($output_datum->get_name());
+            log_error "output term '" . $output_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.", "warning" if ($output_datum->get_name());
           }
         }
         if (!$wiki_output_def) {
@@ -137,8 +139,8 @@ sub merge {
       }
     }
   }
-  print STDERR "  Done.\n";
-  print STDERR "  Adding wiki protocol metadata to the protocol objects.\n";
+  log_error "Done.", "notice", "<";
+  log_error "Adding wiki protocol metadata to the protocol objects.", "notice", ">";
   # Add protocol attributes based on wiki forms
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
@@ -153,7 +155,7 @@ sub merge {
         $protocol_description = $protocol_description->get_values()->[0];
         $protocol->set_description($protocol_description);
       } else {
-        print STDERR "    No description for protocol $protocol_name found at $protocol_url. Using URL as description.\n";
+        log_error "No description for protocol $protocol_name found at $protocol_url. Using URL as description.", "warning";
         $protocol->set_description("Please see: " . $protocol_url);
       }
       # Protocol type
@@ -208,7 +210,7 @@ sub merge {
     }
   }
 
-  print STDERR "  Done.\n";
+  log_error "Done.", "notice", "<";
   return $experiment;
 }
 
@@ -249,9 +251,9 @@ sub validate {
   $login = new ModENCODE::Validator::Wiki::LoginResult($login);
 
   # Fetch protocol descriptions from wiki based on protocol name
-  print STDERR "  Fetching protocol definitions from the wiki...\n";
+  log_error "Fetching protocol definitions from the wiki...", "notice", ">";
   if (defined($protocol_defs_by_url{ident $self}) && defined($protocol_defs_by_name{ident $self})) {
-    print STDERR "    Using cached.\n";
+    log_error "Using cached.", "notice";
   } else {
     $protocol_defs_by_url{ident $self} = {};
     $protocol_defs_by_name{ident $self} = {};
@@ -270,9 +272,9 @@ sub validate {
       $protocol_defs_by_name{ident $self}->{$protocol_name} = $formdata;
     }
     # Fetch protocol descriptions from wiki based on wiki link in the Protocol Description field
-    print STDERR "    ";
+    log_error " ", "notice", "=";
     foreach my $protocol_description (@unique_protocol_descriptions) {
-      print STDERR ".";
+      log_error ".", "notice", ".";
       next unless $protocol_description =~ m/^\s*https?:\/\/wiki.modencode.org\/project/;
       my $data = SOAP::Data->name('query' => \SOAP::Data->value(
           SOAP::Data->name('url' => HTML::Entities::encode($protocol_description))->type('xsd:string'),
@@ -285,14 +287,13 @@ sub validate {
       my $formdata = new ModENCODE::Validator::Wiki::FormData($res);
       $protocol_defs_by_url{ident $self}->{$protocol_description} = $formdata;
     }
-    print STDERR "\n";
-    print STDERR "  Done.\n";
+    log_error "\n", "notice", ".";
   }
+  log_error "Done.", "notice", "<";
 
   # Validate wiki data vs. experiment data passed in
-  print STDERR "  Verifying IDF protocols against wiki...\n";
-  print STDERR "    Validating wiki CV terms...\n";
-  print STDERR "      ";
+  log_error "Verifying IDF protocols against wiki...", "notice", ">";
+  log_error "Validating wiki CV terms...", "notice", ">";
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
@@ -308,7 +309,7 @@ sub validate {
             my ($cv, $term, $name) = $cvhandler{ident $self}->parse_term($value);
             if (!defined($cv)) { $cv = $wiki_protocol_attr->get_types()->[0]; }
             if (!$cvhandler{ident $self}->is_valid_term($cv, $term)) {
-              print STDERR "Couldn't find cvterm '$cv.$term'.\n";
+              log_error "Couldn't find cvterm '$cv.$term'.";
               $success = 0;
             }
           }
@@ -316,12 +317,11 @@ sub validate {
       }
     }
   }
-  print STDERR "\n";
   # Second, special fields need to be dealt with:
   # * "input type" and "output type" are parameter definitions, and need to be validated against the IDF
   # definitions of the same and against the actual uses of them in the SDRF
-  print STDERR "    Done.\n";
-  print STDERR "    Verifying that IDF controlled vocabulary match SDRF controlled vocabulary.\n";
+  log_error "Done.", "notice", "<";
+  log_error "Verifying that IDF controlled vocabulary match SDRF controlled vocabulary.", "notice", ">";
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
@@ -336,10 +336,10 @@ sub validate {
       for (my $i = 0; $i < scalar(@wiki_protocol_types); $i++) { $wiki_protocol_types[$i] =~ s/^\s*|\s*$//; }
       my @idf_protocol_types = grep { $_->get_heading() =~ /^\s*Protocol *Types?$/i } @{$protocol->get_attributes()};
       if (!scalar(@idf_protocol_types)) {
-        print STDERR "Warning: Protocol '" . $protocol->get_name() . "' has no protocol type definition in the IDF.\n";
+        log_error "Protocol '" . $protocol->get_name() . "' has no protocol type definition in the IDF.", "warning";
       } 
       if (scalar(@wiki_protocol_types) != scalar(@idf_protocol_types)) {
-        print STDERR "The protocol '" . $protocol->get_name() . "' has " . scalar(@wiki_protocol_types) . " Protocol Types in the wiki, and " . scalar(@idf_protocol_types) . " in the IDF.\n";
+        log_error "The protocol '" . $protocol->get_name() . "' has " . scalar(@wiki_protocol_types) . " Protocol Types in the wiki, and " . scalar(@idf_protocol_types) . " in the IDF.";
         $success = 0;
         next;
       }
@@ -353,7 +353,7 @@ sub validate {
           $cvhandler{ident $self}->add_cv($idf_type_cv, $idf_type_url, $idf_type_url_type);
         }
         if (!$cvhandler{ident $self}->get_cv_by_name($idf_type_cv)) {
-          print STDERR "Could not find a canonical URL for the controlled vocabulary $idf_type_cv when validating term " . $idf_protocol_type->get_value() . ".\n";
+          log_error "Could not find a canonical URL for the controlled vocabulary $idf_type_cv when validating term " . $idf_protocol_type->get_value() . ".";
           $success = 0;
           next;
         }
@@ -370,7 +370,7 @@ sub validate {
           }
         }
         if (!$valid) {
-          print STDERR "Could not find the protocol type $idf_type_cv:$idf_type_term defined in the wiki for " . $protocol->get_name() . "\n";
+          log_error "Could not find the protocol type $idf_type_cv:$idf_type_term defined in the wiki for '" . $protocol->get_name() . "'.";
           $success = 0;
         }
       }
@@ -390,13 +390,13 @@ sub validate {
       # Fail if there's more than one unnamed input in the SDRF
       my @anonymous_data = grep { $_->is_anonymous() } @{$applied_protocol->get_input_data()};
       if (scalar(grep { !defined($_->get_name()) || length($_->get_name()) <= 0 } @{$applied_protocol->get_input_data()}) - scalar(@anonymous_data) > 1) {
-        print STDERR "Cannot have more than one un-named input parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_input_data()}) . ") for protocol " . $protocol->get_name() . " in the SDRF.\n";
+        log_error "Cannot have more than one un-named input parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_input_data()}) . ") for protocol " . $protocol->get_name() . " in the SDRF.";
         $success = 0;
         next;
       }
       # Fail if there's more than one unnamed input in the wiki
       if (scalar(grep { !defined($_->{'name'}) || length($_->{'name'}) <= 0 } @$input_type_defs_terms) > 1) {
-        print STDERR "Cannot have more than one un-named input parameter (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$input_type_defs_terms) . ") for protocol " . $protocol->get_name() . " in the wiki.\n";
+        log_error "Cannot have more than one un-named input parameter (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$input_type_defs_terms) . ") for protocol " . $protocol->get_name() . " in the wiki.";
         $success = 0;
         next;
       }
@@ -406,12 +406,12 @@ sub validate {
         &&
         scalar(@$input_type_defs_terms) != scalar(@{$applied_protocol->get_input_data()}) # Everything accounted for
       ) {
-        print STDERR "There are " . scalar(@$input_type_defs_terms) . " input parameters according to the wiki";
-        print STDERR " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$input_type_defs_terms) . ")";
-        print STDERR ", and " . scalar(@{$applied_protocol->get_input_data()}) . " input parameters in the SDRF";
-        print STDERR " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_input_data()}) . ")";
-        print STDERR " for protocol " . $protocol->get_name() . ".\n";
-        print STDERR "Please correct one or the other.\n";
+        log_error("There are " . scalar(@$input_type_defs_terms) . " input parameters according to the wiki" .
+        " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$input_type_defs_terms) . ")" .
+        ", and " . scalar(@{$applied_protocol->get_input_data()}) . " input parameters in the SDRF" .
+        " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_input_data()}) . ")" .
+        " for protocol " . $protocol->get_name() . ".\n" .
+        "Please correct one or the other.");
         $success = 0;
         next;
       }
@@ -420,7 +420,7 @@ sub validate {
       foreach my $wiki_term (@$input_type_defs_terms) {
         next unless (defined($wiki_term->{'name'}) && length($wiki_term->{'name'})); # Allowed to have one unnamed one
         if (!scalar(grep { $_->get_name() eq $wiki_term->{'name'} } @{$applied_protocol->get_input_data()})) {
-          print STDERR "Can't find the input [" . $wiki_term->{'name'} . "] in the SDRF for protocol " . $protocol->get_name() . "\n";
+          log_error "Can't find the input [" . $wiki_term->{'name'} . "] in the SDRF for protocol '" . $protocol->get_name() . "'.";
           $success = 0;
           next;
         }
@@ -442,13 +442,13 @@ sub validate {
       # Fail if there's more than one unnamed output in the SDRF
       my @anonymous_data = grep { $_->is_anonymous() } @{$applied_protocol->get_output_data()};
       if (scalar(grep { !defined($_->get_name()) || length($_->get_name()) <= 0 } @{$applied_protocol->get_output_data()}) - scalar(@anonymous_data) > 1) {
-        print STDERR "Cannot have more than one un-named output parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_output_data()}) . ") for protocol " . $protocol->get_name() . " in the SDRF.\n";
+        log_error "Cannot have more than one un-named output parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_output_data()}) . ") for protocol " . $protocol->get_name() . " in the SDRF.";
         $success = 0;
         next;
       }
       # Fail if there's more than one unnamed output in the wiki
       if (scalar(grep { !defined($_->{'name'}) || length($_->{'name'}) <= 0 } @$output_type_defs_terms) > 1) {
-        print STDERR "Cannot have more than one un-named output parameter (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$output_type_defs_terms) . ") for protocol " . $protocol->get_name() . " in the wiki.\n";
+        log_error "Cannot have more than one un-named output parameter (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$output_type_defs_terms) . ") for protocol '" . $protocol->get_name() . "' in the wiki.";
         $success = 0;
         next;
       }
@@ -458,12 +458,12 @@ sub validate {
         &&
         scalar(@$output_type_defs_terms) != scalar(@{$applied_protocol->get_output_data()}) # Everything accounted for
       ) {
-        print STDERR "There are " . scalar(@$output_type_defs_terms) . " output parameters according to the wiki";
-        print STDERR " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$output_type_defs_terms) . ")";
-        print STDERR ", and " . scalar(@{$applied_protocol->get_output_data()}) . " output parameters in the SDRF";
-        print STDERR " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_output_data()}) . ")";
-        print STDERR " for protocol " . $protocol->get_name() . ".\n";
-        print STDERR "Please correct one or the other.\n";
+        log_error("There are " . scalar(@$output_type_defs_terms) . " output parameters according to the wiki" .
+        " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @$output_type_defs_terms) . ")" .
+        ", and " . scalar(@{$applied_protocol->get_output_data()}) . " output parameters in the SDRF" .
+        " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_output_data()}) . ")" .
+        " for protocol '" . $protocol->get_name() . "'.\n" .
+        "Please correct one or the other.");
         $success = 0;
         next;
       }
@@ -472,15 +472,15 @@ sub validate {
       foreach my $wiki_term (@$output_type_defs_terms) {
         next unless (defined($wiki_term->{'name'}) && length($wiki_term->{'name'})); # Allowed to have one unnamed one
         if (!scalar(grep { $_->get_name() eq $wiki_term->{'name'} } @{$applied_protocol->get_output_data()})) {
-          print STDERR "Can't find the output [" . $wiki_term->{'name'} . "] in the SDRF for protocol " . $protocol->get_name() . "\n";
+          log_error "Can't find the output [" . $wiki_term->{'name'} . "] in the SDRF for protocol '" . $protocol->get_name() . "'.";
           $success = 0;
           next;
         }
       }
     }
   }
-  print STDERR "    Done.\n";
-  print STDERR "  Done.\n";
+  log_error "Done.", "notice", "<";
+  log_error "Done.", "notice", "<";
 
   return $success;
 }

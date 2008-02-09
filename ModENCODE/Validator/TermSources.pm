@@ -6,6 +6,7 @@ use Carp qw(croak carp);
 use ModENCODE::Validator::CVHandler;
 use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::DB;
+use ModENCODE::ErrorHandler qw(log_error);
 
 my %cvhandler                   :ATTR( :default<undef> );
 
@@ -58,7 +59,7 @@ sub merge {
     }
   }
 
-  print STDERR "    Making sure that all CV and DB names are consistent.\n";
+  log_error "Making sure that all CV and DB names are consistent.", "notice", ">";
   # experiment_prop (dbxref, type)
   foreach my $experiment_prop (@{$experiment->get_properties()}) {
     if ($experiment_prop->get_type()) {
@@ -128,7 +129,7 @@ sub merge {
       }
     }
   }
-  print STDERR "    Done.\n";
+  log_error "Done.", "notice", "<";
 
   return $experiment;
 }
@@ -137,8 +138,7 @@ sub validate {
   my ($self, $experiment) = @_;
   my $success = 1;
   $experiment = $experiment->clone(); # Don't do anything to change the experiment passed in
-  print STDERR "  Verifying term sources referenced in the SDRF against the terms they constrain.\n";
-  print STDERR "    ";
+  log_error "Verifying term sources referenced in the SDRF against the terms they constrain.", "notice", ">";
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
@@ -146,13 +146,13 @@ sub validate {
       # Term sources can apply to protocols, data, and attributes (which is to say pretty much everything)
       # Protocol
       if ($protocol->get_termsource() && !($self->is_valid($protocol->get_termsource(), $protocol->get_name()))) {
-        print STDERR "\n    Term source " . $protocol->get_termsource()->to_string() . " not valid as it applies to protocol " . $protocol->get_name() . "\n    ";
+        log_error "Term source '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") does not contain a definition for protocol '" . $protocol->get_name() . "'.";
         $success = 0;
       }
       # Protocol attributes
       foreach my $attribute (@{$protocol->get_attributes()}) {
         if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-          print STDERR "\n    Term source " . $attribute->get_termsource()->to_string() . " not valid as it applies to attribute " . $attribute->to_string() . " of protocol " . $protocol->get_name() . "\n    ";
+          log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
           $success = 0;
         }
       }
@@ -160,35 +160,34 @@ sub validate {
       my @data = (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()});
       foreach my $datum (@data) {
         if ($datum->get_termsource() && !($self->is_valid($datum->get_termsource(), $datum->get_value()))) {
-          print STDERR "\n    Term source " . $datum->get_termsource()->to_string() . " not valid as it applies to datum " . $datum->to_string() . " of protocol " . $protocol->get_name() . "\n    ";
+          log_error "Term source '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") does not contain a definition for datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
           $success = 0;
         }
         # Data attributes
         foreach my $attribute (@{$datum->get_attributes()}) {
           if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-            print STDERR "\n    Term source " . $attribute->get_termsource()->to_string() . " not valid as it applies to attribute " . $attribute->to_string() . " of datum " . $datum->to_string() . " of protocol " . $protocol->get_name() . "\n    ";
+            log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
             $success = 0;
           }
         }
       }
     }
   }
-  print STDERR "\n";
-  print STDERR "    Done.\n";
-  print STDERR "    Make sure all types and term sources are valid.\n";
+  log_error "Done.", "notice", "<";
+  log_error "Make sure all types and term sources are valid.", "notice", ">";
   # One last run through all CVTerms and DBXrefs to make we know all of them
   # There is some redundancy here, but it should be plenty fast
   # experiment_prop (dbxref, type)
   foreach my $experiment_prop (@{$experiment->get_properties()}) {
     if ($experiment_prop->get_type()) {
       if (!$cvhandler{ident $self}->is_valid_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name())) {
-        print STDERR "    Type " . $experiment_prop->get_type()->to_string() . " is not a valid CVTerm for experiment_prop '" . $experiment_prop->to_string() . "'\n";
+        log_error "Type '" . $experiment_prop->get_type()->get_cv()->get_name() . ":" . $experiment_prop->get_type()->get_name() . "' is not a valid CVTerm for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
         $success = 0;
       }
     }
     if ($experiment_prop->get_termsource()) {
       if (!$self->is_valid($experiment_prop->get_termsource(), $experiment_prop->get_value())) {
-        print STDERR "    Termsource " . $experiment_prop->get_termsource()->to_string() . " is not a valid DBXref for experiment_prop '" . $experiment_prop->to_string() . "'\n";
+        log_error "Termsource '" . $experiment_prop->get_termsource()->get_db()->get_name() . "' (" . $experiment_prop->get_termsource()->get_db()->get_url() . ") is not a valid term source/DBXref for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
         $success = 0;
       }
     }
@@ -199,7 +198,7 @@ sub validate {
       # protocol (dbxref)
       if ($protocol->get_termsource()) {
         if (!$self->is_valid($protocol->get_termsource(), $protocol->get_name())) {
-          print STDERR "    Termsource " . $protocol->get_termsource()->to_string() . " is not a valid DBXref for protocol '" . $protocol->to_string() . "'\n";
+          log_error "Termsource '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for protocol '" . $protocol->get_name() . "'.";
           $success = 0;
         }
       }
@@ -207,13 +206,13 @@ sub validate {
       foreach my $attribute (@{$protocol->get_attributes()}) {
         if ($attribute->get_type()) {
           if (!$cvhandler{ident $self}->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
-            print STDERR "    Type " . $attribute->get_type()->to_string() . " is not a valid CVTerm for attribute '" . $attribute->to_string() . "'\n";
+            log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
             $success = 0;
           }
         }
         if ($attribute->get_termsource()) {
           if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
-            print STDERR "    Termsource " . $attribute->get_termsource()->to_string() . " is not a valid DBXref for attribute '" . $attribute->to_string() . "'\n";
+            log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
             $success = 0;
           }
         }
@@ -222,13 +221,13 @@ sub validate {
       foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
         if ($datum->get_type()) {
           if (!$cvhandler{ident $self}->is_valid_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name())) {
-            print STDERR "    Type " . $datum->get_type()->to_string() . " is not a valid CVTerm for datum '" . $datum->to_string() . "'\n";
+            log_error "Type '" . $datum->get_type()->get_cv()->get_name() . ":" . $datum->get_type()->get_name() . "' is not a valid CVTerm for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'.";
             $success = 0;
           }
         }
         if ($datum->get_termsource()) {
           if (!$self->is_valid($datum->get_termsource(), $datum->get_value())) {
-            print STDERR "    Termsource " . $datum->get_termsource()->to_string() . " is not a valid DBXref for datum '" . $datum->to_string() . "'\n";
+            log_error "Termsource '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'";
             $success = 0;
           }
         }
@@ -236,13 +235,13 @@ sub validate {
         foreach my $attribute (@{$datum->get_attributes()}) {
           if ($attribute->get_type()) {
             if (!$cvhandler{ident $self}->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
-              print STDERR "    Type " . $attribute->get_type()->to_string() . " is not a valid CVTerm for attribute '" . $attribute->to_string() . "'\n";
+              log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
               $success = 0;
             }
           }
           if ($attribute->get_termsource()) {
             if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
-              print STDERR "    Termsource " . $attribute->get_termsource()->to_string() . " is not a valid DBXref for attribute '" . $attribute->to_string() . "'\n";
+              log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
               $success = 0;
             }
           }
@@ -251,7 +250,7 @@ sub validate {
     }
   }
 
-  print STDERR "    Done.\n";
+  log_error "Done.", "notice", "<";
   return $success;
 
 }
@@ -277,10 +276,10 @@ sub is_valid : PRIVATE {
   croak "Cannot validate a term against a termsource without a termsource object" unless $termsource && ref($termsource) eq "ModENCODE::Chado::DBXref";
   if (!$term && !$accession) {
     # Really shouldn't use is_valid with no term or accession like this
-    carp "Given a termsource to validate with no term or accession; testing accession built into termsource: " . $termsource->to_string() . "\n";
+    log_error "Given a termsource to validate with no term or accession; testing accession built into termsource: " . $termsource->to_string(), "warning";
     $accession = $termsource->get_accession();
     if (!$accession) {
-      carp "Nothing to validate; no term or accession given, and no accession built into termsource: " . $termsource->to_string() . "\n";
+      log_error "Nothing to validate; no term or accession given, and no accession built into termsource: " . $termsource->to_string() . "\n";
       return 0;
     }
   }
@@ -289,15 +288,18 @@ sub is_valid : PRIVATE {
     $termsource->get_db()->get_url(),
     $termsource->get_db()->get_description(),
   )) {
+    log_error "Couldn't add the termsource specified by '" . $termsource->get_db()->get_name() . "' (" . $termsource->get_db()->get_url() . ").";
     $valid = 0;
   }
   if ($accession) {
     if (!$cvhandler{ident $self}->is_valid_accession($termsource->get_db()->get_name(), $accession)) {
+      log_error "Couldn't find the accession $accession in '" . $termsource->get_db()->get_name() . "' (" . $termsource->get_db()->get_url() . ").";
       $valid = 0;
     }
   } 
   if ($term) {
     if (!$cvhandler{ident $self}->is_valid_term($termsource->get_db()->get_name(), $term)) {
+      log_error "Couldn't find the term $term in '" . $termsource->get_db()->get_name() . "' (" . $termsource->get_db()->get_url() . ").";
       $valid = 0;
     }
   }

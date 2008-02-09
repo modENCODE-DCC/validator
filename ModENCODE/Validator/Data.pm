@@ -1,8 +1,10 @@
 package ModENCODE::Validator::Data;
 use strict;
 use ModENCODE::Validator::Data::BED;
+#use ModENCODE::Validator::Data::NCBITrace;
 use Class::Std;
 use Carp qw(croak carp);
+use ModENCODE::ErrorHandler qw(log_error);
 
 my %validators                  :ATTR( :default<{}> );
 
@@ -73,12 +75,12 @@ sub validate {
             $cached_is_valid{$parser_module}->{$output_datum->to_string()} = $is_valid;
           }
           if (!$cached_is_valid{$parser_module}->{$output_datum->to_string()}) {
-            print STDERR "The following datum does not validate using $parser_module:\n  " . $output_datum->to_string() . "\n";
+            log_error "The following datum does not validate using $parser_module:\n  " . $output_datum->to_string();
             $success = 0;
             next;
           }
         } else {
-          print STDERR "    Warning: no validator for data type " . $output_datum_type->get_cv()->get_name() . "_" . $output_datum_type->get_name() . "\n";
+          log_error "No validator for data type " . $output_datum_type->get_cv()->get_name() . "_" . $output_datum_type->get_name() . ".", "warning";
         }
       }
     }

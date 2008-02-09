@@ -16,6 +16,7 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::Attribute;
+use ModENCODE::ErrorHandler qw(error_log);
 
 my %dbh             :ATTR(                          :default<undef> );
 my %host            :ATTR( :name<host>,             :default<undef> );
@@ -55,10 +56,10 @@ sub get_available_experiments {
 sub get_experiment {
   my ($self) = @_;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    print STDERR "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   if (!defined($experiment{ident $self})) {
-    print STDERR "Experiment is empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+    carp "Experiment is empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   return $experiment{ident $self};
 }
@@ -67,7 +68,7 @@ sub get_experiment {
 sub get_normalized_protocol_slots {
   my ($self) = @_;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    print STDERR "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   my @return_protocol_slots;
   for (my $i = 0; $i < scalar(@{$protocol_slots{ident $self}}); $i++) {
@@ -83,7 +84,7 @@ sub get_normalized_protocol_slots {
 sub get_denormalized_protocol_slots {
   my ($self) = @_;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    print STDERR "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   my @new_protocol_slots = ($protocol_slots{ident $self}->[0]);
   foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
@@ -114,10 +115,6 @@ sub get_tsv {
   my $expected_length = scalar(@{$columns->[0]});
   foreach my $column (@$columns) {
     if (scalar(@$column) != $expected_length) {
-      foreach my $col (@$columns) {
-        print STDERR scalar(@$col) . "\t";
-      }
-      print STDERR "\n";
       carp "Cannot print_tsv a \@columns array that is not a rectangular array of arrays: column " . $column->[0] . " has " . scalar(@$column) . " rows, when $expected_length were expected";
       return;
     }
@@ -134,25 +131,16 @@ sub get_tsv_columns {
   my ($self) = @_;
   my @protocol_slots;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    print STDERR "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
     return [];
   }
-#  my @protocol_slots = ($protocol_slots{ident $self}->[0]);
   my @protocol_slots = ([]);
-#  for (my $i = 0; $i < scalar(@{$protocol_slots{ident $self}}); $i++) {
-#    my $applied_protocols = $protocol_slots{ident $self}->[$i];
-#    print STDERR "Protocol Slots[$i] is " . scalar(@{$applied_protocols}) . " deep.\n";
-#  }
   foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
     my $num_duplicate_first_ap = scalar(denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@protocol_slots));
     for (my $i = 0; $i < $num_duplicate_first_ap; $i++) {
       push @{$protocol_slots[0]}, $first_applied_protocol;
     }
   }
-#  for (my $i = 0; $i < scalar(@protocol_slots); $i++) {
-#    my $applied_protocols = $protocol_slots[$i];
-#    print STDERR "Busted Protocol Slots[$i] is " . scalar(@{$applied_protocols}) . " deep.\n";
-#  }
   my @columns;
 
   # Use seen_data to keep from re-printing out as inputs of the next
@@ -598,10 +586,6 @@ sub denormalize_applied_protocol {
   # For each applied protocol in the current slot
   foreach my $next_applied_protocol (@$next_applied_protocols) {
     my $this_ap_follows_prev_ap = scalar(grep { $previous_applied_protocol_id == $_} @{$next_applied_protocol->{'previous_applied_protocol_id'}});
-    if (scalar(@{$next_applied_protocol->{'previous_applied_protocol_id'}}) > 1 && $this_ap_follows_prev_ap) {
-      print STDERR $next_applied_protocol->{'applied_protocol'}->to_string() . " comes from:\n";
-      print STDERR $applied_protocol->{'applied_protocol'}->to_string() . "\n\n";
-    }
     # Get the IDs of applied protocols in the previous slot that have data used in this one
     if ($this_ap_follows_prev_ap) {
       my @next_rows = denormalize_applied_protocol($next_applied_protocol, $protocol_slots, $new_protocol_slots, $slotnum+1);

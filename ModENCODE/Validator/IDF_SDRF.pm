@@ -3,6 +3,7 @@ package ModENCODE::Validator::IDF_SDRF;
 use strict;
 use Class::Std;
 use Carp qw(croak);
+use ModENCODE::ErrorHandler qw(log_error);
 
 
 my %idf_experiment   :ATTR( :name<idf_experiment> );
@@ -58,7 +59,7 @@ sub merge {
       if (defined($datum->get_name()) && length($datum->get_name())) {
         my @matching_params = grep { $_ eq $datum->get_name() } @idf_params;;
         if (!scalar(@matching_params)) {
-          print STDERR "Removing datum '" . $datum->get_name . "' as input from '" . $sdrf_protocol->get_name() . "'; not found in IDF's Protocol Parameters.\n";
+          log_error "Removing datum '" . $datum->get_name . "' as input from '" . $sdrf_protocol->get_name() . "'; not found in IDF's Protocol Parameters.", "warning";
           $sdrf_applied_protocol->remove_input_datum($datum);
         }
       }
@@ -123,7 +124,7 @@ sub validate {
     }
   }
   if (scalar(@undefined_protocols)) {
-    print STDERR "The following protocol(s) are referred to in the SDRF but not defined in the IDF!\n  '" . join("', '", map { $_->get_name() } @undefined_protocols) . "'\n";
+    log_error "The following protocol(s) are referred to in the SDRF but not defined in the IDF!\n  '" . join("', '", map { $_->get_name() } @undefined_protocols) . "'.";
     $success = 0;
   }
   # Parameters
@@ -163,7 +164,7 @@ sub validate {
     foreach my $idf_param (@idf_params) {
       my @matching_param = grep { $_ eq $idf_param } @sdrf_params;
       if (!scalar(@matching_param)) {
-        print STDERR "Unable to find the '$idf_param' field in the SDRF even though it is defined in the IDF.\n";
+        log_error "Unable to find the '$idf_param' field in the SDRF even though it is defined in the IDF.";
         $success = 0;
       }
     }
@@ -213,7 +214,7 @@ sub validate {
     }
   }
   if (scalar(@undefined_term_sources)) {
-    print STDERR "The following term source(s) are referred to in the SDRF but not defined in the IDF!\n  '" . join("', '", map { $_->get_name() } @undefined_term_sources) . "'\n";
+    log_error "The following term source(s) are referred to in the SDRF but not defined in the IDF!\n  '" . join("', '", map { $_->get_name() } @undefined_term_sources) . "'.";
     $success = 0;
   }
 

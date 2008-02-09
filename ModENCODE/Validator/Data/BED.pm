@@ -3,16 +3,17 @@ use strict;
 use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::Chado::Wiggle_Data;
+use ModENCODE::ErrorHandler qw(log_error);
 
 sub validate {
   my ($self, $datum) = @_;
   $datum = $datum->clone();
   my $success = 1;
   if (!length($datum->get_value())) {
-    print STDERR "    Warning: No BED file for " . $datum->get_heading() . "\n";
+    log_error "No BED file for " . $datum->get_heading(), 'warning';
   }
   if (!-r $datum->get_value()) {
-    carp "    Cannot find BED file " . $datum->get_value() . " for column " . $datum->get_heading();
+    log_error "Cannot find BED file " . $datum->get_value() . " for column " . $datum->get_heading();
     $success = 0;
   } else {
     open FH, '<', $datum->get_value();
@@ -23,7 +24,7 @@ sub validate {
       next if $line =~ m/^\s*$/; # Skip blank lines
       my ($chr, $start, $end, $value) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)\s+([-+]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*$/);
       if (!(length($chr) && length($start) && length($end) && length($value))) {
-        carp "    BED file " . $datum->get_value() . " does not seem valid beginning at line $linenum:\n      $line";
+        log_error "BED file " . $datum->get_value() . " does not seem valid beginning at line $linenum:\n      $line";
         $success = 0;
         last;
       }

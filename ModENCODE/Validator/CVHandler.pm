@@ -7,6 +7,7 @@ use LWP::UserAgent;
 use URI::Escape ();
 use GO::Parser;
 use ModENCODE::Validator::Wiki::URLValidator;
+use ModENCODE::ErrorHandler qw(log_error);
 
 my %useragent                   :ATTR;
 my %cvs                         :ATTR( :default<{}> );
@@ -49,14 +50,18 @@ sub add_cv_synonym_for_url {
     push @{$cvs{ident $self}->{$url}->{'names'}}, $synonym;
     return 1;
   } elsif ($existing_url ne $url) {
-    print STDERR "  The CV name $synonym is already used for $existing_url, but at attempt has been made to redefine it for $url. Please check your IDF.\n";
-    print STDERR "  Also, please note that 'xsd', 'modencode', and 'MO' may already be predefined to refer to URLs:\n";
-    print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/xsd.obo\n";
-    print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/modencode-helper.obo\n";
-    print STDERR "    http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo\n";
+    log_error("  The CV name $synonym is already used for $existing_url, but at attempt has been made to redefine it for $url. Please check your IDF.\n" .
+    "  Also, please note that 'xsd', 'modencode', and 'MO' may already be predefined to refer to URLs:\n" .
+    "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/xsd.obo\n" .
+    "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/modencode-helper.obo\n" .
+    "    http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo");
     return 0;
   } else {
-    croak "Can't add synonym '$synonym' for missing CV identified by $url" unless $cv;
+    if (!$cv) {
+      log_error "Can't add synonym '$synonym' for missing CV identified by $url";
+      return 0;
+    }
+    return 1;
   }
 }
 
@@ -103,7 +108,7 @@ sub add_cv {
   if (!$cvurl || !$cvurltype) {
     # Fetch canonical URL
     my $res = $useragent{ident $self}->request(new HTTP::Request('GET' => 'http://wiki.modencode.org/project/extensions/DBFields/DBFieldsCVTerm.php?get_canonical_url=' . URI::Escape::uri_escape($cv)));
-    if (!$res->is_success) { carp "Couldn't connect to canonical URL source: " . $res->status_line; return 0; }
+    if (!$res->is_success) { log_error "Couldn't connect to canonical URL source: " . $res->status_line; return 0; }
     ($cvurl) = ($res->content =~ m/<canonical_url>\s*(.*)\s*<\/canonical_url>/);
     ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/);
   }
@@ -111,11 +116,11 @@ sub add_cv {
   if ($cvurl && $cv) {
     my $existing_cv = $self->get_cv_by_name($cv);
     if ($existing_cv->{'url'} && $existing_cv->{'url'} ne $cvurl) {
-      print STDERR "  The CV name $cv is already used for " . $existing_cv->{'url'} . ", but at attempt has been made to redefine it for $cvurl. Please check your IDF.\n";
-      print STDERR "  Also, please note that 'xsd', 'modencode', and 'MO' may already be predefined to refer to URLs:\n";
-      print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/xsd.obo\n";
-      print STDERR "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/modencode-helper.obo\n";
-      print STDERR "    http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo\n";
+      log_error("  The CV name $cv is already used for " . $existing_cv->{'url'} . ", but at attempt has been made to redefine it for $cvurl. Please check your IDF.\n" .
+      "  Also, please note that 'xsd', 'modencode', and 'MO' may already be predefined to refer to URLs:\n" .
+      "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/xsd.obo\n" .
+      "    http://wiki.modencode.org/project/extensions/DBFields/ontologies/modencode-helper.obo\n" .
+      "    http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo");
       return 0;
     }
   }
@@ -158,11 +163,11 @@ sub add_cv {
   my $res = $self->mirror_url($cvurl, $cache_filename);
   if (!$res->is_success) {
     if ($res->code == 304) {
-      print STDERR "    Using cached copy of CV for $cv; no change on server.\n";
+      log_error "Using cached copy of CV for $cv; no change on server.", "notice";
     } else {
-      carp "Can't fetch or check age of canonical CV source file for '$cv' at url '" . $newcv->{'url'} . "': " . $res->status_line;
+      log_error "Can't fetch or check age of canonical CV source file for '$cv' at url '" . $newcv->{'url'} . "': " . $res->status_line, "warning";
       if (!(-r $cache_filename)) {
-        carp "Couldn't fetch canonical source file '" . $newcv->{'url'} . "', and no cached copy found";
+        log_error "Couldn't fetch canonical source file '" . $newcv->{'url'} . "', and no cached copy found.";
         return 0;
       }
     }
@@ -173,12 +178,12 @@ sub add_cv {
     my $parser = new GO::Parser({ 'format' => 'obo_text', 'handler' => 'obj' });
     # Disable warning outputs here
     open OLDERR, ">&", \*STDERR or croak "Can't hide STDERR output from GO::Parser";
-    print STDERR "(Parsing $cv...)";
+    log_error "(Parsing $cv...", "notice", "=";
     close STDERR;
     $parser->parse($cache_filename);
     open STDERR, ">&", \*OLDERR or croak "Can't reopen STDERR output after closing before GO::Parser";
-    print STDERR "(Done.)";
-    croak "Cannot parse '" . $cache_filename . "' using " . ref($parser) unless $parser->handler->graph;
+    log_error "Done.)\n", "notice", ".";
+    croak "Cannot parse OBO file '" . $cache_filename . "' using " . ref($parser) unless $parser->handler->graph;
     $newcv->{'nodes'} = $parser->handler->graph->get_all_nodes;
   } elsif ($cvurltype =~ m/^OWL$/i) {
     croak "Can't parse OWL files yet, sorry. Please update your IDF to point to an OBO file.";
@@ -199,7 +204,7 @@ sub is_valid_term {
     # This CV isn't loaded, so attempt to load it
     my $cv_exists = $self->add_cv($cvname);
     if (!$cv_exists) {
-      print STDERR "Cannot find the '$cvname' ontology, so '$term' is not valid.\n";
+      log_error "Cannot find the '$cvname' ontology, so '$term' is not valid.";
       return 0;
     }
     $cv = $self->get_cv_by_name($cvname);
@@ -251,7 +256,7 @@ sub is_valid_accession {
     # This CV isn't loaded, so attempt to load it
     my $cv_exists = $self->add_cv($cvname);
     if ($cv_exists == 0) {
-      print STDERR "Cannot find the '$cvname' ontology, so accession $accession is not valid.\n";
+      log_error "Cannot find the '$cvname' ontology, so accession $accession is not valid.";
       return 0;
     }
 
