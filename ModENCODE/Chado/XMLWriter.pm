@@ -48,7 +48,8 @@ sub write_chadoxml {
   # Write the experiment
   $experiment->set_chadoxml_id($self->generate_uniqid("Experiment"));
   $self->println("<experiment id=\"" . $experiment->get_chadoxml_id() . "\">");
-  $self->println("<description>" . HTML::Entities::encode_numeric($experiment->get_description()) . "</description>");
+  $self->println("<description>" . xml_escape($experiment->get_description()) . "</description>");
+  $self->println("<uniquename>" . xml_escape($experiment->get_uniquename()) . "</uniquename>");
   foreach my $applied_protocol (@{$experiment->get_applied_protocols_at_slot(0)}) {
     $self->println("<experiment_applied_protocol>");
     $self->println("<first_applied_protocol_id>" . $applied_protocol->get_chadoxml_id() . "</first_applied_protocol_id>");
@@ -107,8 +108,8 @@ sub write_applied_protocol : PRIVATE {
 sub write_protocol : PRIVATE {
   my ($self, $protocol) = @_;
   $self->println("<protocol id=\"" . $protocol->get_chadoxml_id() . "\">");
-  $self->println("<name>" . HTML::Entities::encode_numeric($protocol->get_name()) . "</name>");
-  $self->println("<description>" . HTML::Entities::encode_numeric($protocol->get_description()) . "</description>");
+  $self->println("<name>" . xml_escape($protocol->get_name()) . "</name>");
+  $self->println("<description>" . xml_escape($protocol->get_description()) . "</description>");
 
   foreach my $attribute (@{$protocol->get_attributes()}) {
     $self->println("<protocol_attribute>");
@@ -131,9 +132,9 @@ sub write_experiment_prop {
   my ($self, $experiment_prop, $experiment) = @_;
   $self->println("<experiment_prop>");
   $self->println("<experiment_id>" . $experiment->get_chadoxml_id() . "</experiment_id>");
-  $self->println("<name>" . HTML::Entities::encode_numeric($experiment_prop->get_name()) . "</name>");
-  $self->println("<value>" . HTML::Entities::encode_numeric($experiment_prop->get_value()) . "</value>");
-  $self->println("<rank>" . HTML::Entities::encode_numeric($experiment_prop->get_rank()) . "</rank>");
+  $self->println("<name>" . xml_escape($experiment_prop->get_name()) . "</name>");
+  $self->println("<value>" . xml_escape($experiment_prop->get_value()) . "</value>");
+  $self->println("<rank>" . xml_escape($experiment_prop->get_rank()) . "</rank>");
   if ($experiment_prop->get_termsource()) {
     $self->println("<dbxref_id>");
     $self->write_dbxref($experiment_prop->get_termsource());
@@ -151,9 +152,9 @@ sub write_experiment_prop {
 sub write_datum {
   my ($self, $datum) = @_;
   $self->println("<data id=\"" . $datum->get_chadoxml_id() . "\">");
-  $self->println("<name>" . HTML::Entities::encode_numeric($datum->get_name()) . "</name>");
-  $self->println("<heading>" . HTML::Entities::encode_numeric($datum->get_heading()) . "</heading>");
-  $self->println("<value>" . HTML::Entities::encode_numeric($datum->get_value()) . "</value>");
+  $self->println("<name>" . xml_escape($datum->get_name()) . "</name>");
+  $self->println("<heading>" . xml_escape($datum->get_heading()) . "</heading>");
+  $self->println("<value>" . xml_escape($datum->get_value()) . "</value>");
 
   if ($datum->get_termsource()) {
     $self->println("<dbxref_id>");
@@ -230,10 +231,10 @@ sub write_wiggle_data {
 sub write_attribute {
   my ($self, $attribute) = @_;
   $self->println("<attribute>");
-  $self->println("<name>" . HTML::Entities::encode_numeric($attribute->get_name()) . "</name>");
-  $self->println("<heading>" . HTML::Entities::encode_numeric($attribute->get_heading()) . "</heading>");
-  $self->println("<value>" . HTML::Entities::encode_numeric($attribute->get_value()) . "</value>");
-  $self->println("<rank>" . HTML::Entities::encode_numeric($attribute->get_rank()) . "</rank>");
+  $self->println("<name>" . xml_escape($attribute->get_name()) . "</name>");
+  $self->println("<heading>" . xml_escape($attribute->get_heading()) . "</heading>");
+  $self->println("<value>" . xml_escape($attribute->get_value()) . "</value>");
+  $self->println("<rank>" . xml_escape($attribute->get_rank()) . "</rank>");
 
   if ($attribute->get_termsource()) {
     $self->println("<dbxref_id>");
@@ -253,8 +254,8 @@ sub write_attribute {
 sub write_cvterm {
   my ($self, $cvterm) = @_;
   $self->println("<cvterm>");
-  $self->println("<name>" . HTML::Entities::encode_numeric($cvterm->get_name()) . "</name>");
-  $self->println("<definition>" . HTML::Entities::encode_numeric($cvterm->get_definition()) . "</definition>");
+  $self->println("<name>" . xml_escape($cvterm->get_name()) . "</name>");
+  $self->println("<definition>" . xml_escape($cvterm->get_definition()) . "</definition>");
   
   if ($cvterm->get_cv()) {
     $self->println("<cv_id>");
@@ -274,16 +275,16 @@ sub write_cvterm {
 sub write_cv {
   my ($self, $cv) = @_;
   $self->println("<cv>");
-  $self->println("<name>" . HTML::Entities::encode_numeric($cv->get_name()) . "</name>");
-  $self->println("<definition>" . HTML::Entities::encode_numeric($cv->get_definition()) . "</definition>");
+  $self->println("<name>" . xml_escape($cv->get_name()) . "</name>");
+  $self->println("<definition>" . xml_escape($cv->get_definition()) . "</definition>");
   $self->println("</cv>");
 }
 
 sub write_dbxref : PRIVATE {
   my ($self, $dbxref) = @_;
   $self->println("<dbxref>");
-  $self->println("<accession>" . HTML::Entities::encode_numeric($dbxref->get_accession()) . "</accession>");
-  $self->println("<version>" . HTML::Entities::encode_numeric($dbxref->get_version()) . "</version>");
+  $self->println("<accession>" . xml_escape($dbxref->get_accession()) . "</accession>");
+  $self->println("<version>" . xml_escape($dbxref->get_version()) . "</version>");
   $self->println("<db_id>");
   $self->write_db($dbxref->get_db());
   $self->println("</db_id>");
@@ -293,9 +294,9 @@ sub write_dbxref : PRIVATE {
 sub write_db : PRIVATE {
   my ($self, $db) = @_;
   $self->println("<db>");
-  $self->println("<name>" . HTML::Entities::encode_numeric($db->get_name()) . "</name>");
-  $self->println("<url>" . HTML::Entities::encode_numeric($db->get_url()) . "</url>");
-  $self->println("<description>" . HTML::Entities::encode_numeric($db->get_description()) . "</description>");
+  $self->println("<name>" . xml_escape($db->get_name()) . "</name>");
+  $self->println("<url>" . xml_escape($db->get_url()) . "</url>");
+  $self->println("<description>" . xml_escape($db->get_description()) . "</description>");
   $self->println("</db>");
 }
 
@@ -376,6 +377,16 @@ sub seen_datum : PRIVATE {
 sub add_seen_datum : PRIVATE {
   my ($self, $datum, $direction) = @_;
   push @{$data_this_proto{ident $self}->{$direction}}, $datum;
+}
+
+sub xml_escape {
+  my ($value) = @_;
+  $value =~ s/>/&gt;/g;
+  $value =~ s/</&lt;/g;
+  $value =~ s/"/&quot;/g;
+  $value =~ s/'/&#39;/g;
+  $value =~ s/&/&amp;/g;
+  return $value;
 }
 
 1;

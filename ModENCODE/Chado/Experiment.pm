@@ -6,8 +6,9 @@ use Carp qw(croak carp);
 
 
 # Attributes
-my %description             :ATTR( :name<description>,            :default<''> );
 my %chadoxml_id             :ATTR( :name<chadoxml_id>,         :default<undef> );
+my %uniquename              :ATTR( :name<uniquename>,          :default<undef> );
+my %description             :ATTR( :name<description>,         :default<''> );
 
 # Relationships
 my %applied_protocol_slots  :ATTR( :get<applied_protocol_slots>,  :default<[]> );
@@ -83,7 +84,7 @@ sub add_property {
 
 sub to_string {
   my ($self) = @_;
-  my $string = "Experiment (" . $self->get_description() . ")\n";
+  my $string = "Experiment " . $self->get_uniquename() . "(" . $self->get_description() . ")\n";
   $string .= "  with properties [";
   $string .= "\n    " . join("\n    ", map { $_->to_string() } @{$self->get_properties()}) . "\n  " if scalar(@{$self->get_properties()});
   $string .= "]\n  has applied_protocols:\n";
@@ -102,6 +103,7 @@ sub equals {
   return 0 unless ref($self) eq ref($other);
 
   return 0 unless ($self->get_description() eq $other->get_description());
+  return 0 unless ($self->get_uniquename() eq $other->get_uniquename());
 
   my @properties = @{$self->get_properties()};
   return 0 unless scalar(@properties) == scalar(@{$other->get_properties()});
@@ -126,8 +128,9 @@ sub equals {
 sub clone {
   my ($self) = @_;
   my $clone = new ModENCODE::Chado::Experiment({
-      'description' => $self->get_description(),
       'chadoxml_id' => $self->get_chadoxml_id(),
+      'uniquename' => $self->get_uniquename(),
+      'description' => $self->get_description(),
     });
   my $applied_protocol_slots = $self->get_applied_protocol_slots();
   for (my $i = 0; $i < scalar(@{$applied_protocol_slots}); $i++) {

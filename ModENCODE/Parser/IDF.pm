@@ -24,12 +24,15 @@ sub BUILD {
 
   $grammar{$ident} = <<'  GRAMMAR';
     {
+      use Time::HiRes qw();
+      use ModENCODE::ErrorHandler qw(log_error);
       my $experiment = {};
       my $persons = {};
       my $instance = {};
       my $optional_metadata = {};
       my $protocols = {};
       my $term_sources = {};
+      my $success = 1;
     }
     IDF:                                experiment
                                         optional_metadata(?)
@@ -43,11 +46,13 @@ sub BUILD {
                                         {
                                           my $experiment_obj = new ModENCODE::Chado::Experiment();
                                           $experiment_obj->add_properties($item[1]);
+                                          my ($investigation_title_prop) = grep { $_->get_name() eq "Investigation Title" } @{$item[1]};
+                                          $experiment_obj->set_uniquename(substr($investigation_title_prop->get_value(), 0, 235) . ":" . Time::HiRes::gettimeofday());
                                           if (defined($item[2])) { $experiment_obj->add_properties($item[2]->[0]); }
                                           $experiment_obj->add_properties($item[3]);
                                           if (defined($item[4])) { $experiment_obj->add_properties($item[4]->[0]); }
                                           if (defined($item[5])) { $experiment_obj->add_properties($item[5]->[0]); }
-                                          return [$experiment_obj, $item[6], $item[7], $item[8]];
+                                          return [$experiment_obj, $item[6], $item[7], $item[8], $success];
                                         }
                                         | <error>
 
@@ -58,6 +63,11 @@ sub BUILD {
                                         {
                                           # Convert experiment hash into experiment properties
                                           my @experiment_properties;
+                                          if (!length($experiment->{'Investigation Title'}->[0])) {
+                                            $success = 0;
+                                            log_error "The Investigation Title field is missing from the IDF.";
+                                            return;
+                                          }
                                           push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                               'value' => $experiment->{'Investigation Title'}->[0],
                                               'name' => 'Investigation Title',
@@ -450,11 +460,13 @@ sub BUILD {
                                               my $protocol_type = $protocols->{'Protocol Type'}->[$i];
                                               my $protocol_type_termsource = $protocols->{'Protocol Type Term Source REF'}->[$i];
                                               if (!length($protocol_type)) {
-                                                print STDERR "The Protocol Type field for $protocol_name is missing from the IDF";
+                                                $success = 0;
+                                                log_error "The Protocol Type field for $protocol_name is missing from the IDF.";
                                                 return;
                                               }
                                               if (!length($protocol_type_termsource)) {
-                                                print STDERR "The Protocol (Type) Term Source REF field for $protocol_name is missing from the IDF";
+                                                $success = 0;
+                                                log_error "The Protocol (Type) Term Source REF field for $protocol_name is missing from the IDF.";
                                                 return;
                                               }
                                               my @protocol_types = split(/[;,]+/, $protocol_type);
@@ -470,16 +482,18 @@ sub BUILD {
                                                       $name = $cv;
                                                       $cv = $protocol_type_types[0];
                                                       if (scalar(@protocol_types) > 1) {
-                                                        print STDERR "Warning: Each term in Protocol Type REALLY SHOULD have a prefix if there is more than one type, even if there is only one term source ref (e.g. $cv:$name)\n";
+                                                        log_error "Each term in Protocol Type REALLY SHOULD have a prefix if there is more than one type, even if there is only one term source ref (e.g. $cv:$name).", "warning";
                                                       }
                                                     } else {
-                                                      print STDERR "Each term in Protocol Type must have a prefix if there is more than one term source (e.g. MO:grow, SO:gene)\n";
+                                                      $success = 0;
+                                                      log_error "Each term in Protocol Type must have a prefix if there is more than one term source (e.g. MO:grow, SO:gene).";
                                                       return;
                                                     }
                                                   }
                                                   my @matching_source = grep { $_ eq $cv } @protocol_type_types;
                                                   if (!scalar(@matching_source)) {
-                                                    print STDERR "The term source $cv for Protocol Type '$protocol_type' is not mentioned in the Protocol Term Source REF field";
+                                                    $success = 0;
+                                                    log_error "The term source $cv for Protocol Type '$protocol_type' is not mentioned in the Protocol Term Source REF field.";
                                                     return;
                                                   } else {
                                                     my $protocol_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
@@ -558,8 +572,15 @@ sub BUILD {
                                           my @sdrf_experiments;
                                           foreach my $sdrf_file (@{$item[4]}) {
                                             next unless (length($sdrf_file));
+                                            log_error "Parsing SDRF '$sdrf_file'.", "notice", ">";
                                             my $sdrf_parser = new ModENCODE::Parser::SDRF();
                                             my $sdrf_experiment = $sdrf_parser->parse($sdrf_file);
+                                            if (!$sdrf_experiment) {
+                                              log_error "Failed.", "error", "<";
+                                              $success = 0;
+                                              return;
+                                            }
+                                            log_error "Done.", "notice", "<";
                                             push @sdrf_experiments, $sdrf_experiment;
                                           }
                                           $return = \@sdrf_experiments;
@@ -655,16 +676,19 @@ sub parse {
   $document =~ s/^"|"$//gxms;
   my $parser = $self->_get_parser();
   
-  return $parser->IDF($document);
+  my $result = $parser->IDF($document);
+  my $success = pop(@$result);
+  return 0 unless $success;
+  return $result;
 }
 
 sub _get_parser : RESTRICTED {
   my ($self) = @_;
-  $::RD_ERRORS++;
-  $::RD_WARN++;
-  #$::RD_TRACE++;
-  $::RD_HINT++;
-  $::RD_AUTOSTUB++;
+  $::RD_ERRORS = undef;
+  $::RD_WARN = undef;
+  $::RD_TRACE = undef;
+  $::RD_HINT = undef;
+  $::RD_AUTOSTUB = undef;
   $Parse::RecDescent::skip = '[ "]*\t[ "]*';
   my $parser = new Parse::RecDescent($grammar{ident $self});
 }

@@ -26,6 +26,7 @@ sub merge {
 
   # Copy basic experiment attributes from IDF experiment object to SDRF experiment object
   $sdrf_experiment->add_properties($self->get_idf_experiment()->get_properties());
+  $sdrf_experiment->set_uniquename($self->get_idf_experiment()->get_uniquename());
 
   # Update SDRF protocols with additional information from IDF
   my @sdrf_applied_protocols;

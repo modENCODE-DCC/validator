@@ -16,6 +16,7 @@ use ModENCODE::Chado::CV;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::Attribute;
 use ModENCODE::Chado::Experiment;
+use ModENCODE::ErrorHandler qw(log_error);
 
 my %grammar     :ATTR;
 
@@ -23,50 +24,59 @@ sub BUILD {
   my ($self, $ident, $args) = @_;
 
   $grammar{$ident} = <<'  GRAMMAR';
+    {
+      use Carp qw(croak);
+      use ModENCODE::ErrorHandler qw(log_error);
+      my $success = 1;
+    }
     SDRF_header:                        input_or_output(s?) protocol(s) end_of_line
                                         { 
-                                          $return = [ 
-                                            sub {
-                                              my ($self, $line) = @_;
+                                          if ($success) {
+                                            $return = [ 
+                                              sub {
+                                                my ($self, $line) = @_;
 
-                                              # Get inputs that come before the first protocol. This 
-                                              # is mainly for biomaterials
-                                              my @extra_inputs;
-                                              foreach my $sub (@{$item[1]}) {
-                                                if (ref $sub eq 'CODE') {
-                                                  push @extra_inputs, &$sub($self, $line);
-                                                } else {
-                                                  print STDERR "Not a sub: $sub\n";
+                                                # Get inputs that come before the first protocol. This 
+                                                # is mainly for biomaterials
+                                                my @extra_inputs;
+                                                foreach my $sub (@{$item[1]}) {
+                                                  if (ref $sub eq 'CODE') {
+                                                    push @extra_inputs, &$sub($self, $line);
+                                                  } else {
+                                                    croak "Not a sub for parsing: $sub\n";
+                                                  }
                                                 }
-                                              }
 
-                                              # Parse everything else (the protocols)
-                                              my @protocols;
-                                              foreach my $sub (@{$item[2]}) {
-                                                if (ref $sub eq 'CODE') {
-                                                  push @protocols, &$sub($self, $line);
-                                                } else {
-                                                  print STDERR "Not a sub: $sub\n";
+                                                # Parse everything else (the protocols)
+                                                my @protocols;
+                                                foreach my $sub (@{$item[2]}) {
+                                                  if (ref $sub eq 'CODE') {
+                                                    push @protocols, &$sub($self, $line);
+                                                  } else {
+                                                    croak "Not a sub for parsing: $sub\n";
+                                                  }
                                                 }
-                                              }
-                                              if (scalar(@$line)) {
-                                                carp("Didn't process input line fully: " . join("\t", @$line));
-                                              }
+                                                if (scalar(@$line)) {
+                                                  log_error "Didn't process input line fully: " . join("\t", @$line), "warning";
+                                                }
 
-                                              # Add the initial inputs to the first protocol.
-                                              foreach my $input (@extra_inputs) {
-                                                # Totally ignoring direction here because initial data can be
-                                                # "outputs" from an invisible-to-us prior process
-                                                $protocols[0]->add_input_datum($input->{'datum'});
-                                              }
+                                                # Add the initial inputs to the first protocol.
+                                                foreach my $input (@extra_inputs) {
+                                                  # Totally ignoring direction here because initial data can be
+                                                  # "outputs" from an invisible-to-us prior process
+                                                  $protocols[0]->add_input_datum($input->{'datum'});
+                                                }
 
-                                              # Return the protocols
-                                              return \@protocols;
-                                            },
-                                            scalar(@{$item[2]})
-                                          ];
+                                                # Return the protocols
+                                                return \@protocols;
+                                              },
+                                              scalar(@{$item[2]})
+                                            ];
+                                          } else {
+                                            $return = 0;
+                                          }
                                         }
-                                        | <error>
+                                        | { $return = 0; }
 
     end_of_line:                        <skip:'[" \t\n\r]*'> /\Z/
 
@@ -311,11 +321,15 @@ sub parse {
   my ($self, $document) = @_;
   if ( -r $document ) {
     local $/;
-    open FH, "<$document" or croak "Couldn't read file $document";
+    unless(open FH, "<$document") {
+      log_error "Couldn't read SDRF file $document.";
+      return 0;
+    }
     $document = <FH>;
     close FH;
   } else {
-    croak "Can't find file '$document'";
+    log_error "Can't find SDRF file $document.";
+    return 0;
   }
   $document =~ s/\A [" ]*/\t/gxms;
   $document =~ s/\015(?![\012])/\n/g; # Replace old-style (thanks, Excel) Mac CR endings with LFs
@@ -324,7 +338,11 @@ sub parse {
 
   # Parse header line
   my $header = <DOC>;
-  my $parse_results = $parser->SDRF_header($header) or croak "Couldn't parse header line";
+  my $parse_results = $parser->SDRF_header($header);
+  if (!$parse_results) { 
+    log_error "Couldn't parse header line of SDRF.";
+    return 0;
+  }
   my ($row_parser, $num_applied_protocols) = @$parse_results;
 
   my @applied_protocol_slots;
@@ -345,7 +363,8 @@ sub parse {
 
     # Sanity check
     if (scalar(@$applied_protocols) != $num_applied_protocols) {
-      croak "Got back " . scalar(@$applied_protocols) . " applied_protocols when $num_applied_protocols applied_protocols were expected";
+      log_error "Got back " . scalar(@$applied_protocols) . " applied_protocols when $num_applied_protocols applied_protocols were expected.";
+      return 0;
     }
 
     my $applied_protocol_slot = 0;

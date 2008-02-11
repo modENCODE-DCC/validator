@@ -36,7 +36,13 @@ $cvhandler->add_cv(
 
 
 log_error "Parsing IDF and SDRF...", "notice", ">";
-my ($experiment, $protocols, $sdrfs, $termsources) = @{$parser->parse($ARGV[0])};
+my $result = $parser->parse($ARGV[0]);
+if (!$result) {
+  log_error "Unable to parse IDF. Terminating.", "error", "<";
+  exit;
+}
+
+my ($experiment, $protocols, $sdrfs, $termsources) = @$result;
 log_error "Done.", "notice", "<";
 
 # Validate IDF vs. SDRF
