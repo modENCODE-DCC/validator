@@ -45,7 +45,7 @@ if (!$result) {
 my ($experiment, $protocols, $sdrfs, $termsources) = @$result;
 log_error "Done.", "notice", "<";
 
-# Validate IDF vs. SDRF
+  # Validate and merge IDF and SDRF
   log_error "Validating IDF vs SDRF...", "notice", ">";
   my $idf_validator = new ModENCODE::Validator::IDF_SDRF({
       'idf_experiment' => $experiment,
@@ -58,6 +58,8 @@ log_error "Done.", "notice", "<";
   log_error "Done.", "notice", "<";
 
   log_error "Validating IDF and SDRF vs wiki...", "notice", ">";
+
+  # Validate and merge wiki data
   my $wiki_validator = new ModENCODE::Validator::Wiki({ 
       'termsources' => $termsources,
       'cvhandler' => $cvhandler,
@@ -68,6 +70,7 @@ log_error "Done.", "notice", "<";
   $experiment = $wiki_validator->merge($experiment);
   log_error "Done.", "notice", "<";
 
+  # Validate and merge term source (make sure terms exist in CVs, fetch missing accessions, etc.)
   log_error "Validating term sources (DBXrefs) against known ontologies.", "notice", ">";
   my $termsource_validator = new ModENCODE::Validator::TermSources({
       'cvhandler' => $cvhandler,
@@ -77,9 +80,13 @@ log_error "Done.", "notice", "<";
   log_error "Merging missing accessions and/or term names from known ontologies.", "notice", ">";
   $experiment = $termsource_validator->merge($experiment);
   log_error "Done.", "notice", "<";
-
-#  my $data_validator = new ModENCODE::Validator::Data();
-#  $data_validator->validate($experiment);
+  
+  # Validate and merge attached data files (BED, Wiggle, ASN.1, etc.)
+  log_error "Reading data files.", "notice", ">";
+  my $data_validator = new ModENCODE::Validator::Data();
+  $data_validator->validate($experiment);
+  $experiment = $data_validator->merge($experiment);
+  log_error "Done.", "notice", "<";
 
 $writer->write_chadoxml($experiment);
 #print $experiment->to_string();

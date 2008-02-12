@@ -223,8 +223,8 @@ sub is_valid_term {
       } elsif ($cv->{'urltype'} =~ m/^URL_mediawiki$/) {
         if (!$mediawiki_url_validator{ident $self}) {
           $mediawiki_url_validator{ident $self} = new ModENCODE::Validator::Wiki::URLValidator({
-              'username' => 'Yostinso',
-              'password' => 'Hella99',
+              'username' => 'Validator_Robot',
+              'password' => 'vdate_358',
               'domain' => 'modencode_wiki',
             });
         }

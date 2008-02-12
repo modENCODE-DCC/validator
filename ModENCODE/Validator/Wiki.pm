@@ -226,8 +226,8 @@ sub validate {
   $soap_client->serializer->soapversion('1.1');
 
   # Attempt to login using wiki credentials
-  my $username = "Yostinso";
-  my $password = "Hella99";
+  my $username = "Validator_Robot";
+  my $password = "vdate_358";
   my $domain = 'modencode_wiki';
   
   my %protocols;

@@ -25,9 +25,9 @@ if (!$experiment_id) {
   $reader->load_experiment($experiment_id);
   my $experiment = $reader->get_experiment();
 
-  my $data_validator = new ModENCODE::Validator::Data();
-  #$data_validator->validate($experiment);
-  $experiment = $data_validator->merge($experiment);
+  # Do more merges/validations here
+#  my $data_validator = new ModENCODE::Validator::Data();
+#  $data_validator->validate($experiment);
 
   my $writer = new ModENCODE::Chado::XMLWriter();
   $writer->write_chadoxml($experiment);
