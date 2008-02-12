@@ -2,6 +2,7 @@ package ModENCODE::ErrorHandler;
 
 use strict;
 use Exporter 'import';
+use IO::Handle;
 
 our @EXPORT_OK = qw(log_error);
 

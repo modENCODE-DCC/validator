@@ -2,7 +2,6 @@ package ModENCODE::Parser::Chado;
 
 use strict;
 use Class::Std;
-use Carp qw(croak carp);
 use Data::Dumper;
 
 use DBI;
@@ -16,7 +15,7 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::Attribute;
-use ModENCODE::ErrorHandler qw(error_log);
+use ModENCODE::ErrorHandler qw(log_error);
 
 my %dbh             :ATTR(                          :default<undef> );
 my %host            :ATTR( :name<host>,             :default<undef> );
@@ -44,7 +43,7 @@ sub DEMOLISH {
 
 sub get_available_experiments {
   my ($self) = @_;
-  my $sth = $self->get_dbh()->prepare("SELECT experiment_id, description FROM experiment");
+  my $sth = $self->get_dbh()->prepare("SELECT experiment_id, uniquename, description FROM experiment");
   $sth->execute();
   my @experiments;
   while (my $row = $sth->fetchrow_hashref()) {
@@ -56,10 +55,10 @@ sub get_available_experiments {
 sub get_experiment {
   my ($self) = @_;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
+    log_error "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   if (!defined($experiment{ident $self})) {
-    carp "Experiment is empty; perhaps you need to call load_experiment(\$experiment_id) first?";
+    log_error "Experiment is empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   return $experiment{ident $self};
 }
@@ -68,7 +67,7 @@ sub get_experiment {
 sub get_normalized_protocol_slots {
   my ($self) = @_;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
+    log_error "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   my @return_protocol_slots;
   for (my $i = 0; $i < scalar(@{$protocol_slots{ident $self}}); $i++) {
@@ -84,7 +83,7 @@ sub get_normalized_protocol_slots {
 sub get_denormalized_protocol_slots {
   my ($self) = @_;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
+    log_error "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
   my @new_protocol_slots = ($protocol_slots{ident $self}->[0]);
   foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
@@ -109,13 +108,15 @@ sub get_tsv {
   # This requires that the @$columns array is rectangular; i.e. all columns 
   # are the same length (like breakout before you start playing, not after).
   if (ref($columns->[0]) ne "ARRAY") {
-    carp "Cannot print_tsv a \@columns array that is not an array of arrays";
+    log_error "Cannot print_tsv a \@columns array that is not an array of arrays";
     return;
   }
   my $expected_length = scalar(@{$columns->[0]});
   foreach my $column (@$columns) {
     if (scalar(@$column) != $expected_length) {
-      carp "Cannot print_tsv a \@columns array that is not a rectangular array of arrays: column " . $column->[0] . " has " . scalar(@$column) . " rows, when $expected_length were expected";
+      log_error "Cannot print_tsv a \@columns array that is not a rectangular array of arrays: column " . $column->[0] . " has " . scalar(@$column) . " rows, when $expected_length were expected";
+      print join("\n", map { $_->[0] . str_repeat(".", (120-(length($_->[0])))) . scalar(@$_) } @$columns);
+      print "\n";
       return;
     }
   }
@@ -127,11 +128,22 @@ sub get_tsv {
   return $return_string;
 }
 
+
+sub str_repeat {
+  my ($str, $count)  = @_;
+  my $newstr = "";;
+  for (my $i = 0; $i < $count; $i++) {
+    $newstr .= $str;
+  }
+  return $newstr;
+}
+
+
 sub get_tsv_columns {
   my ($self) = @_;
   my @protocol_slots;
   if (!scalar(@{$protocol_slots{ident $self}})) {
-    carp "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
+    log_error "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?\n";
     return [];
   }
   my @protocol_slots = ([]);
@@ -161,7 +173,7 @@ sub get_tsv_columns {
       my @input_columns;
       foreach my $applied_protocol (@$applied_protocols) {
         # Inputs go after the protocol if it's not the first protocol
-        my @input_data = @{$applied_protocol->{'applied_protocol'}->get_input_data()};
+        my @input_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} @{$applied_protocol->{'applied_protocol'}->get_input_data()};
         for (my $i = 0; $i < scalar(@input_data); $i++) {
           my $input = $input_data[$i];
           $input_columns[$i] = [] if (ref($input_columns[$i]) ne "ARRAY");
@@ -215,7 +227,7 @@ sub get_tsv_columns {
       my @input_columns;
       foreach my $applied_protocol (@$applied_protocols) {
         # Inputs go after the protocol if it's not the first protocol
-        my @input_data = @{$applied_protocol->{'applied_protocol'}->get_input_data()};
+        my @input_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} @{$applied_protocol->{'applied_protocol'}->get_input_data()};
         for (my $i = 0; $i < scalar(@input_data); $i++) {
           my $input = $input_data[$i];
           $input_columns[$i] = [] if (ref($input_columns[$i]) ne "ARRAY");
@@ -223,7 +235,7 @@ sub get_tsv_columns {
           # If this datum has already been used as an output from the previous
           # set of protocols, then it shouldn't be reprinted as an input here
           if (!scalar(@is_seen)) {
-            $self->flatten_data(@input_columns[$i], $input);
+            $self->flatten_data(@input_columns[$i], $input, $i);
           }
         } 
       }
@@ -238,7 +250,7 @@ sub get_tsv_columns {
     @seen_data = ();
     my @output_columns;
     foreach my $applied_protocol (@$applied_protocols) {
-      my @output_data = @{$applied_protocol->{'applied_protocol'}->get_output_data()};
+      my @output_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} @{$applied_protocol->{'applied_protocol'}->get_output_data()};
       for (my $i = 0; $i < scalar(@output_data); $i++) {
         my $output = $output_data[$i];
         $output_columns[$i] = [] if (ref($output_columns[$i]) ne "ARRAY");
@@ -255,20 +267,14 @@ sub get_tsv_columns {
 }
 
 sub flatten_data : PRIVATE {
-  my ($self, $data_columns, $datum) = @_;
-#  if (
-#    $datum->get_type() && $datum->get_type()->get_name() eq "anonymous_datum" &&
-#    $datum->get_type()->get_cv() && $datum->get_type()->get_cv()->get_name eq "modencode"
-#    $datum->get_heading() =~ /^Anonymous Datum/
-#  ) { 
-#    # Skip "anonymous" data
-#    return; 
-#  }
+  my ($self, $data_columns, $datum, $num) = @_;
 
+  my $cur_column = 0;
   if (!scalar(@$data_columns)) {
     push @$data_columns, $self->get_data_column_headings($datum);
+  } else {
+    # TODO: cur_column is not always 0; it needs to start wherever the current datum is
   }
-  my $cur_column = 0;
   push @{$data_columns->[$cur_column++]}, $datum->get_value();
   push @{$data_columns->[$cur_column++]}, $datum->get_termsource()->get_db()->get_name() if $datum->get_termsource() && $datum->get_termsource()->get_db();
   push @{$data_columns->[$cur_column++]}, $datum->get_termsource()->get_accession() if $datum->get_termsource() && $datum->get_termsource()->get_accession();
@@ -403,11 +409,12 @@ sub load_experiment {
   } while (scalar(values(%next_applied_protocols)));
   $protocol_slots{ident $self} = \@protocol_slots;
 
-  my $experiment_sth = $self->get_dbh()->prepare("SELECT experiment_id, description FROM experiment WHERE experiment_id = ?");
+  my $experiment_sth = $self->get_dbh()->prepare("SELECT experiment_id, uniquename, description FROM experiment WHERE experiment_id = ?");
   $experiment_sth->execute($experiment_id);
   my $row = $experiment_sth->fetchrow_hashref();
   $experiment{ident $self} = new ModENCODE::Chado::Experiment({
       'description' => $row->{'description'},
+      'uniquename' => $row->{'uniquename'},
       'applied_protocol_slots' => $self->get_normalized_protocol_slots(),
     });
   my $experiment_prop_sth = $self->get_dbh()->prepare("SELECT name, type_id, dbxref_id, value, rank FROM experiment_prop WHERE experiment_id = ?");
@@ -612,7 +619,8 @@ sub get_dbh : PRIVATE {
     };
 
     if (!$suppress_warnings && (!defined($dbh{ident $self}) || !$dbh{ident $self})) {
-      croak "Couldn't connect to data source \"$dsn\", using username \"" . $self->get_username() . "\" and password \"" . $self->get_password() . "\"\n  " . $DBI::errstr;
+      log_error "Couldn't connect to data source \"$dsn\", using username \"" . $self->get_username() . "\" and password \"" . $self->get_password() . "\"\n  " . $DBI::errstr;
+      exit;
     }
   }
 

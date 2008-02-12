@@ -17,8 +17,8 @@ my $reader = new ModENCODE::Parser::Chado({
 
 if (!$experiment_id) {
   print "Available experiments are:\n";
-  my @exp_strings = map { $_->{'experiment_id'} . "\t\"" . $_->{'description'} . "\"" } @{$reader->get_available_experiments()};
-  print "  ID\tDescription\n";
+  my @exp_strings = map { $_->{'experiment_id'} . "\t\"" . $_->{'uniquename'} . "\"" } @{$reader->get_available_experiments()};
+  print "  ID\tName\n";
   print "  " . join("\n  ", @exp_strings);
   print "\n";
 } else {
