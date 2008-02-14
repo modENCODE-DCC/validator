@@ -15,6 +15,9 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::Attribute;
+use ModENCODE::Chado::Feature;
+use ModENCODE::Chado::Organism;
+use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
 my %dbh             :ATTR(                          :default<undef> );
@@ -47,6 +50,7 @@ sub get_available_experiments {
   $sth->execute();
   my @experiments;
   while (my $row = $sth->fetchrow_hashref()) {
+    map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
     push @experiments, $row;
   }
   return \@experiments;
@@ -412,6 +416,7 @@ sub load_experiment {
   my $experiment_sth = $self->get_dbh()->prepare("SELECT experiment_id, uniquename, description FROM experiment WHERE experiment_id = ?");
   $experiment_sth->execute($experiment_id);
   my $row = $experiment_sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   $experiment{ident $self} = new ModENCODE::Chado::Experiment({
       'description' => $row->{'description'},
       'uniquename' => $row->{'uniquename'},
@@ -420,6 +425,7 @@ sub load_experiment {
   my $experiment_prop_sth = $self->get_dbh()->prepare("SELECT name, type_id, dbxref_id, value, rank FROM experiment_prop WHERE experiment_id = ?");
   $experiment_prop_sth->execute($experiment_id);
   while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
+    map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
     my $property = new ModENCODE::Chado::ExperimentProp({
         'name' => $row->{'name'},
         'value' => $row->{'value'},
@@ -447,6 +453,7 @@ sub get_applied_protocol {
   $sth = $self->get_dbh()->prepare("SELECT data_id, direction FROM applied_protocol_data WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
   while (my $row = $sth->fetchrow_hashref()) {
+    map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
     if ($row->{'direction'} =~ 'input') {
       $applied_protocol->add_input_datum($self->get_datum($row->{'data_id'}));
     } else {
@@ -466,6 +473,7 @@ sub get_protocol {
   my $sth = $self->get_dbh()->prepare("SELECT name, description, dbxref_id FROM protocol WHERE protocol_id = ?");
   $sth->execute($protocol_id);
   my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   $protocol->set_name($row->{'name'});
   $protocol->set_description($row->{'description'});
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
@@ -485,9 +493,10 @@ sub get_datum {
     return $cached_datum;
   }
   my $datum = new ModENCODE::Chado::Data({ 'chadoxml_id' => $datum_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id, wiggle_data_id, feature_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
   my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   $datum->set_name($row->{'name'});
   $datum->set_heading($row->{'heading'});
   $datum->set_value($row->{'value'});
@@ -495,6 +504,10 @@ sub get_datum {
   $datum->set_termsource($termsource) if $termsource;
   my $type = $self->get_type($row->{'type_id'});
   $datum->set_type($type) if $type;
+  my $wiggle_data = $self->get_wiggle_data($row->{'wiggle_data_id'});
+  $datum->set_wiggle_data($wiggle_data) if $wiggle_data;
+  my $feature = $self->get_feature($row->{'feature_id'});
+  $datum->set_feature($feature) if $feature;
   $sth = $self->get_dbh()->prepare("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($attr_id) = $sth->fetchrow_array()) {
@@ -509,10 +522,11 @@ sub get_termsource {
   if (my $cached_dbxref = $self->get_cache()->{'dbxref'}->{$dbxref_id}) {
     return $cached_dbxref;
   }
-  return 0 unless($dbxref_id);
+  return undef unless($dbxref_id);
   my $sth = $self->get_dbh()->prepare("SELECT accession, version, db_id FROM dbxref WHERE dbxref_id = ?");
   $sth->execute($dbxref_id);
   my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $dbxref = new ModENCODE::Chado::DBXref({
       'accession' => $row->{'accession'},
       'version' => $row->{'version'},
@@ -522,15 +536,90 @@ sub get_termsource {
   return $dbxref;
 }
 
+sub get_feature {
+  my ($self, $feature_id) = @_;
+  if (my $cached_feature = $self->get_cache()->{'feature'}->{$feature_id}) {
+    return $cached_feature;
+  }
+  return undef unless($feature_id);
+  my $sth = $self->get_dbh()->prepare("SELECT name, uniquename, residues, seqlen, organism_id, type_id, timeaccessioned, timelastmodified FROM feature WHERE feature_id = ?");
+  $sth->execute($feature_id);
+  my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+  my $feature = new ModENCODE::Chado::Feature({
+      'name' => $row->{'name'},
+      'uniquename' => $row->{'uniquename'},
+      'residues' => $row->{'residues'},
+      'seqlen' => $row->{'seqlen'},
+      'timeaccessioned' => $row->{'timeaccessioned'},
+      'timelastmodified' => $row->{'timelastmodified'},
+      'type' => $self->get_type($row->{'type_id'}),
+      'organism' => $self->get_organism($row->{'organism_id'}),
+    });
+  $self->get_cache()->{'feature'}->{$feature_id} = $feature;
+  return $feature;
+}
+
+sub get_organism {
+  my ($self, $organism_id) = @_;
+  if (my $cached_organism = $self->get_cache()->{'organism'}->{$organism_id}) {
+    return $cached_organism;
+  }
+  return undef unless($organism_id);
+  my $sth = $self->get_dbh()->prepare("SELECT genus, species FROM organism WHERE organism_id = ?");
+  $sth->execute($organism_id);
+  my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+  my $organism = new ModENCODE::Chado::Organism({
+      'genus' => $row->{'genus'},
+      'species' => $row->{'species'},
+    });
+  $self->get_cache()->{'organism'}->{$organism_id} = $organism;
+  return $organism;
+}
+
+sub get_wiggle_data {
+  my ($self, $wiggle_data_id) = @_;
+  if (my $cached_wiggle_data = $self->get_cache()->{'wiggle_data'}->{$wiggle_data_id}) {
+    return $cached_wiggle_data;
+  }
+  return undef unless($wiggle_data_id);
+  my $sth = $self->get_dbh()->prepare("SELECT type, name, visibility, color, altColor, priority, autoscale, gridDefault, maxHeightPixels, graphType, viewLimits, yLineMark, yLineOnOff, windowingFunction, smoothingWindow, data FROM wiggle_data WHERE wiggle_data_id = ?");
+  $sth->execute($wiggle_data_id);
+  my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+  my $wiggle_data = new ModENCODE::Chado::Organism({
+      'type' => $row->{'type'},
+      'name' => $row->{'name'},
+      'visibility' => $row->{'visibility'},
+      'color' => $row->{'color'},
+      'altColor' => $row->{'altColor'},
+      'priority' => $row->{'priority'},
+      'autoscale' => $row->{'autoscale'},
+      'gridDefault' => $row->{'gridDefault'},
+      'maxHeightPixels' => $row->{'maxHeightPixels'},
+      'graphType' => $row->{'graphType'},
+      'viewLimits' => $row->{'viewLimits'},
+      'yLineMark' => $row->{'yLineMark'},
+      'yLineOnOff' => $row->{'yLineOnOff'},
+      'windowingFunction' => $row->{'windowingFunction'},
+      'smoothingWindow' => $row->{'smoothingWindow'},
+      'data' => $row->{'data'},
+    });
+  $self->get_cache()->{'wiggle_data'}->{$wiggle_data_id} = $wiggle_data;
+  return $wiggle_data;
+}
+
 sub get_db {
   my($self, $db_id) = @_;
   if (my $cached_db = $self->get_cache()->{'db'}->{$db_id}) {
     return $cached_db;
   }
-  return 0 unless ($db_id);
+  return undef unless ($db_id);
   my $sth = $self->get_dbh()->prepare("SELECT name, url, description FROM db WHERE db_id = ?");
   $sth->execute($db_id);
   my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $db = new ModENCODE::Chado::DB({
       'name' => $row->{'name'},
       'url' => $row->{'url'},
@@ -545,10 +634,11 @@ sub get_type {
   if (my $cached_cvterm = $self->get_cache()->{'cvterm'}->{$cvterm_id}) {
     return $cached_cvterm;
   }
-  return 0 unless($cvterm_id);
+  return undef unless($cvterm_id);
   my $sth = $self->get_dbh()->prepare("SELECT cvt.name, cvt.definition, cvt.dbxref_id, cv.name as cvname, cv.definition as cvdefinition FROM cvterm cvt INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE cvterm_id = ?");
   $sth->execute($cvterm_id);
   my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $cvterm = new ModENCODE::Chado::CVTerm({
       'name' => $row->{'name'},
       'definition' => $row->{'definition'},
@@ -569,6 +659,7 @@ sub get_attribute {
   my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   $attribute->set_name($row->{'name'});
   $attribute->set_heading($row->{'heading'});
   $attribute->set_value($row->{'value'});
@@ -625,6 +716,16 @@ sub get_dbh : PRIVATE {
   }
 
   return $dbh{ident $self};
+}
+
+sub xml_unescape {
+  my ($value) = @_;
+  $value =~ s/&gt;/>/g;
+  $value =~ s/&lt;/</g;
+  $value =~ s/&quot;/"/g;
+  $value =~ s/&#39;/'/g;
+  $value =~ s/&amp;/&/g;
+  return $value;
 }
 
 1;

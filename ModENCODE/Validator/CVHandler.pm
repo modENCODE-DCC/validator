@@ -183,14 +183,19 @@ sub add_cv {
     $parser->parse($cache_filename);
     open STDERR, ">&", \*OLDERR or croak "Can't reopen STDERR output after closing before GO::Parser";
     log_error "Done.)\n", "notice", ".";
-    croak "Cannot parse OBO file '" . $cache_filename . "' using " . ref($parser) unless $parser->handler->graph;
+    if (!$parser->handler->graph) {
+      log_error "Cannot parse OBO file '" . $cache_filename . "' using " . ref($parser);
+      return 0;
+    }
     $newcv->{'nodes'} = $parser->handler->graph->get_all_nodes;
   } elsif ($cvurltype =~ m/^OWL$/i) {
-    croak "Can't parse OWL files yet, sorry. Please update your IDF to point to an OBO file.";
+    log_error "Can't parse OWL files yet, sorry. Please update your IDF to point to an OBO file.";
+    return 0;
   } elsif ($cvurl =~ m/^\s*$/ || $cvurltype =~ m/^\s*$/) {
     return 0;
   } else {
-    croak "Don't know how to parse the CV at URL: '" . $cvurl . "' of type: '" . $cvurltype . "'";
+    log_error "Don't know how to parse the CV at URL: '" . $cvurl . "' of type: '" . $cvurltype . "'.";
+    return 0;
   }
 
   $cvs{ident $self}->{$cvurl} = $newcv;

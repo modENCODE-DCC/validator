@@ -203,7 +203,34 @@ sub write_datum {
 
 sub write_feature {
   my ($self, $feature) = @_;
-  croak "Don't know how to write a feature object yet";
+  $self->println("<feature>");
+  $self->println("<name>" . xml_escape($feature->get_name()) . "</name>");
+  $self->println("<uniquename>" . xml_escape($feature->get_uniquename()) . "</uniquename>");
+  $self->println("<residues>" . xml_escape($feature->get_residues()) . "</residues>");
+  $self->println("<seqlen>" . xml_escape($feature->get_seqlen()) . "</seqlen>");
+  $self->println("<timeaccessioned>" . xml_escape($feature->get_timeaccessioned()) . "</timeaccessioned>");
+  $self->println("<timelastmodified>" . xml_escape($feature->get_timelastmodified()) . "</timelastmodified>");
+
+  if ($feature->get_type()) {
+    $self->println("<type_id>");
+    $self->write_cvterm($feature->get_type());
+    $self->println("</type_id>");
+  }
+  if ($feature->get_organism()) {
+    $self->println("<organism_id>");
+    $self->write_organism($feature->get_organism());
+    $self->println("</organism_id>");
+  }
+
+  $self->println("</feature>");
+}
+
+sub write_organism {
+  my ($self, $organism) = @_;
+  $self->println("<organism>");
+  $self->println("<genus>" . xml_escape($organism->get_genus()) . "</genus>");
+  $self->println("<species>" . xml_escape($organism->get_species()) . "</species>");
+  $self->println("</organism>");
 }
 
 sub write_wiggle_data {
