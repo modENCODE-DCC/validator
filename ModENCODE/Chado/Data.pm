@@ -53,6 +53,13 @@ sub is_anonymous {
   return $anonymous{ident $self};
 }
 
+sub set_attributes {
+  my ($self, $attributes) = @_;
+  $attributes{ident $self} = [];
+  foreach my $attribute (@$attributes) {
+    $self->add_attribute($attribute);
+  }
+}
 sub set_feature {
   my ($self, $feature) = @_;
   ($feature->isa('ModENCODE::Chado::Feature')) or croak("Can't add a " . ref($feature) . " as a feature.");

@@ -21,19 +21,25 @@ sub merge {
   my ($self, $experiment) = @_;
   $experiment = $experiment->clone();
   
+  my @unique_data;
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
-      # Do we need to check input data? Maybe, but be careful of rescanning input/output data filling the same role
-      foreach my $output_datum (@{$applied_protocol->get_output_data()}) {
-        my $output_datum_type = $output_datum->get_type();
-        my $parser_module = $output_datum_type->get_cv()->get_name() . ":" . $output_datum_type->get_name();
-        my $validator = $validators{ident $self}->{$parser_module};
-        next unless $validator;
-        my $newdatum = $validator->merge($output_datum);
-        croak "Cannot merge data columns if they do not validate" unless $newdatum;
-        $output_datum->mimic($newdatum);
+      foreach my $datum (@{$applied_protocol->get_output_data()}, @{$applied_protocol->get_input_data()}) {
+        # Actual equality, not ->equals, since we want to validate the data
+        if (!scalar(grep { $datum == $_ } @unique_data)) {
+          push @unique_data, $datum;
+        }
       }
     }
+  }
+  foreach my $datum (@unique_data) {
+    my $datum_type = $datum->get_type();
+    my $parser_module = $datum_type->get_cv()->get_name() . ":" . $datum_type->get_name();
+    my $validator = $validators{ident $self}->{$parser_module};
+    next unless $validator;
+    my $newdatum = $validator->merge($datum);
+    croak "Cannot merge data columns if they do not validate" unless $newdatum;
+    $datum->mimic($newdatum);
   }
   return $experiment;
 }
@@ -48,21 +54,28 @@ sub validate {
   # For any field with a DBxref's DB description of URL_*
   # Convert to a feature. Need some automatically-loaded handlers here
 
-  # For any data field with a cvterm of type where there exists a file
+  my @unique_data;
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
-      # Do we need to check input data? Maybe, but be careful of rescanning input/output data filling the same role
-      foreach my $output_datum (@{$applied_protocol->get_output_data()}) {
-        my $output_datum_type = $output_datum->get_type();
-        my $parser_module = $output_datum_type->get_cv()->get_name() . ":" . $output_datum_type->get_name();
-        my $validator = $validators{ident $self}->{$parser_module};
-        if (!$validator) {
-          log_error "No validator for data type $parser_module.", "warning";
-          next;
+      foreach my $datum (@{$applied_protocol->get_output_data()}, @{$applied_protocol->get_input_data()}) {
+        # Actual equality, not ->equals, since we want to validate the data
+        if (!scalar(grep { $datum == $_ } @unique_data)) {
+          push @unique_data, $datum;
         }
-        $validator->add_datum($output_datum);
       }
     }
+  }
+
+  # For any data field with a cvterm of type where there exists a validator module
+  foreach my $datum (@unique_data) {
+    my $datum_type = $datum->get_type();
+    my $parser_module = $datum_type->get_cv()->get_name() . ":" . $datum_type->get_name();
+    my $validator = $validators{ident $self}->{$parser_module};
+    if (!$validator) {
+      log_error "No validator for data type $parser_module.", "warning";
+      next;
+    }
+    $validator->add_datum($datum);
   }
   foreach my $validator (values(%{$validators{ident $self}})) {
     if (!$validator->validate()) {

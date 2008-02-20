@@ -32,7 +32,7 @@ sub mirror_url : PRIVATE {
 sub parse_term {
   my ($self, $term) = @_;
   my ($name, $cv, $term) = (undef, split(/:/, $term));
-  if (!defined($term)) {
+  if (!length($term)) {
     $term = $cv;
     $cv = undef;
   }
@@ -225,7 +225,7 @@ sub is_valid_term {
         } else {
           $cv->{'terms'}->{$term} = 0;
         }
-      } elsif ($cv->{'urltype'} =~ m/^URL_mediawiki$/) {
+      } elsif ($cv->{'urltype'} =~ m/^URL_mediawiki(_expansion)?$/) {
         if (!$mediawiki_url_validator{ident $self}) {
           $mediawiki_url_validator{ident $self} = new ModENCODE::Validator::Wiki::URLValidator({
               'username' => 'Validator_Robot',

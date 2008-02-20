@@ -588,7 +588,7 @@ sub get_wiggle_data {
   $sth->execute($wiggle_data_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
-  my $wiggle_data = new ModENCODE::Chado::Organism({
+  my $wiggle_data = new ModENCODE::Chado::Wiggle_Data({
       'type' => $row->{'type'},
       'name' => $row->{'name'},
       'visibility' => $row->{'visibility'},

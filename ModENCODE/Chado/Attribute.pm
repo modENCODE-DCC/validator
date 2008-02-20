@@ -77,4 +77,18 @@ sub clone {
   return $clone;
 }
 
+sub mimic {
+  my ($self, $other) = @_;
+  croak "Attribute " . $self->to_string() . " cannot mimic an object of type " . ref($other) if (ref($self) ne ref($other));
+  $self->set_name($other->get_name());
+  $self->set_heading($other->get_heading());
+  $self->set_value($other->get_value());
+  $self->set_rank($other->get_rank());
+
+  $termsource{ident $self} = undef;
+  $type{ident $self} = undef;
+  $self->set_termsource($other->get_termsource()->clone()) if $other->get_termsource();
+  $self->set_type($other->get_type()->clone()) if $other->get_type();
+}
+
 1;

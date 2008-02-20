@@ -9,6 +9,7 @@ use ModENCODE::Validator::Wiki;
 use ModENCODE::Validator::TermSources;
 use ModENCODE::Validator::CVHandler;
 use ModENCODE::Validator::Data;
+use ModENCODE::Validator::Attributes;
 use ModENCODE::ErrorHandler qw(log_error);
 
 $ModENCODE::ErrorHandler::show_logtype = 1;
@@ -69,6 +70,13 @@ log_error "Done.", "notice", "<";
   log_error "Merging wiki data into experiment...", "notice", ">";
   $experiment = $wiki_validator->merge($experiment);
   log_error "Done.", "notice", "<";
+  
+  # Validate and merge expanded columns (attributes, etc)
+  log_error "Expanding attribute columns.", "notice", ">";
+  my $attribute_validator = new ModENCODE::Validator::Attributes();
+  $attribute_validator->validate($experiment);
+  $experiment = $attribute_validator->merge($experiment);
+  log_error "Done.", "notice", "<";
 
   # Validate and merge term source (make sure terms exist in CVs, fetch missing accessions, etc.)
   log_error "Validating term sources (DBXrefs) against known ontologies.", "notice", ">";
@@ -80,7 +88,7 @@ log_error "Done.", "notice", "<";
   log_error "Merging missing accessions and/or term names from known ontologies.", "notice", ">";
   $experiment = $termsource_validator->merge($experiment);
   log_error "Done.", "notice", "<";
-  
+
   # Validate and merge attached data files (BED, Wiggle, ASN.1, etc.)
   log_error "Reading data files.", "notice", ">";
   my $data_validator = new ModENCODE::Validator::Data();
