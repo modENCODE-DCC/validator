@@ -31,9 +31,9 @@ sub START {
   my ($wiki_domain) = ($self->get_wsdl() =~ m/:\/\/([^:\/]+)/);
 
   my $cookie_jar = new HTTP::Cookies();
-  $cookie_jar->set_cookie(1, $login->get_cookieprefix() . "UserID", $login->get_lguserid(), '/', $wiki_domain);
-  $cookie_jar->set_cookie(1, $login->get_cookieprefix() . "UserName", $login->get_lgusername(), '/', $wiki_domain);
-  $cookie_jar->set_cookie(1, $login->get_cookieprefix() . "Token", $login->get_lgtoken(), '/', $wiki_domain);
+  $cookie_jar->set_cookie(undef, $login->get_cookieprefix() . "UserID", $login->get_lguserid(), '/', $wiki_domain);
+  $cookie_jar->set_cookie(undef, $login->get_cookieprefix() . "UserName", $login->get_lgusername(), '/', $wiki_domain);
+  $cookie_jar->set_cookie(undef, $login->get_cookieprefix() . "Token", $login->get_lgtoken(), '/', $wiki_domain);
 
   $useragent{$ident} = new LWP::UserAgent();
   $useragent{$ident}->cookie_jar($cookie_jar);
