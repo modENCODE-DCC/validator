@@ -11,8 +11,14 @@ use ModENCODE::Validator::CVHandler;
 use ModENCODE::Validator::Data;
 use ModENCODE::Validator::Attributes;
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Config;
 
 $ModENCODE::ErrorHandler::show_logtype = 1;
+
+my $root_dir = $0;
+$root_dir =~ s/[^\/]*$//;
+$root_dir = "./" unless $root_dir =~ /\//;
+ModENCODE::Config::set_cfg($root_dir . 'validator.ini');
 
 my $parser = new ModENCODE::Parser::IDF();
 my $writer = new ModENCODE::Chado::XMLWriter();

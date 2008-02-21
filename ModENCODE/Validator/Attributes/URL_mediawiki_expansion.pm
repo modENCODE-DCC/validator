@@ -12,6 +12,7 @@ use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
 use HTML::Entities ();
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Config;
 
 sub BUILD {
   # HACKY FIX TO MISSING "can('as_$typename')"
@@ -36,18 +37,18 @@ sub validate {
   my ($self) = @_;
   my $success = 1;
 
-  # Attempt to login using wiki credentials
-  my $username = "Validator_Robot";
-  my $password = "vdate_358";
-  my $domain = 'modencode_wiki';
-
   # Get soap client
   my $soap_client = SOAP::Lite->service('http://wiki.modencode.org/project/extensions/DBFields/DBFieldsService.wsdl');
   $soap_client->serializer->envprefix('SOAP-ENV');
   $soap_client->serializer->encprefix('SOAP-ENC');
   $soap_client->serializer->soapversion('1.1');
 
-  my $login = $soap_client->getLoginCookie($username, $password, $domain);
+  # Attempt to login using wiki credentials
+  my $login = $soap_client->getLoginCookie(
+    ModENCODE::Config::get_cfg()->val('wiki', 'username'),
+    ModENCODE::Config::get_cfg()->val('wiki', 'password'),
+    ModENCODE::Config::get_cfg()->val('wiki', 'domain'),
+  );
   bless $login, 'HASH';
   $login = new ModENCODE::Validator::Wiki::LoginResult($login);
   

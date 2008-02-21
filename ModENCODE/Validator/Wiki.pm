@@ -10,6 +10,7 @@ use ModENCODE::Validator::Wiki::LoginResult;
 use ModENCODE::Validator::CVHandler;
 use HTML::Entities ();
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Config;
 
 my %protocol_defs_by_name       :ATTR( :default<undef> );
 my %protocol_defs_by_url        :ATTR( :default<undef> );
@@ -225,11 +226,6 @@ sub validate {
   $soap_client->serializer->encprefix('SOAP-ENC');
   $soap_client->serializer->soapversion('1.1');
 
-  # Attempt to login using wiki credentials
-  my $username = "Validator_Robot";
-  my $password = "vdate_358";
-  my $domain = 'modencode_wiki';
-  
   my %protocols;
   # Get wiki protocol data names and/or URLs
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
@@ -246,7 +242,12 @@ sub validate {
   my @unique_protocol_names = (); foreach my $name (keys(%protocols)) { if (!scalar(grep { $_ eq $name } @unique_protocol_names)) { push @unique_protocol_names, $name; } };
   my @unique_protocol_descriptions = (); foreach my $protocols (values(%protocols)) { foreach my $protocol (@$protocols) { if (!scalar(grep { $_ eq $protocol->get_description() } @unique_protocol_descriptions) && ($protocol->get_description() !~ m/^\s*$/)) { push @unique_protocol_descriptions, $protocol->get_description(); } } };
 
-  my $login = $soap_client->getLoginCookie($username, $password, $domain);
+  # Attempt to login using wiki credentials
+  my $login = $soap_client->getLoginCookie(
+    ModENCODE::Config::get_cfg()->val('wiki', 'username'),
+    ModENCODE::Config::get_cfg()->val('wiki', 'password'),
+    ModENCODE::Config::get_cfg()->val('wiki', 'domain'),
+  );
   bless $login, 'HASH';
   $login = new ModENCODE::Validator::Wiki::LoginResult($login);
 

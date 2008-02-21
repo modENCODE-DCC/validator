@@ -8,6 +8,7 @@ use URI::Escape ();
 use GO::Parser;
 use ModENCODE::Validator::Wiki::URLValidator;
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Config;
 
 my %useragent                   :ATTR;
 my %cvs                         :ATTR( :default<{}> );
@@ -228,9 +229,9 @@ sub is_valid_term {
       } elsif ($cv->{'urltype'} =~ m/^URL_mediawiki(_expansion)?$/) {
         if (!$mediawiki_url_validator{ident $self}) {
           $mediawiki_url_validator{ident $self} = new ModENCODE::Validator::Wiki::URLValidator({
-              'username' => 'Validator_Robot',
-              'password' => 'vdate_358',
-              'domain' => 'modencode_wiki',
+              'username' => ModENCODE::Config::get_cfg()->val('wiki', 'username'),
+              'password' => ModENCODE::Config::get_cfg()->val('wiki', 'password'),
+              'domain' => ModENCODE::Config::get_cfg()->val('wiki', 'domain'),
             });
         }
         my $res = $mediawiki_url_validator{ident $self}->get_url($cv->{'url'} . $term);
