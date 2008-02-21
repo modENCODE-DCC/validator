@@ -155,14 +155,14 @@ sub BUILD {
                                           };
                                         }
 
-    hybridization_name_heading:         /Hybridization *Names?/i
-    hybridization_name:                 hybridization_name_heading <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    hybridization_name_heading:         /Hybridi[sz]ation *Names?/i
+    hybridization_name:                 hybridization_name_heading <skip:' *'> bracket_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = undef;
-                                            return $self->create_input($item[1], $value, $item[3], $type, $item[5], $item[6], $values);
+                                            return $self->create_input($item[1], $value, $item[3][0], $type, $item[5], $item[6], $values);
                                           };
                                         }
 
