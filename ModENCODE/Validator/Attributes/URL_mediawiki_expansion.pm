@@ -103,7 +103,6 @@ sub validate {
     if (!($pages{$attribute->get_value()})) {
       # If %pages is false for this attribute, couldn't find the expansion page; nothing to expand
     } else {
-      # TODO: If a page{$attribute}, stick it merged_attributes
       $attribute_hash->{'merged_attributes'} = $pages{$attribute->get_value()};
     }
   }

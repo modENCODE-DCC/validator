@@ -40,6 +40,11 @@ $cvhandler->add_cv(
   'http://www.berkeleybop.org/ontologies/obo-all/mged/mged.obo',
   'OBO',
 );
+$cvhandler->add_cv(
+  'CARO',
+  'http://obo.cvs.sourceforge.net/*checkout*/obo/obo/ontology/anatomy/caro/caro.obo',
+  'OBO',
+);
 
 
 log_error "Parsing IDF and SDRF...", "notice", ">";

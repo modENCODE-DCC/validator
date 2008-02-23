@@ -14,6 +14,7 @@ my %rank             :ATTR( :name<rank>,                :default<0> );
 # Relationships
 my %termsource       :ATTR( :get<termsource>,           :default<undef> );
 my %type             :ATTR( :get<type>,                 :default<undef> );
+my %organism         :ATTR( :get<organism>,             :default<undef> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -24,6 +25,10 @@ sub BUILD {
   my $type = $args->{'type'};
   if (defined($type)) {
     $self->set_type($type);
+  }
+  my $organism = $args->{'organism'};
+  if (defined($organism)) {
+    $self->set_organism($organism);
   }
 }
 
@@ -37,6 +42,12 @@ sub set_termsource {
   my ($self, $this_termsource) = @_;
   ($this_termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($this_termsource) . " as a termsource.");
   $termsource{ident $self} = $this_termsource;
+}
+
+sub set_organism {
+  my ($self, $organism) = @_;
+  ($organism->isa('ModENCODE::Chado::Organism')) or Carp::confess("Can't add a " . ref($organism) . " as an organism.");
+  $organism{ident $self} = $organism;
 }
 
 sub to_string {
@@ -61,6 +72,10 @@ sub equals {
     return 0 unless $other->get_type();
     return 0 unless $self->get_type()->equals($other->get_type());
   }
+  if ($self->get_organism()) {
+    return 0 unless $other->get_organism();
+    return 0 unless $self->get_organism()->equals($other->get_organism());
+  }
 
   return 1;
 }
@@ -74,6 +89,7 @@ sub clone {
     });
   $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
   $clone->set_type($self->get_type()->clone()) if $self->get_type();
+  $clone->set_organism($self->get_organism()->clone()) if $self->get_organism();
   return $clone;
 }
 
@@ -89,6 +105,7 @@ sub mimic {
   $type{ident $self} = undef;
   $self->set_termsource($other->get_termsource()->clone()) if $other->get_termsource();
   $self->set_type($other->get_type()->clone()) if $other->get_type();
+  $self->set_organism($other->get_organism()->clone()) if $other->get_organism();
 }
 
 1;

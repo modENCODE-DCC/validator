@@ -18,6 +18,7 @@ my %termsource       :ATTR( :get<termsource>,           :default<undef> );
 my %type             :ATTR( :get<type>,                 :default<undef> );
 my %feature          :ATTR( :get<feature>,              :default<undef> );
 my %wiggle_data      :ATTR( :get<wiggle_data>,          :default<undef> );
+my %organism         :ATTR( :get<organism>,             :default<undef> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -36,6 +37,10 @@ sub BUILD {
   my $wiggle_data = $args->{'wiggle_data'};
   if (defined($wiggle_data)) {
     $self->set_wiggle_data($wiggle_data);
+  }
+  my $organism = $args->{'organism'};
+  if (defined($organism)) {
+    $self->set_organism($organism);
   }
   my $attributes = $args->{'attributes'};
   if (defined($attributes)) {
@@ -82,6 +87,12 @@ sub set_termsource {
   my ($self, $termsource) = @_;
   ($termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($termsource) . " as a termsource.");
   $termsource{ident $self} = $termsource;
+}
+
+sub set_organism {
+  my ($self, $organism) = @_;
+  ($organism->isa('ModENCODE::Chado::Organism')) or Carp::confess("Can't add a " . ref($organism) . " as an organism.");
+  $organism{ident $self} = $organism;
 }
 
 sub add_attribute {
@@ -138,6 +149,10 @@ sub equals {
     return 0 unless $other->get_wiggle_data();
     return 0 unless $self->get_wiggle_data()->equals($other->get_wiggle_data());
   }
+  if ($self->get_organism()) {
+    return 0 unless $other->get_organism();
+    return 0 unless $self->get_organism()->equals($other->get_organism());
+  }
 
   return 1;
 }
@@ -158,6 +173,7 @@ sub clone {
   $clone->set_type($self->get_type()->clone()) if $self->get_type();
   $clone->set_feature($self->get_feature()->clone()) if $self->get_feature();
   $clone->set_wiggle_data($self->get_wiggle_data()->clone()) if $self->get_wiggle_data();
+  $clone->set_organism($self->get_organism()->clone()) if $self->get_organism();
   return $clone;
 }
 
@@ -181,6 +197,7 @@ sub mimic {
   $self->set_type($other->get_type()->clone()) if $other->get_type();
   $self->set_feature($other->get_feature()->clone()) if $other->get_feature();
   $self->set_wiggle_data($other->get_wiggle_data()->clone()) if $other->get_wiggle_data();
+  $self->set_organism($other->get_organism()->clone()) if $other->get_organism();
 }
 
 

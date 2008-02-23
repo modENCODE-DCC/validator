@@ -37,6 +37,14 @@ sub add_attribute {
   push @{$attributes{ident $self}}, $attribute;
 }
 
+sub set_attributes {
+  my ($self, $attributes) = @_;
+  $attributes{ident $self} = [];
+  foreach my $attribute (@$attributes) {
+    $self->add_attribute($attribute);
+  }
+}
+
 sub set_termsource {
   my ($self, $termsource) = @_;
   ($termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($termsource) . " as a termsource.");

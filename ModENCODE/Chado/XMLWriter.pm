@@ -190,6 +190,12 @@ sub write_datum {
     }
   }
 
+  if ($datum->get_organism()) {
+    $self->println("<organism_id>");
+    $self->write_organism($datum->get_organism());
+    $self->println("</organism_id>");
+  }
+
   foreach my $attribute (@{$datum->get_attributes()}) {
     $self->println("<data_attribute>");
     $self->println("<attribute_id>");
@@ -273,6 +279,12 @@ sub write_attribute {
     $self->println("<type_id>");
     $self->write_cvterm($attribute->get_type());
     $self->println("</type_id>");
+  }
+
+  if ($attribute->get_organism()) {
+    $self->println("<organism_id>");
+    $self->write_organism($attribute->get_organism());
+    $self->println("</organism_id>");
   }
 
   $self->println("</attribute>");

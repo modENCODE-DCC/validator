@@ -493,7 +493,7 @@ sub get_datum {
     return $cached_datum;
   }
   my $datum = new ModENCODE::Chado::Data({ 'chadoxml_id' => $datum_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id, wiggle_data_id, feature_id FROM data WHERE data_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id, wiggle_data_id, feature_id, organism_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -508,6 +508,8 @@ sub get_datum {
   $datum->set_wiggle_data($wiggle_data) if $wiggle_data;
   my $feature = $self->get_feature($row->{'feature_id'});
   $datum->set_feature($feature) if $feature;
+  my $organism = $self->get_organism($row->{'organism_id'});
+  $datum->set_organism($organism) if $organism;
   $sth = $self->get_dbh()->prepare("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($attr_id) = $sth->fetchrow_array()) {
@@ -656,7 +658,7 @@ sub get_attribute {
     return $cached_attribute;
   }
   my $attribute = new ModENCODE::Chado::Attribute({ 'chadoxml_id' => $attribute_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id, organism_id FROM attribute WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -667,6 +669,8 @@ sub get_attribute {
   $attribute->set_termsource($termsource) if $termsource;
   my $type = $self->get_type($row->{'type_id'});
   $attribute->set_type($type) if $type;
+  my $organism = $self->get_organism($row->{'organism_id'});
+  $attribute->set_organism($organism) if $organism;
   $self->get_cache()->{'attribute'}->{$attribute_id} = $attribute;
   return $attribute;
 }

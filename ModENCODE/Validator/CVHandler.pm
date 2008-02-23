@@ -241,6 +241,17 @@ sub is_valid_term {
             $cv->{'terms'}->{$term} = 1;
           }
         }
+      } elsif ($cv->{'urltype'} =~ m/^URL_DBFields$/) {
+        my $res = $self->get_url($cv->{'url'} . $term);
+        if ($res->is_success) {
+          if ($res->content =~ m/<name>.*\Q$term\E<\/name>/) {
+            $cv->{'terms'}->{$term} = 1;
+          } else {
+            $cv->{'terms'}->{$term} = 0;
+          }
+        } else {
+          $cv->{'terms'}->{$term} = 0;
+        }
       } else {
         croak "Don't know how to parse the CV at URL: '" . $cv->{'url'} . "' of type: '" . $cv->{'urltype'} . "'";
       }
@@ -283,11 +294,27 @@ sub get_accession_for_term {
   my ($self, $cvname, $term) = @_;
   my $cv = $self->get_cv_by_name($cvname);
   croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
-  if ($cv->{'urltype'} =~ m/^URL/i) {
+  if ($cv->{'urltype'} =~ m/^URL_DBFields$/) {
+    my $res = $self->get_url($cv->{'url'} . $term);
+    if ($res->is_success) {
+      if ($res->content =~ m/<name>.*\Q$term\E<\/name>/) {
+        my ($accession) = ($res->content =~ m/<accession>([^<]+)<\/accession>/);
+        if (!length($accession)) {
+          log_error "Unable to find accession for $term in $cvname", "warning";
+          $accession = $term;
+        }
+        return $accession;
+      } else {
+        log_error "Unable to find accession for $term in $cvname";
+      }
+    } else {
+      log_error "Unable to find accession for $term in $cvname";
+    }
+  } elsif ($cv->{'urltype'} =~ m/^URL/i) {
     return $term; # No accession other than the term for URL-based ontologies
   }
   my ($matching_node) = grep { $_->name =~ m/:?\Q$term\E$/ || $_->acc =~ m/:\Q$term\E$/ } @{$cv->{'nodes'}};
-  croak "Unable to find accession for $term in $cvname" unless $matching_node;
+  log_error "Unable to find accession for $term in $cvname" unless $matching_node;
   my $accession = $matching_node->acc;
   $accession =~ s/^.*://;
   return $accession;
