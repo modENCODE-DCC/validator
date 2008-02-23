@@ -2,6 +2,7 @@ package ModENCODE::Validator::Data;
 use strict;
 use ModENCODE::Validator::Data::BED;
 use ModENCODE::Validator::Data::dbEST_gi;
+use ModENCODE::Validator::Data::dbEST_acc;
 #use ModENCODE::Validator::Data::NCBITrace;
 use Class::Std;
 use Carp qw(croak carp);
