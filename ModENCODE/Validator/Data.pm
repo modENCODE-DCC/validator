@@ -13,7 +13,7 @@ sub BUILD {
   my ($self, $ident, $args) = @_;
   # TODO: Figure out how to be more canonical about CV names w/ respect to validation function identifiers
   $validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED();
-  $validators{$ident}->{'modencode:sequence_file'} = new ModENCODE::Validator::Data::dbEST_gi();
+  $validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc();
   #$validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG();
 }
 
