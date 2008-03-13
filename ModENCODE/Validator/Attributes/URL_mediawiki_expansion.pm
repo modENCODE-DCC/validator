@@ -38,7 +38,7 @@ sub validate {
   my $success = 1;
 
   # Get soap client
-  my $soap_client = SOAP::Lite->service('http://wiki.modencode.org/project/extensions/DBFields/DBFieldsService.wsdl');
+  my $soap_client = SOAP::Lite->service(ModENCODE::Config::get_cfg()->val('wiki', 'soap_wsdl_url'));
   $soap_client->serializer->envprefix('SOAP-ENV');
   $soap_client->serializer->encprefix('SOAP-ENC');
   $soap_client->serializer->soapversion('1.1');

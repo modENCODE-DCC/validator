@@ -27,6 +27,14 @@ sub clone {
   return $clone;
 }
 
+sub equals {
+  my ($self, $other) = @_;
+
+  return 0 unless ($self->get_genus() eq $other->get_genus() && $self->get_species() eq $other->get_species());
+
+  return 1;
+}
+
 sub to_string {
   my ($self) = @_;
   return $self->get_genus() . " " . $self->get_species();

@@ -14,7 +14,7 @@ my %rank             :ATTR( :name<rank>,                :default<0> );
 # Relationships
 my %termsource       :ATTR( :get<termsource>,           :default<undef> );
 my %type             :ATTR( :get<type>,                 :default<undef> );
-my %organism         :ATTR( :get<organism>,             :default<undef> );
+my %organisms        :ATTR( :get<organisms>,            :default<[]> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -26,9 +26,14 @@ sub BUILD {
   if (defined($type)) {
     $self->set_type($type);
   }
-  my $organism = $args->{'organism'};
-  if (defined($organism)) {
-    $self->set_organism($organism);
+  my $organisms = $args->{'organisms'};
+  if (defined($organisms)) {
+    if (ref($organisms) ne 'ARRAY') {
+      $organisms = [ $organisms ];
+    }
+    foreach my $organism (@$organisms) {
+      $self->add_organism($organism);
+    }
   }
 }
 
@@ -44,10 +49,18 @@ sub set_termsource {
   $termsource{ident $self} = $this_termsource;
 }
 
-sub set_organism {
+sub add_organism {
   my ($self, $organism) = @_;
-  ($organism->isa('ModENCODE::Chado::Organism')) or Carp::confess("Can't add a " . ref($organism) . " as an organism.");
-  $organism{ident $self} = $organism;
+  ($organism->isa('ModENCODE::Chado::Organism')) or croak("Can't add a " . ref($organism) . " as an organism.");
+  push @{$organisms{ident $self}}, $organism;
+}
+
+sub set_organisms {
+  my ($self, $organisms) = @_;
+  $organisms{ident $self} = [];
+  foreach my $organism (@$organisms) {
+    $self->add_organism($organism);
+  }
 }
 
 sub to_string {
@@ -67,14 +80,21 @@ sub equals {
   if ($self->get_termsource()) {
     return 0 unless $other->get_termsource();
     return 0 unless $self->get_termsource()->equals($other->get_termsource());
+  } else {
+    return 0 if $other->get_termsource();
   }
+
   if ($self->get_type()) {
     return 0 unless $other->get_type();
     return 0 unless $self->get_type()->equals($other->get_type());
+  } else {
+    return 0 if $other->get_type();
   }
-  if ($self->get_organism()) {
-    return 0 unless $other->get_organism();
-    return 0 unless $self->get_organism()->equals($other->get_organism());
+
+  my @organisms = @{$self->get_organisms()};
+  return 0 unless scalar(@organisms) == scalar(@{$other->get_organisms()});
+  foreach my $organism (@organisms) {
+    return 0 unless scalar(grep { $_->equals($organism) } @{$other->get_organisms()});
   }
 
   return 1;
@@ -89,23 +109,10 @@ sub clone {
     });
   $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
   $clone->set_type($self->get_type()->clone()) if $self->get_type();
-  $clone->set_organism($self->get_organism()->clone()) if $self->get_organism();
+  foreach my $organism (@{$self->get_organisms()}) {
+    $clone->add_organism($organism->clone());
+  }
   return $clone;
-}
-
-sub mimic {
-  my ($self, $other) = @_;
-  croak "Attribute " . $self->to_string() . " cannot mimic an object of type " . ref($other) if (ref($self) ne ref($other));
-  $self->set_name($other->get_name());
-  $self->set_heading($other->get_heading());
-  $self->set_value($other->get_value());
-  $self->set_rank($other->get_rank());
-
-  $termsource{ident $self} = undef;
-  $type{ident $self} = undef;
-  $self->set_termsource($other->get_termsource()->clone()) if $other->get_termsource();
-  $self->set_type($other->get_type()->clone()) if $other->get_type();
-  $self->set_organism($other->get_organism()->clone()) if $other->get_organism();
 }
 
 1;

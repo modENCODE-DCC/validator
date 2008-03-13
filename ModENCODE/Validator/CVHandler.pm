@@ -12,7 +12,6 @@ use ModENCODE::Config;
 
 my %useragent                   :ATTR;
 my %cvs                         :ATTR( :default<{}> );
-my %cv_synonyms                 :ATTR( :default<{}> );
 my %mediawiki_url_validator     :ATTR;
 
 sub BUILD {
@@ -92,6 +91,17 @@ sub get_cv_by_name {
   return undef;
 }
 
+sub cvname_has_synonym {
+  my ($self, $cvname_one, $cvname_two) = @_;
+  my $cvone = $self->get_cv_by_name($cvname_one);
+  my $cvtwo = $self->get_cv_by_name($cvname_two);
+  if ($cvone && $cvtwo && $cvone == $cvtwo) {
+    return 1;
+  }
+  return 0;
+}
+
+
 sub get_url_for_cv_name : PRIVATE {
   my ($self, $cv) = @_;
   foreach my $cvurl (keys(%{$cvs{ident $self}})) {
@@ -108,7 +118,7 @@ sub add_cv {
 
   if (!$cvurl || !$cvurltype) {
     # Fetch canonical URL
-    my $res = $useragent{ident $self}->request(new HTTP::Request('GET' => 'http://wiki.modencode.org/project/extensions/DBFields/DBFieldsCVTerm.php?get_canonical_url=' . URI::Escape::uri_escape($cv)));
+    my $res = $useragent{ident $self}->request(new HTTP::Request('GET' => ModENCODE::Config::get_cfg()->val('wiki', 'cvterm_validator_url') . URI::Escape::uri_escape($cv)));
     if (!$res->is_success) { log_error "Couldn't connect to canonical URL source: " . $res->status_line; return 0; }
     ($cvurl) = ($res->content =~ m/<canonical_url>\s*(.*)\s*<\/canonical_url>/);
     ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/);
@@ -189,6 +199,7 @@ sub add_cv {
       return 0;
     }
     $newcv->{'nodes'} = $parser->handler->graph->get_all_nodes;
+    $newcv->{'graph'} = $parser->handler->graph;
   } elsif ($cvurltype =~ m/^OWL$/i) {
     log_error "Can't parse OWL files yet, sorry. Please update your IDF to point to an OBO file.";
     return 0;
@@ -202,6 +213,18 @@ sub add_cv {
   $cvs{ident $self}->{$cvurl} = $newcv;
   return 1;
 }
+
+sub term_isa {
+  my ($self, $cvname, $term, $ancestor) = @_;
+  return 0 unless ($self->is_valid_term($cvname, $term) && $self->is_valid_term($cvname, $ancestor));
+  my $cv = $self->get_cv_by_name($cvname);
+  my $child_acc = $self->get_accession_for_term($cvname, $term);
+  log_error "Trying to get parents of $child_acc from $cvname", "notice";
+  my $parents = $cv->{'graph'}->get_recursive_parent_terms_by_type($cvname . ':' . $child_acc);
+  my @matching_parents = grep { $_->name() eq $ancestor } @$parents;
+  return (scalar(@matching_parents) ? 1 : 0);
+}
+  
 
 sub is_valid_term {
   my ($self, $cvname, $term) = @_;
@@ -313,7 +336,7 @@ sub get_accession_for_term {
   } elsif ($cv->{'urltype'} =~ m/^URL/i) {
     return $term; # No accession other than the term for URL-based ontologies
   }
-  my ($matching_node) = grep { $_->name =~ m/:?\Q$term\E$/ || $_->acc =~ m/:\Q$term\E$/ } @{$cv->{'nodes'}};
+  my ($matching_node) = grep { $_->name =~ m/^(.*:)?\Q$term\E$/ || $_->acc =~ m/^(.*:)?\Q$term\E$/ } @{$cv->{'nodes'}};
   log_error "Unable to find accession for $term in $cvname" unless $matching_node;
   my $accession = $matching_node->acc;
   $accession =~ s/^.*://;

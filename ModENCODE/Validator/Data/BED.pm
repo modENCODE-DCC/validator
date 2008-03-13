@@ -44,7 +44,7 @@ sub validate {
       }
       close FH;
       $wiggle->set_data($wiggle_data);
-      $datum->set_wiggle_data($wiggle) if ($datum_success);
+      $datum->add_wiggle_data($wiggle) if ($datum_success);
     }
     $datum_hash->{'is_valid'} = $datum_success;
     $datum_hash->{'merged_datum'} = $datum;
@@ -53,11 +53,9 @@ sub validate {
 }
 
 sub merge {
-  my ($self, $datum) = @_;
+  my ($self, $datum, $applied_protocol) = @_;
 
-  my ($validated_entry) = grep { $_->{'datum'}->equals($datum); } @{$self->get_data()};
-
-  return $validated_entry->{'merged_datum'};
+  return $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
 }
 
 1;

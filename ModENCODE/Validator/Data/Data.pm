@@ -5,11 +5,17 @@ use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %data                        :ATTR( :get<data>, :default<[]> );
+my %data                        :ATTR( :get<data>,                      :default<[]> );
+my %data_validator              :ATTR( :init_arg<data_validator> );
+
+sub get_data_validator : RESTRICTED {
+  my ($self) = @_;
+  return $data_validator{ident $self};
+}
 
 sub is_valid {
-  my ($self, $datum) = @_;
-  my $validated_entry = grep { $_->{'datum'}->equals($datum); } @{$self->get_data()};
+  my ($self, $datum, $applied_protocol) = @_;
+  my $validated_entry = grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()};
 
   if ($validated_entry->{'is_valid'} == -1) {
     croak "The datum " . $datum->to_string() . " hasn't been validated yet";
@@ -18,14 +24,21 @@ sub is_valid {
   }
 }
 sub add_datum {
-  my ($self, $datum)  = @_;
+  my ($self, $datum, $applied_protocol)  = @_;
   croak "Can't add a " . ref($datum) . " as a ModENCODE::Chado::Data" unless ref($datum) eq "ModENCODE::Chado::Data";
+  croak "Can't add a " . ref($applied_protocol) . " as a ModENCODE::Chado::AppliedProtocol" unless ref($applied_protocol) eq "ModENCODE::Chado::AppliedProtocol";
   my $datum_exists = scalar(
-    grep { $_->{'datum'}->equals($datum); } @{$self->get_data()}
+    grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()}
   );
   if (!$datum_exists) {
-    push @{$self->get_data()}, { 'datum' => $datum->clone(), 'is_valid' => -1 };
+    push @{$self->get_data()}, { 'datum' => $datum->clone(), 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
   }
+}
+
+sub get_datum {
+  my ($self, $datum, $applied_protocol) = @_;
+  my ($entry) = grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()};
+  return $entry;
 }
 
 1;

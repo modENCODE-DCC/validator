@@ -104,7 +104,10 @@ sub equals {
   if ($self->get_protocol()) {
     return 0 unless $other->get_protocol();
     return 0 unless $self->get_protocol()->equals($other->get_protocol());
+  } else {
+    return 0 if $other->get_protocol();
   }
+
 
   return 1;
 }

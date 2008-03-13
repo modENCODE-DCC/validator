@@ -4,10 +4,15 @@ use base qw( ModENCODE::Validator::Data::Data );
 use Class::Std;
 use Carp qw(croak carp);
 use SOAP::Lite;
+use Bio::FeatureIO;
 use ModENCODE::Chado::Feature;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Organism;
+use ModENCODE::Chado::AnalysisFeature;
+use ModENCODE::Chado::Analysis;
+use ModENCODE::Chado::FeatureRelationship;
+use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::ErrorHandler qw(log_error);
 
 my %soap_client                 :ATTR;
@@ -23,6 +28,7 @@ sub BUILD {
 
 sub validate {
   my ($self) = @_;
+  log_error "Pulling down EST information from Genbank.", "notice", ">";
   my $success = 1;
   my @ids;
   foreach my $datum_hash (@{$self->get_data()}) {
@@ -107,20 +113,48 @@ sub validate {
               }),
           });
 
-        $datum->set_feature($feature);
+        $datum->add_feature($feature);
         $datum_hash->{'merged_datum'} = $datum;
       }
       $datum_hash->{'is_valid'} = $datum_success;
     }
+    log_error "Done.", "notice", "<";
     return $success;
 }
 
 sub merge {
-  my ($self, $datum) = @_;
+  my ($self, $datum, $applied_protocol) = @_;
 
-  my ($validated_entry) = grep { $_->{'datum'}->equals($datum); } @{$self->get_data()};
+  my $validated_datum = $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
 
-  return $validated_entry->{'merged_datum'};
+  # If there's a GFF attached to this particular protocol, update any entries referencing this EST
+  if (scalar(@{$validated_datum->get_features()})) {
+    my $gff_validator = $self->get_data_validator()->get_validators()->{'modencode:GFF3'};
+    if ($gff_validator) {
+      foreach my $other_datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
+        if (
+          $other_datum->get_type()->get_name() eq "GFF3" && 
+          ModENCODE::Config::get_cvhandler()->cvname_has_synonym($other_datum->get_type()->get_cv()->get_name(), "modencode")
+        ) {
+          if (defined($other_datum->get_value()) && length($other_datum->get_value())) {
+            my $gff_feature = $gff_validator->get_feature_by_id_from_file(
+              $validated_datum->get_value(),
+              $other_datum->get_value()
+            );
+            if ($gff_feature) {
+              # Update the GFF feature to look like this feature (but don't break any links
+              # it may have to other features in the GFF, then return the updated feature as
+              # part of the validated_datum
+              croak "Unable to continue; the validated dbEST_acc datum " . $validated_datum->to_string() . " has more than one associated feature!" if (scalar(@{$validated_datum->get_features()}) > 1);
+              $gff_feature->mimic($validated_datum->get_features()->[0]);
+              $validated_datum->set_features( [$gff_feature] );
+            }
+          }
+        }
+      }
+    }
+  }
+  return $validated_datum;
 }
 
 1;

@@ -8,21 +8,10 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::DB;
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %cvhandler                   :ATTR( :default<undef> );
-
-sub BUILD {
-  my ($self, $ident, $args) = @_;
-  my $cvhandler = $args->{'cvhandler'};
-  if (ref($cvhandler) ne 'ModENCODE::Validator::CVHandler') {
-    croak "Cannot create a ModENCODE::Validator::Wiki without a cvhandler of type ModENCODE::Validator::CVHandler";
-  }
-  $cvhandler{ident $self} = $cvhandler;
-}
-
 sub merge {
   my ($self, $experiment) = @_;
   $experiment = $experiment->clone();
-  $self->validate($experiment) or croak "Can't merge term sources if it doesn't validate!"; # Cache all the protocol definitions and stuff if they aren't already
+  $self->validate($experiment) or croak "Can't merge term sources if it doesn't validate!";
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
@@ -55,6 +44,7 @@ sub merge {
             $attribute->get_termsource()->set_accession($accession);
           }
         }
+        
       }
     }
   }
@@ -63,21 +53,34 @@ sub merge {
   # experiment_prop (dbxref, type)
   foreach my $experiment_prop (@{$experiment->get_properties()}) {
     if ($experiment_prop->get_type()) {
-      $experiment_prop->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($experiment_prop->get_type()->get_cv()->get_name())->{'names'}->[0]);
+      $experiment_prop->get_type()->get_cv()->set_name(ModENCODE::Config::get_cvhandler()->get_cv_by_name($experiment_prop->get_type()->get_cv()->get_name())->{'names'}->[0]);
       if ($experiment_prop->get_type->get_dbxref()) {
-        $experiment_prop->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($experiment_prop->get_type()->get_dbxref->get_db()->get_name()));
+        # If there's a dbxref for the experiment_prop type, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
+        # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
+        my $db_name = ($experiment_prop->get_type()->get_dbxref->get_db() ? $experiment_prop->get_type()->get_dbxref->get_db()->get_name() : $experiment_prop->get_type()->get_cv()->get_name());
+        $experiment_prop->get_type()->get_dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
         if (!$experiment_prop->get_type()->get_dbxref()->get_accession() && $experiment_prop->get_type()->get_dbxref()->get_db()) {
-          $experiment_prop->get_type()->get_dbxref()->set_accession($cvhandler{ident $self}->get_accession_for_term($experiment_prop->get_type()->get_dbxref()->get_db()->get_name(), $experiment_prop->get_type()->get_name()));
+          # If the dbxref doesn't yet have an accession, and we managed to get a DB out of CVHandler with get_db_object_by_cv_name, then fetch the accession based on the CVTerm and CV name
+          $experiment_prop->get_type()->get_dbxref()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name()));
         }
       } else {
-        my $dbname = $cvhandler{ident $self}->get_cv_by_name($experiment_prop->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
-        $experiment_prop->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $experiment_prop->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
+        # If there's not a dbxref for the experiment_prop type, try to find one
+        # First, get a DB based on the CV name
+        my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($experiment_prop->get_type()->get_cv()->get_name());
+        my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name()) if $db;
+        if ($db && $accession) {
+          # If there's a DB and accession, create a new DBXref and add it to the experiment_prop's type
+          $experiment_prop->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+        }
       }
     }
-    if ($experiment_prop->get_termsource()) {
-      $experiment_prop->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($experiment_prop->get_termsource()->get_db()->get_name()));
+    if ($experiment_prop->get_termsource() && $experiment_prop->get_termsource()->get_db()) {
+      # If the experiment_prop has a dbxref and DB itself
+      # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
+      $experiment_prop->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($experiment_prop->get_termsource()->get_db()->get_name()));
       if (!$experiment_prop->get_termsource()->get_accession() && $experiment_prop->get_termsource()->get_db()) {
-        $experiment_prop->get_termsource()->set_accession($cvhandler{ident $self}->get_accession_for_term($experiment_prop->get_termsource()->get_db()->get_name(), $experiment_prop->get_value()));
+        # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
+        $experiment_prop->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($experiment_prop->get_termsource()->get_db()->get_name(), $experiment_prop->get_value()));
       }
     }
   }
@@ -86,67 +89,113 @@ sub merge {
       my $protocol = $applied_protocol->get_protocol();
       # protocol (dbxref)
       if ($protocol->get_termsource()) {
-        $protocol->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($protocol->get_termsource()->get_db()->get_name()));
+        $protocol->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($protocol->get_termsource()->get_db()->get_name()));
       }
       # protocol attributes (dbxref, type)
       foreach my $attribute (@{$protocol->get_attributes()}) {
         if ($attribute->get_type()) {
-          $attribute->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_cv()->get_name())->{'names'}->[0]);
-          if ($attribute->get_type()->get_dbxref()) {
-            $attribute->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_type()->get_dbxref->get_db()->get_name()));
+          $attribute->get_type()->get_cv()->set_name(ModENCODE::Config::get_cvhandler()->get_cv_by_name($attribute->get_type()->get_cv()->get_name())->{'names'}->[0]);
+          if ($attribute->get_type->get_dbxref()) {
+            # If there's a dbxref for the attribute type, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
+            # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
+            my $db_name = ($attribute->get_type()->get_dbxref->get_db() ? $attribute->get_type()->get_dbxref->get_db()->get_name() : $attribute->get_type()->get_cv()->get_name());
+            $attribute->get_type()->get_dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
             if (!$attribute->get_type()->get_dbxref()->get_accession() && $attribute->get_type()->get_dbxref()->get_db()) {
-              $attribute->get_type()->get_dbxref()->set_accession($cvhandler{ident $self}->get_accession_for_term($attribute->get_type()->get_dbxref()->get_db()->get_name(), $attribute->get_type()->get_name()));
+              # If the dbxref doesn't yet have an accession, and we managed to get a DB out of CVHandler with get_db_object_by_cv_name, then fetch the accession based on the CVTerm and CV name
+              $attribute->get_type()->get_dbxref()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name()));
             }
           } else {
-            my $dbname = $cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
-            $attribute->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $attribute->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
+            # If there's not a dbxref for the attribute type, try to find one
+            # First, get a DB based on the CV name
+            my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($attribute->get_type()->get_cv()->get_name());
+            my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name()) if $db;
+            if ($db && $accession) {
+              # If there's a DB and accession, create a new DBXref and add it to the attribute's type
+              $attribute->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+            }
           }
         }
-        if ($attribute->get_termsource()) {
-          $attribute->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
+        if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
+          # If the attribute has a dbxref and DB itself
+          # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
+          $attribute->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
           if (!$attribute->get_termsource()->get_accession() && $attribute->get_termsource()->get_db()) {
-            $attribute->get_termsource()->set_accession($cvhandler{ident $self}->get_accession_for_term($attribute->get_termsource()->get_db()->get_name(), $attribute->get_value()));
+            # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
+            $attribute->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_termsource()->get_db()->get_name(), $attribute->get_value()));
           }
         }
       }
       # data (dbxref, type)
       foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
         if ($datum->get_type()) {
-          $datum->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($datum->get_type()->get_cv()->get_name())->{'names'}->[0]);
+          $datum->get_type()->get_cv()->set_name(ModENCODE::Config::get_cvhandler()->get_cv_by_name($datum->get_type()->get_cv()->get_name())->{'names'}->[0]);
           if ($datum->get_type->get_dbxref()) {
-            $datum->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($datum->get_type()->get_dbxref->get_db()->get_name()));
+            # If there's a dbxref for the datum type, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
+            # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
+            my $db_name = ($datum->get_type()->get_dbxref->get_db() ? $datum->get_type()->get_dbxref->get_db()->get_name() : $datum->get_type()->get_cv()->get_name());
+            $datum->get_type()->get_dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
             if (!$datum->get_type()->get_dbxref()->get_accession() && $datum->get_type()->get_dbxref()->get_db()) {
-              $datum->get_type()->get_dbxref()->set_accession($cvhandler{ident $self}->get_accession_for_term($datum->get_type()->get_dbxref()->get_db()->get_name(), $datum->get_type()->get_name()));
+              # If the dbxref doesn't yet have an accession, and we managed to get a DB out of CVHandler with get_db_object_by_cv_name, then fetch the accession based on the CVTerm and CV name
+              $datum->get_type()->get_dbxref()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name()));
             }
           } else {
-            my $dbname = $cvhandler{ident $self}->get_cv_by_name($datum->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
-            $datum->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $datum->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
+            # If there's not a dbxref for the datum type, try to find one
+            # First, get a DB based on the CV name
+            my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($datum->get_type()->get_cv()->get_name());
+            my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name()) if $db;
+            if ($db && $accession) {
+              # If there's a DB and accession, create a new DBXref and add it to the datum's type
+              $datum->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+            }
           }
         }
-        if ($datum->get_termsource()) {
-          $datum->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($datum->get_termsource()->get_db()->get_name()));
+        if ($datum->get_termsource() && $datum->get_termsource()->get_db()) {
+          # If the datum has a dbxref and DB itself
+          # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
+          $datum->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($datum->get_termsource()->get_db()->get_name()));
           if (!$datum->get_termsource()->get_accession() && $datum->get_termsource()->get_db()) {
-            $datum->get_termsource()->set_accession($cvhandler{ident $self}->get_accession_for_term($datum->get_termsource()->get_db()->get_name(), $datum->get_value()));
+            # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
+            $datum->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($datum->get_termsource()->get_db()->get_name(), $datum->get_value()));
           }
         }
+        # data features
+        if (scalar(@{$datum->get_features()})) {
+          foreach my $feature (@{$datum->get_features()}) {
+            $self->merge_chado_feature($feature);
+          }
+        }
+
         # data attributes (dbxref, type)
         foreach my $attribute (@{$datum->get_attributes()}) {
           if ($attribute->get_type()) {
-            $attribute->get_type()->get_cv()->set_name($cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_cv()->get_name())->{'names'}->[0]);
+            $attribute->get_type()->get_cv()->set_name(ModENCODE::Config::get_cvhandler()->get_cv_by_name($attribute->get_type()->get_cv()->get_name())->{'names'}->[0]);
             if ($attribute->get_type->get_dbxref()) {
-              $attribute->get_type()->get_dbxref->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_type()->get_dbxref->get_db()->get_name()));
+              # If there's a dbxref for the attribute type, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
+              # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
+              my $db_name = ($attribute->get_type()->get_dbxref->get_db() ? $attribute->get_type()->get_dbxref->get_db()->get_name() : $attribute->get_type()->get_cv()->get_name());
+              $attribute->get_type()->get_dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
               if (!$attribute->get_type()->get_dbxref()->get_accession() && $attribute->get_type()->get_dbxref()->get_db()) {
-                $attribute->get_type()->get_dbxref()->set_accession($cvhandler{ident $self}->get_accession_for_term($attribute->get_type()->get_dbxref()->get_db()->get_name(), $attribute->get_type()->get_name()));
+                # If the dbxref doesn't yet have an accession, and we managed to get a DB out of CVHandler with get_db_object_by_cv_name, then fetch the accession based on the CVTerm and CV name
+                $attribute->get_type()->get_dbxref()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name()));
               }
             } else {
-              my $dbname = $cvhandler{ident $self}->get_cv_by_name($attribute->get_type()->get_dbxref->get_db()->get_name())->{'names'}->[0];
-              $attribute->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $cvhandler{ident $self}->get_accession_for_term($dbname, $attribute->get_type()->get_name()), 'db' => new ModENCODE::Chado::DB({'name' => $dbname}) }));
+              # If there's not a dbxref for the attribute type, try to find one
+              # First, get a DB based on the CV name
+              my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($attribute->get_type()->get_cv()->get_name());
+              my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name()) if $db;
+              if ($db && $accession) {
+                # If there's a DB and accession, create a new DBXref and add it to the attribute's type
+                $attribute->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+              }
             }
           }
-          if ($attribute->get_termsource()) {
-            $attribute->get_termsource()->set_db($cvhandler{ident $self}->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
+          if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
+            # If the attribute has a dbxref and DB itself
+            # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
+            $attribute->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
             if (!$attribute->get_termsource()->get_accession() && $attribute->get_termsource()->get_db()) {
-              $attribute->get_termsource()->set_accession($cvhandler{ident $self}->get_accession_for_term($attribute->get_termsource()->get_db()->get_name(), $attribute->get_value()));
+              # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
+              $attribute->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_termsource()->get_db()->get_name(), $attribute->get_value()));
             }
           }
         }
@@ -156,6 +205,123 @@ sub merge {
   log_error "Done.", "notice", "<";
 
   return $experiment;
+}
+
+sub merge_chado_feature : PRIVATE {
+  my ($self, $feature, $seen_objects) = @_;
+
+  $seen_objects = [] unless ref($seen_objects) eq "ARRAY";
+
+  return 1 if scalar(grep { $feature == $_ } @$seen_objects);
+  push @$seen_objects, $feature;
+
+  if ($feature->get_type()) {
+    $feature->get_type()->get_cv()->set_name(ModENCODE::Config::get_cvhandler()->get_cv_by_name($feature->get_type()->get_cv()->get_name())->{'names'}->[0]);
+    if ($feature->get_type->get_dbxref()) {
+      # If there's a dbxref for the feature type, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
+      # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
+      my $db_name = ($feature->get_type()->get_dbxref->get_db() ? $feature->get_type()->get_dbxref->get_db()->get_name() : $feature->get_type()->get_cv()->get_name());
+      $feature->get_type()->get_dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
+      if (!$feature->get_type()->get_dbxref()->get_accession() && $feature->get_type()->get_dbxref()->get_db()) {
+        # If the dbxref doesn't yet have an accession, and we managed to get a DB out of CVHandler with get_db_object_by_cv_name, then fetch the accession based on the CVTerm and CV name
+        $feature->get_type()->get_dbxref()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($feature->get_type()->get_cv()->get_name(), $feature->get_type()->get_name()));
+      }
+    } else {
+      # If there's not a dbxref for the feature type, try to find one
+      # First, get a DB based on the CV name
+      my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($feature->get_type()->get_cv()->get_name());
+      my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($feature->get_type()->get_cv()->get_name(), $feature->get_type()->get_name()) if $db;
+      if ($db && $accession) {
+        # If there's a DB and accession, create a new DBXref and add it to the feature's type
+        $feature->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+      }
+    }
+  }
+  foreach my $relationship (@{$feature->get_relationships()}) {
+    if ($relationship->get_type()) {
+      if (ModENCODE::Config::get_cvhandler()->is_valid_term($relationship->get_type()->get_cv()->get_name(), $relationship->get_type()->get_name())) {
+        if ($relationship->get_type()) {
+          $relationship->get_type()->get_cv()->set_name(ModENCODE::Config::get_cvhandler()->get_cv_by_name($relationship->get_type()->get_cv()->get_name())->{'names'}->[0]);
+          if ($relationship->get_type->get_dbxref()) {
+            # If there's a dbxref for the relationship type, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
+            # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
+            my $db_name = ($relationship->get_type()->get_dbxref->get_db() ? $relationship->get_type()->get_dbxref->get_db()->get_name() : $relationship->get_type()->get_cv()->get_name());
+            $relationship->get_type()->get_dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
+            if (!$relationship->get_type()->get_dbxref()->get_accession() && $relationship->get_type()->get_dbxref()->get_db()) {
+              # If the dbxref doesn't yet have an accession, and we managed to get a DB out of CVHandler with get_db_object_by_cv_name, then fetch the accession based on the CVTerm and CV name
+              $relationship->get_type()->get_dbxref()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($relationship->get_type()->get_cv()->get_name(), $relationship->get_type()->get_name()));
+            }
+          } else {
+            # If there's not a dbxref for the relationship type, try to find one
+            # First, get a DB based on the CV name
+            my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($relationship->get_type()->get_cv()->get_name());
+            my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($relationship->get_type()->get_cv()->get_name(), $relationship->get_type()->get_name()) if $db;
+            if ($db && $accession) {
+              # If there's a DB and accession, create a new DBXref and add it to the relationship's type
+              $relationship->get_type()->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+            }
+          }
+        }
+      }
+    }
+    if ($relationship->get_object()) {
+      $self->merge_chado_feature($relationship->get_object(), $seen_objects);
+    }
+    if ($relationship->get_subject()) {
+      $self->merge_chado_feature($relationship->get_subject(), $seen_objects);
+    }
+    # Featureloc's srcfeature_id
+    foreach my $featureloc (@{$feature->get_locations()}) {
+      if ($featureloc->get_srcfeature()) {
+        $self->merge_chado_feature($featureloc->get_srcfeature(), $seen_objects);
+      }
+    }
+  }
+}
+
+sub validate_chado_feature : PRIVATE {
+  my ($self, $feature, $seen_objects) = @_;
+  my $success = 1;
+
+  $seen_objects = [] unless ref($seen_objects) eq "ARRAY";
+
+  return 1 if scalar(grep { $feature == $_ } @$seen_objects);
+  push @$seen_objects, $feature;
+
+  if ($feature->get_type()) {
+    if (!ModENCODE::Config::get_cvhandler()->is_valid_term($feature->get_type()->get_cv()->get_name(), $feature->get_type()->get_name())) {
+      log_error "Type '" . $feature->get_type()->get_cv()->get_name() . ":" . $feature->get_type()->get_name() . "' is not a valid CVTerm for feature '" . $feature->get_name() . "'";
+      $success = 0;
+    }
+  }
+  if ($feature->get_type()) {
+    if (!ModENCODE::Config::get_cvhandler()->is_valid_term($feature->get_type()->get_cv()->get_name(), $feature->get_type()->get_name())) {
+      log_error "Type '" . $feature->get_type()->get_cv()->get_name() . ":" . $feature->get_type()->get_name() . "' is not a valid CVTerm for feature '" . $feature->get_name() . "'";
+      $success = 0;
+    }
+  }
+  foreach my $relationship (@{$feature->get_relationships()}) {
+    if ($relationship->get_type()) {
+      if (!ModENCODE::Config::get_cvhandler()->is_valid_term($relationship->get_type()->get_cv()->get_name(), $relationship->get_type()->get_name())) {
+        log_error "Relationship between '" . $relationship->get_subject()->get_name() . " and " . $relationship->get_object()->get_name() . "' doesn't have a valid CVTerm type '" . $relationship->get_type()->get_name() . "'";
+        $success = 0;
+      }
+    }
+    if ($relationship->get_object()) {
+      $success = 0 unless $self->validate_chado_feature($relationship->get_object(), $seen_objects);
+    }
+    if ($relationship->get_subject()) {
+      $success = 0 unless $self->validate_chado_feature($relationship->get_subject(), $seen_objects);
+    }
+  }
+  # Featureloc's srcfeature_id
+  foreach my $featureloc (@{$feature->get_locations()}) {
+    if ($featureloc->get_srcfeature()) {
+      $success = 0 unless $self->validate_chado_feature($featureloc->get_srcfeature(), $seen_objects);
+    }
+  }
+
+  return $success;
 }
 
 sub validate {
@@ -194,6 +360,12 @@ sub validate {
             $success = 0;
           }
         }
+        # Features
+        if (scalar(@{$datum->get_features()})) {
+          foreach my $feature (@{$datum->get_features()}) {
+            $success = 0 unless $self->validate_chado_feature($feature);
+          }
+        }
       }
     }
   }
@@ -204,7 +376,7 @@ sub validate {
   # experiment_prop (dbxref, type)
   foreach my $experiment_prop (@{$experiment->get_properties()}) {
     if ($experiment_prop->get_type()) {
-      if (!$cvhandler{ident $self}->is_valid_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name())) {
+      if (!ModENCODE::Config::get_cvhandler()->is_valid_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name())) {
         log_error "Type '" . $experiment_prop->get_type()->get_cv()->get_name() . ":" . $experiment_prop->get_type()->get_name() . "' is not a valid CVTerm for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
         $success = 0;
       }
@@ -229,7 +401,7 @@ sub validate {
       # protocol attributes (dbxref, type)
       foreach my $attribute (@{$protocol->get_attributes()}) {
         if ($attribute->get_type()) {
-          if (!$cvhandler{ident $self}->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
+          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
             log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
             $success = 0;
           }
@@ -244,7 +416,7 @@ sub validate {
       # data (dbxref, type)
       foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
         if ($datum->get_type()) {
-          if (!$cvhandler{ident $self}->is_valid_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name())) {
+          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name())) {
             log_error "Type '" . $datum->get_type()->get_cv()->get_name() . ":" . $datum->get_type()->get_name() . "' is not a valid CVTerm for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'.";
             $success = 0;
           }
@@ -258,7 +430,7 @@ sub validate {
         # data attributes (dbxref, type)
         foreach my $attribute (@{$datum->get_attributes()}) {
           if ($attribute->get_type()) {
-            if (!$cvhandler{ident $self}->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
+            if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
               log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
               $success = 0;
             }
@@ -285,10 +457,10 @@ sub get_term_and_accession : PRIVATE {
     $accession = $termsource->get_accession();
   }
   if (!$accession) {
-    $accession = $cvhandler{ident $self}->get_accession_for_term($termsource->get_db()->get_name(), $term);
+    $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($termsource->get_db()->get_name(), $term);
   }
   if (!$term) {
-    $term = $cvhandler{ident $self}->get_term_for_accession($termsource->get_db()->get_name(), $accession);
+    $term = ModENCODE::Config::get_cvhandler()->get_term_for_accession($termsource->get_db()->get_name(), $accession);
   }
   return (wantarray ? ($term, $accession) : { 'term' => $term, 'accession' => $accession });
 }
@@ -307,7 +479,7 @@ sub is_valid : PRIVATE {
       return 0;
     }
   }
-  if (!$cvhandler{ident $self}->add_cv(
+  if (!ModENCODE::Config::get_cvhandler()->add_cv(
     $termsource->get_db()->get_name(),
     $termsource->get_db()->get_url(),
     $termsource->get_db()->get_description(),
@@ -316,13 +488,13 @@ sub is_valid : PRIVATE {
     $valid = 0;
   }
   if ($accession) {
-    if (!$cvhandler{ident $self}->is_valid_accession($termsource->get_db()->get_name(), $accession)) {
+    if (!ModENCODE::Config::get_cvhandler()->is_valid_accession($termsource->get_db()->get_name(), $accession)) {
       log_error "Couldn't find the accession $accession in '" . $termsource->get_db()->get_name() . "' (" . $termsource->get_db()->get_url() . ").";
       $valid = 0;
     }
   } 
   if ($term) {
-    if (!$cvhandler{ident $self}->is_valid_term($termsource->get_db()->get_name(), $term)) {
+    if (!ModENCODE::Config::get_cvhandler()->is_valid_term($termsource->get_db()->get_name(), $term)) {
       log_error "Couldn't find the term $term in '" . $termsource->get_db()->get_name() . "' (" . $termsource->get_db()->get_url() . ").";
       $valid = 0;
     }

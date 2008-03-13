@@ -7,6 +7,7 @@ use Carp qw(croak);
 
 # Attributes
 my %name             :ATTR( :name<name>,                :default<''> );
+my %version          :ATTR( :name<version>,             :default<undef> );
 my %description      :ATTR( :name<description>,         :default<''> );
 my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
 
@@ -53,7 +54,7 @@ sub set_termsource {
 
 sub to_string {
   my ($self) = @_;
-  my $string = "'" . $self->get_name() . "'";
+  my $string = "'" . $self->get_name() . "." . $self->get_version() . "'";
   $string .= "\n      Description:     " . $self->get_description() if $self->get_description();
   $string .= "\n      Attributes:      <" . join(", ", map { $_->to_string() } @{$self->get_attributes()}) . ">" if scalar(@{$self->get_attributes()});
   $string .= "\n      Term Source REF: " . $self->get_termsource()->to_string() if ($self->get_termsource());
@@ -64,7 +65,7 @@ sub equals {
   my ($self, $other) = @_;
   return 0 unless ref($self) eq ref($other);
 
-  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_description() eq $other->get_description());
+  return 0 unless ($self->get_version() eq $other->get_version() && $self->get_description() eq $other->get_description() && $self->get_version() eq $other->get_version());
 
   my @attributes = @{$self->get_attributes()};
   return 0 unless scalar(@attributes) == scalar(@{$other->get_attributes()});
@@ -75,7 +76,10 @@ sub equals {
   if ($self->get_termsource()) {
     return 0 unless $other->get_termsource();
     return 0 unless $self->get_termsource()->equals($other->get_termsource());
+  } else {
+    return 0 if $other->get_termsource();
   }
+
 
   return 1;
 }
@@ -84,6 +88,7 @@ sub clone {
   my ($self) = @_;
   my $clone = new ModENCODE::Chado::Protocol({
       'name' => $self->get_name(),
+      'version' => $self->get_version(),
       'description' => $self->get_description(),
       'chadoxml_id' => $self->get_chadoxml_id(),
     });

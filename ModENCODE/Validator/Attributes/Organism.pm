@@ -26,7 +26,7 @@ sub validate {
             'genus' => $genus,
             'species' => $species,
           });
-        $attribute->set_organism($organism);
+        $attribute->add_organism($organism);
         $organisms{$attribute->get_value()} = [ $attribute ];
         $attribute->set_type(new ModENCODE::Chado::CVTerm({
               'name' => 'multi-cellular organism',

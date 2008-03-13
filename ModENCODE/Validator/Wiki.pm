@@ -15,15 +15,9 @@ use ModENCODE::Config;
 my %protocol_defs_by_name       :ATTR( :default<undef> );
 my %protocol_defs_by_url        :ATTR( :default<undef> );
 my %termsources                 :ATTR( :name<termsources> );
-my %cvhandler                   :ATTR;
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
-  my $cvhandler = $args->{'cvhandler'};
-  if (ref($cvhandler) ne 'ModENCODE::Validator::CVHandler') {
-    croak "Cannot create a ModENCODE::Validator::Wiki without a cvhandler of type ModENCODE::Validator::CVHandler";
-  }
-  $cvhandler{ident $self} = $cvhandler;
 
   # HACKY FIX TO MISSING "can('as_$typename')"
   my $old_generate_stub = *SOAP::Schema::generate_stub;
@@ -89,7 +83,7 @@ sub merge {
         }
         my $cv = $wiki_input_def->{'cv'};
         my $term = $wiki_input_def->{'term'};
-        my $canonical_cvname = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
+        my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
         $input_datum->set_type(new ModENCODE::Chado::CVTerm({
               'name' => $term,
               'cv' => new ModENCODE::Chado::CV({
@@ -129,7 +123,7 @@ sub merge {
         }
         my $cv = $wiki_output_def->{'cv'};
         my $term = $wiki_output_def->{'term'};
-        my $canonical_cvname = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
+        my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
         $output_datum->set_type(new ModENCODE::Chado::CVTerm({
               'name' => $term,
               'cv' => new ModENCODE::Chado::CV({
@@ -149,6 +143,8 @@ sub merge {
       my $protocol_name = $protocol->get_name();
       my $protocol_url = $protocol->get_description();
       my $protocol_def = (defined($protocol_defs_by_url{ident $self}->{$protocol_url}) ? $protocol_defs_by_url{ident $self}->{$protocol_url} : $protocol_defs_by_name{ident $self}->{$protocol_name});
+      my $protocol_version = $protocol_def->get_version();
+      $protocol->set_version($protocol_version) if length($protocol_version);
       croak "How did this experiment manage to validate with a wiki-less protocol?!" unless $protocol_def;
       # Protocol description
       my ($protocol_description) = grep { $_->get_name() =~ /^\s*short *descriptions?$/i } @{$protocol_def->get_values()};
@@ -186,7 +182,7 @@ sub merge {
             }
             # TODO: Map the CV to a Chado CV if possible
             # Set the type_id of the attribute to this term
-            my $canonical_cvname = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
+            my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
             $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
                   'name' => $term,
                   'cv' => new ModENCODE::Chado::CV({
@@ -221,7 +217,7 @@ sub validate {
   my $success = 1;
 
   # Get soap client
-  my $soap_client = SOAP::Lite->service('http://wiki.modencode.org/project/extensions/DBFields/DBFieldsService.wsdl');
+  my $soap_client = SOAP::Lite->service(ModENCODE::Config::get_cfg()->val('wiki', 'soap_wsdl_url'));
   $soap_client->serializer->envprefix('SOAP-ENV');
   $soap_client->serializer->encprefix('SOAP-ENC');
   $soap_client->serializer->soapversion('1.1');
@@ -276,7 +272,7 @@ sub validate {
     log_error " ", "notice", "=";
     foreach my $protocol_description (@unique_protocol_descriptions) {
       log_error ".", "notice", ".";
-      next unless $protocol_description =~ m/^\s*https?:\/\/wiki.modencode.org\/project/;
+      next unless $protocol_description =~ m/^\s*http:\/\//;
       my $data = SOAP::Data->name('query' => \SOAP::Data->value(
           SOAP::Data->name('url' => HTML::Entities::encode($protocol_description))->type('xsd:string'),
           SOAP::Data->name('auth' => \$login->get_soap_obj())->type('LoginResult'),
@@ -307,9 +303,9 @@ sub validate {
       foreach my $wiki_protocol_attr (@{$wiki_protocol_def->get_values()}) {
         if (scalar(@{$wiki_protocol_attr->get_types()}) && scalar(@{$wiki_protocol_attr->get_values()})) {
           foreach my $value (@{$wiki_protocol_attr->get_values()}) {
-            my ($cv, $term, $name) = $cvhandler{ident $self}->parse_term($value);
+            my ($cv, $term, $name) = ModENCODE::Config::get_cvhandler()->parse_term($value);
             if (!defined($cv)) { $cv = $wiki_protocol_attr->get_types()->[0]; }
-            if (!$cvhandler{ident $self}->is_valid_term($cv, $term)) {
+            if (!ModENCODE::Config::get_cvhandler()->is_valid_term($cv, $term)) {
               log_error "Couldn't find cvterm '$cv.$term'.";
               $success = 0;
             }
@@ -346,25 +342,25 @@ sub validate {
       }
 
       foreach my $idf_protocol_type (@idf_protocol_types) {
-        my ($idf_type_cv, $idf_type_term, undef) = $cvhandler{ident $self}->parse_term($idf_protocol_type->get_value());
+        my ($idf_type_cv, $idf_type_term, undef) = ModENCODE::Config::get_cvhandler()->parse_term($idf_protocol_type->get_value());
         if (!$idf_type_cv) { $idf_type_cv = $idf_protocol_type->get_termsource()->get_db()->get_name(); }
-        if (!$cvhandler{ident $self}->get_cv_by_name($idf_type_cv)) {
+        if (!ModENCODE::Config::get_cvhandler()->get_cv_by_name($idf_type_cv)) {
           my $idf_type_url = $idf_protocol_type->get_termsource()->get_db()->get_url();
           my $idf_type_url_type = $idf_protocol_type->get_termsource()->get_db()->get_description();
-          $cvhandler{ident $self}->add_cv($idf_type_cv, $idf_type_url, $idf_type_url_type);
+          ModENCODE::Config::get_cvhandler()->add_cv($idf_type_cv, $idf_type_url, $idf_type_url_type);
         }
-        if (!$cvhandler{ident $self}->get_cv_by_name($idf_type_cv)) {
+        if (!ModENCODE::Config::get_cvhandler()->get_cv_by_name($idf_type_cv)) {
           log_error "Could not find a canonical URL for the controlled vocabulary $idf_type_cv when validating term " . $idf_protocol_type->get_value() . ".";
           $success = 0;
           next;
         }
-        my $idf_type_cv = $cvhandler{ident $self}->get_cv_by_name($idf_type_cv)->{'names'}->[0];
+        my $idf_type_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($idf_type_cv)->{'names'}->[0];
         my $valid = 0;
         for (my $i = 0; $i < @wiki_protocol_types; $i++) {
           my $wiki_protocol_type = $wiki_protocol_types[$i];
-          my ($cv, $term, $name) = $cvhandler{ident $self}->parse_term($wiki_protocol_type);
+          my ($cv, $term, $name) = ModENCODE::Config::get_cvhandler()->parse_term($wiki_protocol_type);
           if (!defined($cv)) { $cv = $wiki_protocol_type_def->get_types()->[0]; }
-          my $cv = $cvhandler{ident $self}->get_cv_by_name($cv)->{'names'}->[0];
+          my $cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
           if ($cv eq $idf_type_cv && $term eq $idf_type_term) {
             $valid = 1;
             last;

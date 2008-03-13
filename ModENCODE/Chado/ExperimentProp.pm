@@ -48,6 +48,31 @@ sub to_string {
   return $string;
 }
 
+sub equals {
+  my ($self, $other) = @_;
+  return 0 unless ref($self) eq ref($other);
+
+  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_value() eq $other->get_value() && $self->get_rank() eq $other->get_rank());
+
+  if ($self->get_termsource()) {
+    return 0 unless $other->get_termsource();
+    return 0 unless $self->get_termsource()->equals($other->get_termsource());
+  } else {
+    return 0 if $other->get_termsource();
+  }
+
+  if ($self->get_type()) {
+    return 0 unless $other->get_type();
+    return 0 unless $self->get_type()->equals($other->get_type());
+  } else {
+    return 0 if $other->get_type();
+  }
+
+  return 1;
+}
+
+
+
 sub clone {
   my ($self) = @_;
   my $clone = new ModENCODE::Chado::ExperimentProp({

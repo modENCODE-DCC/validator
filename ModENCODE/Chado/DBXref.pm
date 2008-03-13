@@ -43,7 +43,10 @@ sub equals {
   if ($self->get_db()) {
     return 0 unless $other->get_db();
     return 0 unless $self->get_db()->equals($other->get_db());
+  } else {
+    return 0 if $other->get_db();
   }
+
 
   return 1;
 }

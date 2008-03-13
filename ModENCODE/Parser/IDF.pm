@@ -232,43 +232,43 @@ sub BUILD {
                                         | person_first_name
                                         | person_mid_initial
   person_last_name_heading:             /Person *Last *Name/i
-  person_last_name:                     <skip:'[\r\n \t]*'> person_last_name_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  person_last_name:                     <skip:'[\r\n \t]*'> person_last_name_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $persons->{'Person Last Name'} = [] if (!defined($persons->{'Person Last Name'}));
                                           push @{$persons->{'Person Last Name'}}, @{$item[4]};
                                         }
   person_first_name_heading:            /Person *First *Name/i
-  person_first_name:                    <skip:'[\r\n \t]*'> person_first_name_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  person_first_name:                    <skip:'[\r\n \t]*'> person_first_name_heading <skip:'[ "]*\t[ "]*'> field_value(s?)  <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $persons->{'Person First Name'} = [] if (!defined($persons->{'Person First Name'}));
                                           push @{$persons->{'Person First Name'}}, @{$item[4]};
                                         }
   person_mid_initial_heading:           /Person *Mid(dle)? *Initials?/i
-  person_mid_initial:                   <skip:'[\r\n \t]*'> person_mid_initial_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  person_mid_initial:                   <skip:'[\r\n \t]*'> person_mid_initial_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $persons->{'Person Mid Initials'} = [] if (!defined($persons->{'Person Mid Initials'}));
                                           push @{$persons->{'Person Mid Initials'}}, @{$item[4]};
                                         }
   person_email_heading:                 /Person *Email *(Address)*/i
-  person_email:                         <skip:'[\r\n \t]*'> person_email_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  person_email:                         <skip:'[\r\n \t]*'> person_email_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $persons->{'Person Email'} = [] if (!defined($persons->{'Person Email'}));
                                           push @{$persons->{'Person Email'}}, @{$item[4]};
                                         }
   person_phone_heading:                 /Person *Phone/i
-  person_phone:                         <skip:'[\r\n \t]*'> person_phone_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  person_phone:                         <skip:'[\r\n \t]*'> person_phone_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $persons->{'Person Phone'} = [] if (!defined($persons->{'Person Phone'}));
                                           push @{$persons->{'Person Phone'}}, @{$item[4]};
                                         }
   person_address_heading:               /Person *Address/i
-  person_address:                       <skip:'[\r\n \t]*'> person_address_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  person_address:                       <skip:'[\r\n \t]*'> person_address_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $persons->{'Person Address'} = [] if (!defined($persons->{'Person Address'}));
                                           push @{$persons->{'Person Address'}}, @{$item[4]};
                                         }
   person_affiliation_heading:           /Person *Affiliation/i
-  person_affiliation:                   <skip:'[\r\n \t]*'> person_affiliation_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  person_affiliation:                   <skip:'[\r\n \t]*'> person_affiliation_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $persons->{'Person Affiliation'} = [] if (!defined($persons->{'Person Affiliation'}));
                                           push @{$persons->{'Person Affiliation'}}, @{$item[4]};
@@ -413,25 +413,25 @@ sub BUILD {
   optional_metadata_part:               pubmed_id | experiment_description_ref
 
   pubmed_id_heading:                    /PubMed *ID/i
-  pubmed_id:                            <skip:'[\r\n \t]*'> pubmed_id_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  pubmed_id:                            <skip:'[\r\n \t]*'> pubmed_id_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $optional_metadata->{'PubMed ID'} = [] if (!defined($optional_metadata->{'PubMed ID'}));
                                           push @{$optional_metadata->{'PubMed ID'}}, @{$item[4]};
                                         }
   experiment_description_ref_heading:   /Experiment *Description *(REF)?/i
-  experiment_description_ref:           <skip:'[\r\n \t]*'> experiment_description_ref_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  experiment_description_ref:           <skip:'[\r\n \t]*'> experiment_description_ref_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $optional_metadata->{'Experiment Description'} = [] if (!defined($optional_metadata->{'Experiment Description'}));
                                           push @{$optional_metadata->{'Experiment Description'}}, @{$item[4]};
                                         }
   date_of_experiment_heading:           /Date *of *Experiment/i
-  date_of_experiment:                   <skip:'[\r\n \t]*'> date_of_experiment_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  date_of_experiment:                   <skip:'[\r\n \t]*'> date_of_experiment_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $optional_metadata->{'Date of Experiment'} = [] if (!defined($optional_metadata->{'Date of Experiment'}));
                                           push @{$optional_metadata->{'Date of Experiment'}}, @{$item[4]};
                                         }
   release_date_heading:                 /(Public)? *Release *Date/i
-  release_date:                         <skip:'[\r\n \t]*'> release_date_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  release_date:                         <skip:'[\r\n \t]*'> release_date_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $optional_metadata->{'Public Release Date'} = [] if (!defined($optional_metadata->{'Public Release Date'}));
                                           push @{$optional_metadata->{'Public Release Date'}}, @{$item[4]};
@@ -539,19 +539,19 @@ sub BUILD {
                                           push @{$protocols->{'Protocol Name'}}, @{$item[4]};
                                         }
   protocol_type_heading:                /Protocol *Type/i
-  protocol_type:                        <skip:'[\r\n \t]*'> protocol_type_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  protocol_type:                        <skip:'[\r\n \t]*'> protocol_type_heading <skip:'[ "]*\t[ "]*'> field_value(s?)
                                         { 
                                           $protocols->{'Protocol Type'} = [] if (!defined($protocols->{'Protocol Type'}));
                                           push @{$protocols->{'Protocol Type'}}, @{$item[4]};
                                         }
   protocol_description_heading:         /Protocol *Description/i
-  protocol_description:                 <skip:'[\r\n \t]*'> protocol_description_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  protocol_description:                 <skip:'[\r\n \t]*'> protocol_description_heading <skip:'[ "]*\t[ "]*'> field_value(s?)
                                         { 
                                           $protocols->{'Protocol Description'} = [] if (!defined($protocols->{'Protocol Description'}));
                                           push @{$protocols->{'Protocol Description'}}, @{$item[4]};
                                         }
   protocol_parameters_heading:          /Protocol *Parameters?/i
-  protocol_parameters:                  <skip:'[\r\n \t]*'> protocol_parameters_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  protocol_parameters:                  <skip:'[\r\n \t]*'> protocol_parameters_heading <skip:'[ "]*\t[ "]*'> field_value(s?)
                                         { 
                                           $protocols->{'Protocol Parameters'} = [] if (!defined($protocols->{'Protocol Parameters'}));
                                           push @{$protocols->{'Protocol Parameters'}}, @{$item[4]};
@@ -637,7 +637,7 @@ sub BUILD {
                                           push @{$term_sources->{'Term Source File'}}, @{$item[4]};
                                         }
   term_source_version_heading:          /Term *Source *Version/i
-  term_source_version:                  <skip:'[\r\n \t]*'> term_source_version_heading <skip:'[ "]*\t[ "]*'> field_value(s)
+  term_source_version:                  <skip:'[\r\n \t]*'> term_source_version_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $term_sources->{'Term Source Version'} = [] if (!defined($term_sources->{'Term Source Version'}));
                                           push @{$term_sources->{'Term Source Version'}}, @{$item[4]};
@@ -662,6 +662,11 @@ sub BUILD {
 }
 sub parse {
   my ($self, $document) = @_;
+     
+#  my ($path) = ($document =~ m/(.*)(?=\/)/);
+#  $grammar{ident $self} =~ s/([^\{])\{/\1\{ my \$path = '$path\/';/;
+
+
   if ( -r $document ) {
     local $/;
     open FH, "<$document" or croak "Couldn't read file $document";
@@ -684,7 +689,7 @@ sub parse {
 
 sub _get_parser : RESTRICTED {
   my ($self) = @_;
-  $::RD_ERRORS = undef;
+  $::RD_ERRORS = 1;
   $::RD_WARN = undef;
   $::RD_TRACE = undef;
   $::RD_HINT = undef;

@@ -470,11 +470,12 @@ sub get_protocol {
     return $cached_protocol;
   }
   my $protocol = new ModENCODE::Chado::Protocol({ 'chadoxml_id' => $protocol_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, description, dbxref_id FROM protocol WHERE protocol_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT name, version, description, dbxref_id FROM protocol WHERE protocol_id = ?");
   $sth->execute($protocol_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   $protocol->set_name($row->{'name'});
+  $protocol->set_version($row->{'version'});
   $protocol->set_description($row->{'description'});
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
   $protocol->set_termsource($termsource) if $termsource;
@@ -493,7 +494,7 @@ sub get_datum {
     return $cached_datum;
   }
   my $datum = new ModENCODE::Chado::Data({ 'chadoxml_id' => $datum_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id, wiggle_data_id, feature_id, organism_id FROM data WHERE data_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -504,12 +505,25 @@ sub get_datum {
   $datum->set_termsource($termsource) if $termsource;
   my $type = $self->get_type($row->{'type_id'});
   $datum->set_type($type) if $type;
-  my $wiggle_data = $self->get_wiggle_data($row->{'wiggle_data_id'});
-  $datum->set_wiggle_data($wiggle_data) if $wiggle_data;
-  my $feature = $self->get_feature($row->{'feature_id'});
-  $datum->set_feature($feature) if $feature;
-  my $organism = $self->get_organism($row->{'organism_id'});
-  $datum->set_organism($organism) if $organism;
+
+  $sth = $self->get_dbh()->prepare("SELECT wiggle_data_id FROM data_wiggle_data WHERE data_id = ?");
+  $sth->execute($datum_id);
+  while (my ($wiggle_data_id) = $sth->fetchrow_array()) {
+    $datum->add_wiggle_data($self->get_wiggle_data($row->{'wiggle_data_id'}));
+  }
+
+  $sth = $self->get_dbh()->prepare("SELECT feature_id FROM data_feature WHERE data_id = ?");
+  $sth->execute($datum_id);
+  while (my ($feature_id) = $sth->fetchrow_array()) {
+    $datum->add_feature($self->get_feature($row->{'feature_id'}));
+  }
+
+  $sth = $self->get_dbh()->prepare("SELECT organism_id FROM data_organism WHERE data_id = ?");
+  $sth->execute($datum_id);
+  while (my ($organism_id) = $sth->fetchrow_array()) {
+    $datum->add_organism($self->get_organism($row->{'organism_id'}));
+  }
+
   $sth = $self->get_dbh()->prepare("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($attr_id) = $sth->fetchrow_array()) {
@@ -538,15 +552,53 @@ sub get_termsource {
   return $dbxref;
 }
 
+sub get_feature_id_by_name_and_type {
+  # Helper method for ModENCODE::Validator::Data::SO_transcript and possibly others
+  my ($self, $feature_name, $type, $allow_isa) = @_;
+
+  $allow_isa ||= 0;
+
+  my $sth = $self->get_dbh()->prepare("SELECT f.feature_id, cvt.name as cvterm, cv.name as cv FROM feature f INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE f.name = ?");
+  $sth->execute($feature_name);
+  my @found_feature_ids;
+  while (my $row = $sth->fetchrow_hashref()) {
+    if (
+      (
+        (!$allow_isa && $row->{'cvterm'} eq $type->get_name())
+        ||
+        ($allow_isa && ModENCODE::Config::get_cvhandler()->term_isa(
+            $row->{'cv'}, 
+            $row->{'cvterm'}, 
+            $type->get_name()),
+        )
+      )
+      && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv()->get_name())
+    ) {
+      push @found_feature_ids, $row->{'feature_id'};
+    }
+  }
+  if (scalar(@found_feature_ids) == 0) {
+    log_error "Couldn't find feature '$feature_name' with type " . $type->to_string() . ".", "warning";
+    return undef;
+  } elsif (scalar(@found_feature_ids) > 1) {
+    log_error "Found more than one feature '$feature_name' with type " . $type->to_string() . ".", "warning";
+  }
+  return $found_feature_ids[0];
+}
+
 sub get_feature {
   my ($self, $feature_id) = @_;
   if (my $cached_feature = $self->get_cache()->{'feature'}->{$feature_id}) {
     return $cached_feature;
   }
   return undef unless($feature_id);
-  my $sth = $self->get_dbh()->prepare("SELECT name, uniquename, residues, seqlen, organism_id, type_id, timeaccessioned, timelastmodified FROM feature WHERE feature_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT f.name, f.uniquename, f.residues, f.seqlen, f.organism_id, f.type_id, f.timeaccessioned, f.timelastmodified, f.is_analysis FROM feature f LEFT JOIN analysisfeature af ON f.feature_id = af.feature_id WHERE f.feature_id = ?");
   $sth->execute($feature_id);
   my $row = $sth->fetchrow_hashref();
+  my @analysisfeatures = ( $row->{'analysisfeature_id'} );
+  while (my $extra_row = $sth->fetchrow_hashref()) {
+    push @analysisfeatures, $row->{'analysisfeature_id'};
+  }
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $feature = new ModENCODE::Chado::Feature({
       'name' => $row->{'name'},
@@ -555,11 +607,69 @@ sub get_feature {
       'seqlen' => $row->{'seqlen'},
       'timeaccessioned' => $row->{'timeaccessioned'},
       'timelastmodified' => $row->{'timelastmodified'},
+      'is_analysis' => $row->{'is_analysis'},
       'type' => $self->get_type($row->{'type_id'}),
       'organism' => $self->get_organism($row->{'organism_id'}),
     });
+  foreach my $analysisfeature_id (@analysisfeatures) {
+    if ($analysisfeature_id) {
+      $feature->add_analysisfeature($self->get_analysisfeature($analysisfeature_id));
+    }
+  }
   $self->get_cache()->{'feature'}->{$feature_id} = $feature;
   return $feature;
+}
+
+sub get_analysisfeature {
+  my ($self, $analysisfeature_id) = @_;
+  if (my $cached_analysisfeature = $self->get_cache()->{'analysisfeature'}->{$analysisfeature_id}) {
+    return $cached_analysisfeature;
+  }
+  my $sth = $self->get_dbh()->prepare("SELECT rawscore, normscore, significance, identity, feature_id, analysis_id FROM analysisfeature WHERE analysisfeature_id = ?");
+  $sth->execute($analysisfeature_id);
+  my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+
+  my $analysisfeature = new ModENCODE::Chado::AnalysisFeature({ 
+      'chadoxml_id' => $analysisfeature_id,
+      'rawscore' => $row->{'rawscore'},
+      'normscore' => $row->{'normscore'},
+      'significance' => $row->{'significance'},
+      'identity' => $row->{'identity'},
+    });
+  my $feature = $self->get_feature($row->{'feature_id'});
+  $analysisfeature->set_feature($feature) if $feature;
+  my $analysis = $self->get_analysis($row->{'analysis_id'});
+  $analysisfeature->set_analysis($analysis) if $analysis;
+  $self->get_cache()->{'analysisfeature'}->{$analysisfeature_id} = $analysisfeature;
+  return $analysisfeature;
+}
+
+sub get_analysis {
+  my ($self, $analysis_id) = @_;
+  if (my $cached_analysis = $self->get_cache()->{'analysis'}->{$analysis_id}) {
+    return $cached_analysis;
+  }
+  my $sth = $self->get_dbh()->prepare("SELECT name, description, program, programversion, algorithm, sourcename, sourceversion, sourceuri, timeexecuted FROM analysis WHERE analysis_id = ?");
+  $sth->execute($analysis_id);
+  my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+
+  
+  my $analysis = new ModENCODE::Chado::Analysis({ 
+      'chadoxml_id' => $analysis_id,
+      'name' => $row->{'name'},
+      'description' => $row->{'description'},
+      'program' => $row->{'program'},
+      'programversion' => $row->{'programversion'},
+      'algorithm' => $row->{'algorithm'},
+      'sourcename' => $row->{'sourcename'},
+      'sourceversion' => $row->{'sourceversion'},
+      'sourceuri' => $row->{'sourceuri'},
+      'timeexecuted' => $row->{'timeexecuted'},
+    });
+  $self->get_cache()->{'analysis'}->{$analysis_id} = $analysis;
+  return $analysis;
 }
 
 sub get_organism {
@@ -637,14 +747,18 @@ sub get_type {
     return $cached_cvterm;
   }
   return undef unless($cvterm_id);
-  my $sth = $self->get_dbh()->prepare("SELECT cvt.name, cvt.definition, cvt.dbxref_id, cv.name as cvname, cv.definition as cvdefinition FROM cvterm cvt INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE cvterm_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT cvt.name, cvt.definition, cvt.is_obsolete, cvt.dbxref_id, cv.name as cvname, cv.definition as cvdefinition FROM cvterm cvt INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE cvterm_id = ?");
   $sth->execute($cvterm_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $cvterm = new ModENCODE::Chado::CVTerm({
       'name' => $row->{'name'},
       'definition' => $row->{'definition'},
-      'cv' => new ModENCODE::Chado::CV({ 'name' => $row->{'cvname'}, 'definition' => $row->{'definition'} }),
+      'is_obsolete' => $row->{'is_obsolete'},
+      'cv' => new ModENCODE::Chado::CV({ 
+          'name' => $row->{'cvname'}, 
+          'definition' => $row->{'definition'} 
+        }),
     });
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
   $cvterm->set_dbxref($termsource) if $termsource;
@@ -658,7 +772,7 @@ sub get_attribute {
     return $cached_attribute;
   }
   my $attribute = new ModENCODE::Chado::Attribute({ 'chadoxml_id' => $attribute_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id, organism_id FROM attribute WHERE attribute_id = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -669,8 +783,13 @@ sub get_attribute {
   $attribute->set_termsource($termsource) if $termsource;
   my $type = $self->get_type($row->{'type_id'});
   $attribute->set_type($type) if $type;
-  my $organism = $self->get_organism($row->{'organism_id'});
-  $attribute->set_organism($organism) if $organism;
+
+  $sth = $self->get_dbh()->prepare("SELECT organism_id FROM data_organism WHERE attribute_id = ?");
+  $sth->execute($attribute_id);
+  while (my ($organism_id) = $sth->fetchrow_array()) {
+    $attribute->add_organism($self->get_organism($row->{'organism_id'}));
+  }
+
   $self->get_cache()->{'attribute'}->{$attribute_id} = $attribute;
   return $attribute;
 }
