@@ -509,19 +509,19 @@ sub get_datum {
   $sth = $self->get_dbh()->prepare("SELECT wiggle_data_id FROM data_wiggle_data WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($wiggle_data_id) = $sth->fetchrow_array()) {
-    $datum->add_wiggle_data($self->get_wiggle_data($row->{'wiggle_data_id'}));
+    $datum->add_wiggle_data($self->get_wiggle_data($wiggle_data_id));
   }
 
   $sth = $self->get_dbh()->prepare("SELECT feature_id FROM data_feature WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($feature_id) = $sth->fetchrow_array()) {
-    $datum->add_feature($self->get_feature($row->{'feature_id'}));
+    $datum->add_feature($self->get_feature($feature_id));
   }
 
   $sth = $self->get_dbh()->prepare("SELECT organism_id FROM data_organism WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($organism_id) = $sth->fetchrow_array()) {
-    $datum->add_organism($self->get_organism($row->{'organism_id'}));
+    $datum->add_organism($self->get_organism($organism_id));
   }
 
   $sth = $self->get_dbh()->prepare("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
@@ -784,10 +784,10 @@ sub get_attribute {
   my $type = $self->get_type($row->{'type_id'});
   $attribute->set_type($type) if $type;
 
-  $sth = $self->get_dbh()->prepare("SELECT organism_id FROM data_organism WHERE attribute_id = ?");
+  $sth = $self->get_dbh()->prepare("SELECT organism_id FROM attribute_organism WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   while (my ($organism_id) = $sth->fetchrow_array()) {
-    $attribute->add_organism($self->get_organism($row->{'organism_id'}));
+    $attribute->add_organism($self->get_organism($organism_id));
   }
 
   $self->get_cache()->{'attribute'}->{$attribute_id} = $attribute;
