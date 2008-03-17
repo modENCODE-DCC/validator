@@ -123,46 +123,46 @@ sub BUILD {
     # INPUT TYPES               #
     ## # # # # # # # # # # # # ##
     parameter_heading:                  /Parameter *Values?/i
-    parameter:                          parameter_heading <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    parameter:                          parameter_heading <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = undef;
-                                            return $self->create_input($item[1], $value, $item[3], $type, $item[5], $item[6], $values);
+                                            my $type = $item[5][0] || undef;
+                                            return $self->create_input($item[1], $value, $item[3], $type, $item[7], $item[8], $values);
                                           };
                                         }
 
     parameter_file_header:              /Parameter *Files?/i
-    parameter_file:                     parameter_file_header <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> attribute(s?)
+    parameter_file:                     parameter_file_header <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'modtab:file';
-                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[5], $values);
+                                            my $type = $item[5][0] || 'modtab:file';
+                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }
 
     array_design_ref_heading:           /Array *Design *REF/i
-    array_design_ref:                   array_design_ref_heading <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    array_design_ref:                   array_design_ref_heading <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = undef;
-                                            return $self->create_input($item[1], $value, $item[3], $type, $item[5], $item[6], $values);
+                                            my $type = $item[5][0] || undef;
+                                            return $self->create_input($item[1], $value, $item[3], $type, $item[7], $item[8], $values);
                                           };
                                         }
 
     hybridization_name_heading:         /Hybridi[sz]ation *Names?/i
-    hybridization_name:                 hybridization_name_heading <skip:' *'> bracket_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    hybridization_name:                 hybridization_name_heading <skip:' *'> bracket_term(?) <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = undef;
-                                            return $self->create_input($item[1], $value, $item[3][0], $type, $item[5], $item[6], $values);
+                                            my $type = $item[5][0] || undef;
+                                            return $self->create_input($item[1], $value, $item[3][0], $type, $item[7], $item[8], $values);
                                           };
                                         }
 
@@ -172,93 +172,93 @@ sub BUILD {
     # OUTPUT TYPES              #
     ## # # # # # # # # # # # # ##
     result_header:                      /Result *Values?/i
-    result:                             result_header <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    result:                             result_header <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = undef;
-                                            return $self->create_output($item[1], $value, $item[3], $type, $item[5], $item[6], $values);
+                                            my $type = $item[5][0] || undef;
+                                            return $self->create_output($item[1], $value, $item[3], $type, $item[7], $item[8], $values);
                                           };
                                         }
 
     biomaterial:                        source_name | sample_name | extract_name | labeled_extract_name
 
     source_name_heading:                /Source *Names?/i 
-    source_name:                        source_name_heading <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    source_name:                        source_name_heading <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'mage:biosource';
-                                            return $self->create_input($item[1], $value, undef, $type, $item[3], $item[4], $values);
+                                            my $type = $item[3][0] || 'mage:biosource';
+                                            return $self->create_input($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
 
     sample_name_heading:                /Sample *Names?/i
-    sample_name:                        sample_name_heading <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    sample_name:                        sample_name_heading <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'mage:biosample';
+                                            my $type = $item[3][0] || 'mage:biosample';
                                             return $self->create_input($item[1], $value, undef, $type, $item[3], $item[4], $values);
                                           };
                                         }
 
     extract_name_heading:               /Extract *Names?/i
-    extract_name:                       extract_name_heading <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    extract_name:                       extract_name_heading <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'mage:biosample';
-                                            return $self->create_input($item[1], $value, undef, $type, $item[3], $item[4], $values);
+                                            my $type = $item[3][0] || 'mage:biosample';
+                                            return $self->create_input($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
 
     labeled_extract_name_heading:       /Labell?ed *Extract *Names?/i
-    labeled_extract_name:               labeled_extract_name_heading <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
+    labeled_extract_name:               labeled_extract_name_heading <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'mage:labeledextract';
-                                            return $self->create_input($item[1], $value, undef, $type, $item[3], $item[4], $values);
+                                            my $type = $item[3][0] || 'mage:labeledextract';
+                                            return $self->create_input($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
 
 
     data_file_header:                   /Result *Files?/i
-    data_file:                          data_file_header <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> attribute(s?)
+    data_file:                          data_file_header <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'modtab:generic_file';
-                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[5], $values);
+                                            my $type = $item[5][0] || 'modtab:generic_file';
+                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }
 
     array_data_file_header:             /(Derived)? *Array *Data *Files?/i
-    array_data_file:                    array_data_file_header <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> attribute(s?)
+    array_data_file:                    array_data_file_header <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'mage:datafile';
-                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[5], $values);
+                                            my $type = $item[5][0] || 'mage:datafile';
+                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }
 
     array_matrix_data_file_header:      /Array *Matrix *Data *Files?/i
-    array_matrix_data_file:             array_matrix_data_file_header <skip:' *'> bracket_term <skip:'[ "]*\t[ "]*'> attribute(s?)
+    array_matrix_data_file:             array_matrix_data_file_header <skip:' *'> bracket_term  <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = 'mage:datafile';
-                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[5], $values);
+                                            my $type = $item[5][0] || 'mage:datafile';
+                                            return $self->create_input($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }
 
