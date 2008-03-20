@@ -5,6 +5,7 @@ use ModENCODE::Validator::Data::dbEST_acc;
 use ModENCODE::Validator::Data::Result_File;
 use ModENCODE::Validator::Data::GFF3;
 use ModENCODE::Validator::Data::SO_transcript;
+use ModENCODE::Validator::Data::dbEST_acc_list;
 #use ModENCODE::Validator::Data::NCBITrace;
 use Class::Std;
 use Carp qw(croak carp);
@@ -18,6 +19,7 @@ sub START {
   $validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'data_validator' => $self });
+  $validators{$ident}->{'modencode:accession_number_list_data_file'} = new ModENCODE::Validator::Data::dbEST_acc_list({ 'data_validator' => $self });
   $validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript({ 'data_validator' => $self });
   $validators{$ident}->{'Result File'} = new ModENCODE::Validator::Data::Result_File({ 'data_validator' => $self });
   #$validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });

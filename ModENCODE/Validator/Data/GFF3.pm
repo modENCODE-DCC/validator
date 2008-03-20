@@ -24,50 +24,48 @@ sub validate {
   log_error "Parsing attached GFF3 files.", "notice", ">";
   my $success = 1;
 
-  my @gff_files;
+#  my @gff_files;
   foreach my $datum_hash (@{$self->get_data()}) {
     my $datum = $datum_hash->{'datum'}->clone();
     my $applied_protocol = $datum_hash->{'applied_protocol'}->clone();
-    push @gff_files, { 'datum' => $datum, 'applied_protocol' => $applied_protocol } if length($datum_hash->{'datum'}->get_value());
-  }
-
-  foreach my $gff_file_datum (@gff_files) {
-    my $gff_file = $gff_file_datum->{'datum'}->get_value();
+    my $gff_file = $datum->get_value();
     next unless length($gff_file);
+    log_error "Parsing GFF file " . $gff_file . ".", "notice", ">";
     if (!-r $gff_file) {
       log_error "Cannot read GFF file '$gff_file'.";
       $success = 0;
       next;
     }
     if (!$cached_gff_features{ident $self}->{$gff_file}) {
-      my @top_level_features;
       unless (open GFF, $gff_file) {
         log_error "Cannot open GFF file '$gff_file' for reading.";
         $success = 0;
         next;
       }
-      my $gffio = new Bio::FeatureIO(-fh => \*GFF, -format => 'gff_modencode', -version => 3);
-      while (my @group_features = $gffio->next_feature_group()) {
-        push @top_level_features, @group_features;
-      }
-      close GFF;
       my $analysis = new ModENCODE::Chado::Analysis({
-          'name' => $gff_file_datum->{'applied_protocol'}->get_protocol()->get_name(),
-          'program' => $gff_file_datum->{'applied_protocol'}->get_protocol()->get_name(),
-          'programversion' => $gff_file_datum->{'applied_protocol'}->get_protocol()->get_version(),
+          'name' => $applied_protocol->get_protocol()->get_name(),
+          'program' => $applied_protocol->get_protocol()->get_name(),
+          'programversion' => $applied_protocol->get_protocol()->get_version(),
         });
       my %features_by_id;
-      foreach my $top_level_feature (@top_level_features) {
-        # These all get cached in features_by_id and features_by_uniquename
-        $self->gff_feature_to_chado_features($gffio, $top_level_feature, $analysis, \%features_by_id);
+      my $gffio = new Bio::FeatureIO(-fh => \*GFF, -format => 'gff_modencode', -version => 3);
+      while (my @group_features = $gffio->next_feature_group()) {
+        foreach my $top_level_feature (@group_features) {
+          # These all get cached in features_by_id and features_by_uniquename
+          log_error "Sorting out a feature into a chado feature: " . ($top_level_feature->get_Annotations('ID'))[0], "notice", ">";
+          my $feature = $self->gff_feature_to_chado_features($gffio, $top_level_feature, $analysis, \%features_by_id);
+          if ($feature) {
+            $datum->add_feature($feature);
+          }
+          log_error "Done.", "notice", "<";
+        }
       }
       $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
+      close GFF;
     }
 
-#    my $features_by_id = $cached_gff_features{ident $self}->{$gff_file};
-#    my $est_feature = $features_by_id->{'FD586274'};
-#    print STDERR $est_feature->to_string();
-#    exit;
+    log_error "Done.", "notice", "<";
+    $datum_hash->{'merged_datum'} = $datum;
   }
   log_error "Done.", "notice", "<";
   return $success;
@@ -101,7 +99,7 @@ sub gff_feature_to_chado_features : PRIVATE {
     $this_seq_region = new ModENCODE::Chado::Feature({
         'uniquename' => $this_seq_region->seq_id(),
         'type' => new ModENCODE::Chado::CVTerm({
-            'name' => $this_seq_region->type()->name() || 'ohno!',
+            'name' => $this_seq_region->type()->name(),
             'cv' => new ModENCODE::Chado::CV({ 
                 'name' => 'SO',
               }),
@@ -251,12 +249,21 @@ sub gff_feature_to_chado_features : PRIVATE {
     }
   }
 
-  return $feature;
+  if (
+    (($gff_obj->get_Annotations('ID'))[0] && ($gff_obj->get_Annotations('ID'))[0] eq $this_seq_region->seq_id()) 
+    ||
+    $gff_obj->type()->name() eq $this_seq_region->type()->name()
+  ) {
+    # Don't return the seq_region features
+    return undef;
+  } else {
+    return $feature;
+  }
 }
 
 sub merge {
   my ($self, $datum, $applied_protocol) = @_;
-  return $datum->clone();
+  return $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
 }
 
 1;

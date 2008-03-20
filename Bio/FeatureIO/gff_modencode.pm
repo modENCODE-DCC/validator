@@ -237,7 +237,7 @@ sub next_feature_group {
 	if (@parents) {
       foreach my $parent (@parents) {
 		my $parent_id = $parent->value;
-		$self->throw("Parent with ID $parent_id not found!") unless (exists($seen_ids{$parent_id}));
+		$self->throw("Parent with ID $parent_id not found for " . ($feat->get_Annotations('ID'))[0] . "!") unless (exists($seen_ids{$parent_id}));
 		$seen_ids{$parent_id}->add_SeqFeature($feat);
       }
 	} else {

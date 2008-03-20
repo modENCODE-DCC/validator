@@ -59,6 +59,8 @@ log_error "Done.", "notice", "<";
   $experiment = $idf_validator->merge($sdrf);
   log_error "Done.", "notice", "<";
 
+  $sdrf = undef;
+
   log_error "Validating IDF and SDRF vs wiki...", "notice", ">";
 
   # Validate and merge wiki data
@@ -70,6 +72,7 @@ log_error "Done.", "notice", "<";
   log_error "Merging wiki data into experiment...", "notice", ">";
   $experiment = $wiki_validator->merge($experiment);
   log_error "Done.", "notice", "<";
+  $wiki_validator = undef;
   
   # Validate and merge expanded columns (attributes, etc)
   log_error "Expanding attribute columns.", "notice", ">";
@@ -77,6 +80,7 @@ log_error "Done.", "notice", "<";
   $attribute_validator->validate($experiment);
   $experiment = $attribute_validator->merge($experiment);
   log_error "Done.", "notice", "<";
+  $attribute_validator = undef;
 
   # Validate and merge attached data files and remote resources (BED, Wiggle, ASN.1, dbEST, etc.)
   log_error "Reading data files.", "notice", ">";
@@ -84,6 +88,7 @@ log_error "Done.", "notice", "<";
   $data_validator->validate($experiment);
   $experiment = $data_validator->merge($experiment);
   log_error "Done.", "notice", "<";
+  $data_validator = undef;
 
   # Validate and merge term source (make sure terms exist in CVs, fetch missing accessions, etc.)
   log_error "Validating term sources (DBXrefs) against known ontologies.", "notice", ">";
