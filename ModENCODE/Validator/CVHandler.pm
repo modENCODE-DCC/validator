@@ -337,7 +337,10 @@ sub get_accession_for_term {
     return $term; # No accession other than the term for URL-based ontologies
   }
   my ($matching_node) = grep { $_->name =~ m/^(.*:)?\Q$term\E$/ || $_->acc =~ m/^(.*:)?\Q$term\E$/ } @{$cv->{'nodes'}};
-  log_error "Unable to find accession for $term in $cvname" unless $matching_node;
+  if (!$matching_node) {
+    log_error "Unable to find accession for $term in $cvname" unless $matching_node;
+    return;
+  }
   my $accession = $matching_node->acc;
   $accession =~ s/^.*://;
   return $accession;

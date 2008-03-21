@@ -24,7 +24,7 @@ sub validate {
   log_error "Parsing attached GFF3 files.", "notice", ">";
   my $success = 1;
 
-#  my @gff_files;
+  my %features_by_id;
   foreach my $datum_hash (@{$self->get_data()}) {
     my $datum = $datum_hash->{'datum'}->clone();
     my $applied_protocol = $datum_hash->{'applied_protocol'}->clone();
@@ -47,17 +47,18 @@ sub validate {
           'program' => $applied_protocol->get_protocol()->get_name(),
           'programversion' => $applied_protocol->get_protocol()->get_version(),
         });
-      my %features_by_id;
       my $gffio = new Bio::FeatureIO(-fh => \*GFF, -format => 'gff_modencode', -version => 3);
       while (my @group_features = $gffio->next_feature_group()) {
         foreach my $top_level_feature (@group_features) {
           # These all get cached in features_by_id and features_by_uniquename
-          log_error "Sorting out a feature into a chado feature: " . ($top_level_feature->get_Annotations('ID'))[0], "notice", ">";
           my $feature = $self->gff_feature_to_chado_features($gffio, $top_level_feature, $analysis, \%features_by_id);
+          if ($feature == -1) {
+            $success = 0;
+            next;
+          }
           if ($feature) {
             $datum->add_feature($feature);
           }
-          log_error "Done.", "notice", "<";
         }
       }
       $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
@@ -82,10 +83,17 @@ sub get_feature_by_id_from_file {
 sub gff_feature_to_chado_features : PRIVATE {
   my ($self, $gff_io, $gff_obj, $analysis, $features_by_id) = @_;
 
+  my $gff_obj_id;
+  if (
+    defined($gff_obj->get_Annotations('ID')) && 
+    defined(($gff_obj->get_Annotations('ID'))[0]) && 
+    length(($gff_obj->get_Annotations('ID'))[0]->value())) {
+    $gff_obj_id = ($gff_obj->get_Annotations('ID'))[0]->value();
+  }
+
   # Deal with typing the sequence region
   if ($gff_obj->seq_id() eq $gff_io->sequence_region($gff_obj->seq_id()) && 
-    defined($gff_obj->get_Annotations('ID')) && defined(($gff_obj->get_Annotations('ID'))[0]) && 
-    ($gff_obj->get_Annotations('ID'))[0]->value() eq $gff_io->seq_region($gff_obj->seq_id())->seq_id() &&
+    defined($gff_obj_id) && $gff_obj_id eq $gff_io->seq_region($gff_obj->seq_id())->seq_id() &&
     length($gff_obj->type())) {
     # If we have a feature with the same ID as the seqregion, then assign its type to
     # the seqregion, instead of relying on the default "region"
@@ -116,7 +124,7 @@ sub gff_feature_to_chado_features : PRIVATE {
     $feature_start = $feature_end;
     $feature_end = $_;
   }
-  my $name = $gff_obj->name() || ($gff_obj->get_Annotations('ID'))[0] || "gff_obj_" . $gff_obj->type()->name() . "/$feature_start,$feature_end";
+  my $name = $gff_obj->name() || $gff_obj_id || "gff_obj_" . $gff_obj->type()->name() . "/$feature_start,$feature_end";
 
   my $gff_id = ($gff_obj->get_Annotations('ID'))[0] || ident($gff_obj);
 
@@ -138,14 +146,18 @@ sub gff_feature_to_chado_features : PRIVATE {
         'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
       });
 
-    my $primary_location = new ModENCODE::Chado::FeatureLoc({ # vs. chromosome
-        'rank' => 1,
-        'srcfeature' => $this_seq_region_feature,
-        'fmin' => $feature_start,
-        'fmax' => $feature_end,
-        'strand' => ($gff_obj->strand() eq '-' ? -1 : 1),
-        'phase' => ($gff_obj->phase() eq '.' ? 0 : $gff_obj->phase()),
-      });
+    my $primary_location;
+   
+    if (defined($feature_start) || defined($feature_end)) {
+      $primary_location = new ModENCODE::Chado::FeatureLoc({ # vs. chromosome
+          'rank' => 1,
+          'srcfeature' => $this_seq_region_feature,
+          'fmin' => $feature_start,
+          'fmax' => $feature_end,
+          'strand' => ($gff_obj->strand() eq '-' ? -1 : 1),
+          'phase' => ($gff_obj->phase() eq '.' ? 0 : $gff_obj->phase()),
+        });
+    }
 
 
     ##########################################
@@ -195,12 +207,24 @@ sub gff_feature_to_chado_features : PRIVATE {
         'organism' => $organism,
         'uniquename' => $uniquename,
         'type' => $type,
-        'locations' => [ $primary_location ],
       });
-    $features_by_uniquename{ident $self}->{$uniquename} = $feature;
-    if (($gff_obj->get_Annotations('ID'))[0]) {
-      $features_by_id->{($gff_obj->get_Annotations('ID'))[0]} = $feature;
+    $feature->add_location($primary_location) if $primary_location;
+    if (defined($gff_obj_id)) {
+      my $feature_by_id = $features_by_id->{$gff_obj_id};
+      if ($feature_by_id) {
+        # If we've actually seen this feature before, use the old version
+        # (assuming the locations don't conflict!)
+        if (scalar(@{$feature_by_id->get_locations()})) {
+          if ($primary_location && !scalar(grep { $primary_location->equals($_) } @{$feature_by_id->get_locations()})) {
+            log_error "Mismatch between feature locations in GFF files with the same IDs for ID=$gff_obj_id.";
+            return -1;
+          }
+        }
+        $feature = $feature_by_id;
+      }
+      $features_by_id->{$gff_obj_id} = $feature;
     }
+    $features_by_uniquename{ident $self}->{$uniquename} = $feature;
     # Add the hit to the target if any; this is also how the target_feature is tied in (srcfeature_id)
     if ($target_location) {
       # Add the location (and thus the target_feature, since it's the srcfeature_id)
@@ -222,11 +246,15 @@ sub gff_feature_to_chado_features : PRIVATE {
     my $rank = 0;
     foreach my $child_gff_obj ($gff_obj->get_SeqFeatures()) {
       my $child_feature = $self->gff_feature_to_chado_features($gff_io, $child_gff_obj, $analysis, $features_by_id);
+      if ($child_feature == -1) {
+        return -1;
+        next;
+      }
       my $relationship_type = "part_of";
       if ($child_gff_obj->get_Annotations('parental_relationship')) {
         foreach my $parental_relationship ($child_gff_obj->get_Annotations('parental_relationship')) {
           my ($term, $parent) = split /\//, $parental_relationship->value();
-          if ($parent eq ($gff_obj->get_Annotations('ID'))[0]->value()) {
+          if ($parent eq $gff_obj_id) {
             $relationship_type = $term;
             last;
           }
@@ -250,7 +278,7 @@ sub gff_feature_to_chado_features : PRIVATE {
   }
 
   if (
-    (($gff_obj->get_Annotations('ID'))[0] && ($gff_obj->get_Annotations('ID'))[0] eq $this_seq_region->seq_id()) 
+    (defined($gff_obj_id) && $gff_obj_id eq $this_seq_region->seq_id()) 
     ||
     $gff_obj->type()->name() eq $this_seq_region->type()->name()
   ) {
