@@ -6,7 +6,6 @@ use Carp qw(croak carp);
 use ModENCODE::Validator::Data::dbEST_acc;
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %sub_validator               :ATTR;
 my %seen_est_files              :ATTR( :default<[]> );
 my %features_by_acc             :ATTR( :default<{}> );
 
@@ -14,6 +13,8 @@ sub validate {
   my ($self) = @_;
   log_error "Parsing list of ESTs.", "notice", ">";
   my $success = 1;
+
+  my $est_validator = new ModENCODE::Validator::Data::dbEST_acc({ 'data_validator' => $self->get_data_validator() });
 
   my @est_list_file_data;
   foreach my $datum_hash (@{$self->get_data()}) {
@@ -29,7 +30,6 @@ sub validate {
       next;
     }
     if (!scalar(grep { $_ eq $est_list_file } @{$seen_est_files{ident $self}})) {
-      my $est_validator = $self->get_sub_validator();
       unless (open ESTS, $est_list_file) {
         log_error "Cannot open EST list file '$est_list_file' for reading.";
         $success = 0;
@@ -99,14 +99,6 @@ sub merge {
     $validated_datum->set_features(\@est_features);
   }
   return $validated_datum;
-}
-
-sub get_sub_validator {
-  my ($self) = @_;
-  if (!$sub_validator{ident $self}) {
-    $sub_validator{ident $self} = new ModENCODE::Validator::Data::dbEST_acc({ 'data_validator' => $self->get_data_validator() });
-  }
-  return $sub_validator{ident $self};
 }
 
 1;
