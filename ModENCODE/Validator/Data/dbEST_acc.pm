@@ -37,7 +37,9 @@ sub validate {
 
   my @all_results;
   for (my $i = 0; $i < scalar(@ids) + 400; $i += 400) {
-    my $term = join(" OR ", @ids[$i..$i+400]);
+    my $term = $ids[$i];
+    my $iplus = (scalar(@ids)-$i-1 < 400) ? scalar(@ids) : 400;
+    $term = join(" OR ", @ids[$i..$i+$iplus]);
     my $results = $soap_client{ident $self}->run_eSearch({
         'eSearchRequest' => {
           'db' => 'nucest',
@@ -45,8 +47,17 @@ sub validate {
           'tool' => 'modENCODE pipeline',
           'email' => 'yostinso@berkeleybop.org',
           'usehistory' => 'y',
+          'retmax' => 1000,
         }
       }) ;
+
+    $results->match('/Envelope/Body/Fault/faultstring/');
+    my $faultstring = $results->valueof();
+    if ($faultstring) {
+      log_error "Couldn't search for EST ID's; got response \"$faultstring\" from NCBI.", "error";
+      $success = 0;
+      next;
+    }
     $results->match('/Envelope/Body/eSearchResult/WebEnv');
     my $webenv = $results->valueof();
     $results->match('/Envelope/Body/eSearchResult/QueryKey');
@@ -59,11 +70,20 @@ sub validate {
           'query_key' => $querykey,
           'tool' => 'modENCODE pipeline',
           'email' => 'yostinso@berkeleybop.org',
+          'retmax' => 1000,
         }
       });
 
+    $results->match('/Envelope/Body/Fault/faultstring/');
+    $faultstring = $results->valueof();
+    if ($faultstring) {
+      log_error "Couldn't retrieve EST by ID, even though search was successful; got response \"$faultstring\" from NCBI.", "error";
+      $success = 0;
+      next;
+    }
     $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
     push @all_results, $fetch_results->valueof();
+    sleep 3; # Make no more than one request every 3 seconds
   }
 
   foreach my $datum_hash (@{$self->get_data()}) {

@@ -27,7 +27,7 @@ sub validate {
   my %features_by_id;
   foreach my $datum_hash (@{$self->get_data()}) {
     my $datum = $datum_hash->{'datum'}->clone();
-    my $applied_protocol = $datum_hash->{'applied_protocol'}->clone();
+    my $applied_protocol = $datum_hash->{'applied_protocol'};
     my $gff_file = $datum->get_value();
     next unless length($gff_file);
     log_error "Parsing GFF file " . $gff_file . ".", "notice", ">";
@@ -69,6 +69,7 @@ sub validate {
     $datum_hash->{'merged_datum'} = $datum;
   }
   log_error "Done.", "notice", "<";
+  $features_by_uniquename{ident $self} = {};
   return $success;
 }
 
@@ -161,13 +162,13 @@ sub gff_feature_to_chado_features : PRIVATE {
 
 
     ##########################################
-    # TODO: If the Target attribute is used, create a placeholder feature for it
+    # If the Target attribute is used, create a placeholder feature for it
     my $target_location;
     my ($target) = $gff_obj->annotation()->get_Annotations("Target");
     if ($target) {
       # This will later be replaced with:
-      #  a link to a feature from the SDRF (TODO first)
-      #  a link to a feature in the final structure (TODO)
+      #  a link to a feature from the SDRF
+      #  a link to a feature in the final structure
       my ($target_start, $target_end, $target_name) = ($target->start(), $target->end(), $target->target_id()) if $target;
       if ($target_start > $target_end) {
         $_ = $target_start;

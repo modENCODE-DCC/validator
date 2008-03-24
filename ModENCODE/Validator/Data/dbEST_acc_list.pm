@@ -19,7 +19,7 @@ sub validate {
   my @est_list_file_data;
   foreach my $datum_hash (@{$self->get_data()}) {
     my $datum = $datum_hash->{'datum'}->clone();
-    my $applied_protocol = $datum_hash->{'applied_protocol'}->clone();
+    my $applied_protocol = $datum_hash->{'applied_protocol'};
 
     my $est_list_file = $datum_hash->{'datum'}->get_value();
     next unless length($est_list_file);
@@ -36,13 +36,18 @@ sub validate {
         next;
       }
 
+      log_error "Reading file...", "notice", ">";
+      my $i = 0;
       while (defined(my $est = <ESTS>)) {
+        $i++;
+        if (!($i % 1000)) { log_error "Parsed line $i.", "notice"; }
         $est =~ s/\s*//g;
         my $temp_datum = new ModENCODE::Chado::Data({
             'value' => $est
           });
-        $est_validator->add_datum($temp_datum, $applied_protocol);
+        $est_validator->add_datum($temp_datum, $applied_protocol, 1); # Skip equality check
       }
+      log_error "Done.", "notice", "<";
       $success = 0 unless $est_validator->validate();
       my @temp_data = @{$est_validator->get_data()};
       foreach my $temp_datum (@temp_data) {

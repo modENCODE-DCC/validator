@@ -57,7 +57,9 @@ sub clone {
 
 sub to_string {
   my ($self) = @_;
-  my $string = "featureloc(" . $self->get_fmin() . ", " . $self->get_fmax() . ")";
+  my $string = "featureloc";
+  $string .= " " . $self->get_srcfeature()->get_name() if $self->get_srcfeature();
+  $string .= "(" . $self->get_fmin() . ", " . $self->get_fmax() . ")";
   return $string;
 }
 
