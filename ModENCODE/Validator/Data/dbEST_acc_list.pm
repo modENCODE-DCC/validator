@@ -47,8 +47,8 @@ sub validate {
           });
         $est_validator->add_datum($temp_datum, $applied_protocol, 1); # Skip equality check
       }
-      log_error "Done.", "notice", "<";
       $success = 0 unless $est_validator->validate();
+      log_error "Done.", "notice", "<";
       my @temp_data = @{$est_validator->get_data()};
       foreach my $temp_datum (@temp_data) {
         foreach my $feature (@{$temp_datum->{'merged_datum'}->get_features()}) {

@@ -60,6 +60,7 @@ sub merge {
   my ($self, $datum, $applied_protocol) = @_;
   my $validated_datum = $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
 
+
   # If there's a GFF attached to this particular protocol, update any entries referencing this transcript
   if ($validated_datum && scalar(@{$validated_datum->get_features()})) {
     my $gff_validator = $self->get_data_validator()->get_validators()->{'modencode:GFF3'};

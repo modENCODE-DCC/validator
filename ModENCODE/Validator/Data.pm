@@ -28,6 +28,8 @@ sub START {
 sub merge {
   my ($self, $experiment) = @_;
   $experiment = $experiment->clone();
+
+  log_error "Merging data elements into experiment object.", "notice", ">";
   
   my @unique_data;
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
@@ -50,6 +52,7 @@ sub merge {
     croak "Cannot merge data columns if they do not validate" unless $newdatum;
     $datum->mimic($newdatum);
   }
+  log_error "Done.", "notice", "<";
   return $experiment;
 }
 
@@ -111,8 +114,10 @@ sub validate {
     $validator->add_datum($datum, $applied_protocol);
   }
   foreach my $validator (values(%{$validators{ident $self}})) {
-    if (!$validator->validate()) {
-      $success = 0;
+    if (scalar(@{$validator->get_data()})) {
+      if (!$validator->validate()) {
+        $success = 0;
+      }
     }
   }
   return $success;

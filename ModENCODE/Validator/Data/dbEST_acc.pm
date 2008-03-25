@@ -28,7 +28,7 @@ sub BUILD {
 
 sub validate {
   my ($self) = @_;
-  log_error "Pulling down EST information from Genbank.", "notice", ">";
+  log_error "Pulling down EST information from Genbank...", "notice", "=";
   my $success = 1;
   my @ids;
   foreach my $datum_hash (@{$self->get_data()}) {
@@ -138,7 +138,7 @@ sub validate {
       }
       $datum_hash->{'is_valid'} = $datum_success;
     }
-    log_error "Done.", "notice", "<";
+    log_error "Done.\n", "notice", ".";
     return $success;
 }
 

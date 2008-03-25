@@ -188,11 +188,8 @@ sub add_cv {
   if ($cvurltype =~ m/^OBO$/i) {
     my $parser = new GO::Parser({ 'format' => 'obo_text', 'handler' => 'obj' });
     # Disable warning outputs here
-#    open OLDERR, ">&", \*STDERR or croak "Can't hide STDERR output from GO::Parser";
     log_error "(Parsing $cv...", "notice", "=";
-#    close STDERR;
     $parser->parse($cache_filename);
-#    open STDERR, ">&", \*OLDERR or croak "Can't reopen STDERR output after closing before GO::Parser";
     log_error "Done.)\n", "notice", ".";
     if (!$parser->handler->graph) {
       log_error "Cannot parse OBO file '" . $cache_filename . "' using " . ref($parser);

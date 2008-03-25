@@ -30,13 +30,13 @@ sub validate {
     my $applied_protocol = $datum_hash->{'applied_protocol'};
     my $gff_file = $datum->get_value();
     next unless length($gff_file);
-    log_error "Parsing GFF file " . $gff_file . ".", "notice", ">";
-    if (!-r $gff_file) {
-      log_error "Cannot read GFF file '$gff_file'.";
-      $success = 0;
-      next;
-    }
     if (!$cached_gff_features{ident $self}->{$gff_file}) {
+      if (!-r $gff_file) {
+        log_error "Cannot read GFF file '$gff_file'.";
+        $success = 0;
+        next;
+      }
+      log_error "Parsing GFF file " . $gff_file . "...", "notice", "=";
       unless (open GFF, $gff_file) {
         log_error "Cannot open GFF file '$gff_file' for reading.";
         $success = 0;
@@ -63,9 +63,9 @@ sub validate {
       }
       $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
       close GFF;
+      log_error "Done.\n", "notice", ".";
     }
 
-    log_error "Done.", "notice", "<";
     $datum_hash->{'merged_datum'} = $datum;
   }
   log_error "Done.", "notice", "<";

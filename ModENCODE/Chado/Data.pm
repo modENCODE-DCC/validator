@@ -167,6 +167,8 @@ sub to_string {
 
 sub equals {
   my ($self, $other) = @_;
+
+  return 1 if ($self == $other);
   return 0 unless ref($self) eq ref($other);
 
   return 0 unless ($self->get_name() eq $other->get_name() && $self->get_heading() eq $other->get_heading()&& $self->get_value() eq $other->get_value());
@@ -191,23 +193,23 @@ sub equals {
     return 0 if $other->get_type();
   }
 
-  my @features = @{$self->get_features()};
-  return 0 unless scalar(@features) == scalar(@{$other->get_features()});
-  foreach my $feature (@features) {
-    return 0 unless scalar(grep { $_->equals($feature) } @{$other->get_features()});
-  }
+#  my @features = @{$self->get_features()};
+#  return 0 unless scalar(@features) == scalar(@{$other->get_features()});
+#  foreach my $feature (@features) {
+#    return 0 unless scalar(grep { $_->equals($feature) } @{$other->get_features()});
+#  }
 
-  my @wiggle_datas = @{$self->get_wiggle_datas()};
-  return 0 unless scalar(@wiggle_datas) == scalar(@{$other->get_wiggle_datas()});
-  foreach my $wiggle_data (@wiggle_datas) {
-    return 0 unless scalar(grep { $_->equals($wiggle_data) } @{$other->get_wiggle_datas()});
-  }
+#  my @wiggle_datas = @{$self->get_wiggle_datas()};
+#  return 0 unless scalar(@wiggle_datas) == scalar(@{$other->get_wiggle_datas()});
+#  foreach my $wiggle_data (@wiggle_datas) {
+#    return 0 unless scalar(grep { $_->equals($wiggle_data) } @{$other->get_wiggle_datas()});
+#  }
 
-  my @organisms = @{$self->get_organisms()};
-  return 0 unless scalar(@organisms) == scalar(@{$other->get_organisms()});
-  foreach my $organism (@organisms) {
-    return 0 unless scalar(grep { $_->equals($organism) } @{$other->get_organisms()});
-  }
+#  my @organisms = @{$self->get_organisms()};
+#  return 0 unless scalar(@organisms) == scalar(@{$other->get_organisms()});
+#  foreach my $organism (@organisms) {
+#    return 0 unless scalar(grep { $_->equals($organism) } @{$other->get_organisms()});
+#  }
 
   return 1;
 }
