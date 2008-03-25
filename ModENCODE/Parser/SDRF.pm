@@ -76,7 +76,7 @@ sub BUILD {
                                             $return = 0;
                                           }
                                         }
-                                        | <error> { $return = 0; }
+                                        | <error>
 
     end_of_line:                        <skip:'[" \t\n\r]*'> /\Z/
 

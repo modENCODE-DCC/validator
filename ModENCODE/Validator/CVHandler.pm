@@ -122,6 +122,10 @@ sub add_cv {
     if (!$res->is_success) { log_error "Couldn't connect to canonical URL source: " . $res->status_line; return 0; }
     ($cvurl) = ($res->content =~ m/<canonical_url>\s*(.*)\s*<\/canonical_url>/);
     ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/);
+    if ($cvurl xor $cvurltype) {
+      log_error "Found a URL ($cvurl) OR a URL type ($cvurltype), but not both for ccontrolled vocabulary $cv. Please check DBFieldsConf.php", "error";
+      return 0;
+    }
   }
 
   if ($cvurl && $cv) {
