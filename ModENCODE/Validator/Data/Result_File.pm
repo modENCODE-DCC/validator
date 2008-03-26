@@ -13,11 +13,12 @@ sub validate {
   foreach my $datum_hash (@{$self->get_data()}) {
     my $datum = $datum_hash->{'datum'}->clone();
     if (length($datum->get_value())) {
-      next if $datum->get_value() =~ m/(http|ftp):\/\//;
+      next if ($datum->get_value() =~ m/(http|ftp):\/\//);
       if (!-r $datum->get_value()) {
         log_error "Can't find Result File [" . $datum->get_name() . "]=" . $datum->get_value() . ".";
         $success = 0;
       }
+    }
   }
 
   return $success;
