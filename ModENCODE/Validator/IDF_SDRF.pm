@@ -121,7 +121,8 @@ sub validate {
   my @undefined_protocols;
   foreach my $sdrf_protocol (@sdrf_protocols) {
     next if $sdrf_protocol->get_name() eq "->"; # TODO: Handle -> protocols
-    if (!scalar(grep { $_->get_name() eq $sdrf_protocol->get_name() } @{$self->get_protocols()})) {
+    my ($idf_protocol) = grep { $_->get_name() eq $sdrf_protocol->get_name() } @{$self->get_protocols()};
+    if (!$idf_protocol) {
       push @undefined_protocols, $sdrf_protocol;
     }
   }
