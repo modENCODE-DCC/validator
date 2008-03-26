@@ -37,6 +37,7 @@ sub merge {
   # Add any protocol attributes as an attribute (except for Protocol Parameters, which is special)
   foreach my $sdrf_protocol (@sdrf_protocols) {
     my ($idf_protocol) = grep { $_->get_name() eq $sdrf_protocol->get_name() } @{$self->get_protocols()};
+    croak "Can't find IDF protocol for SDRF protocol " . $sdrf_protocol->get_name() unless $idf_protocol;
     if (length($idf_protocol->get_description())) {
       $sdrf_protocol->set_description($idf_protocol->get_description());
       foreach my $attribute (@{$idf_protocol->get_attributes()}) {
