@@ -24,20 +24,24 @@ sub is_valid {
   }
 }
 sub add_datum {
-  my ($self, $datum, $applied_protocol, $skip_check_equals)  = @_;
-  $skip_check_equals ||= 0;
+  my ($self, $datum, $applied_protocol, $quick_check_equals)  = @_;
+#  $quick_check_equals ||= 0;
   croak "Can't add a " . ref($datum) . " as a ModENCODE::Chado::Data" unless ref($datum) eq "ModENCODE::Chado::Data";
   croak "Can't add a " . ref($applied_protocol) . " as a ModENCODE::Chado::AppliedProtocol" unless ref($applied_protocol) eq "ModENCODE::Chado::AppliedProtocol";
-  if ($skip_check_equals) {
-    push @{$self->get_data()}, { 'datum' => $datum->clone(), 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
-  } else {
-    my $datum_exists = scalar(
-      grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()}
-    );
-    if (!$datum_exists) {
-      push @{$self->get_data()}, { 'datum' => $datum->clone(), 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
-    }
-  }
+#  if ($quick_check_equals) {
+#    my $datum_exists = scalar(grep { $_->{'datum'} == $datum } @{$self->get_data()});
+#    if (!$datum_exists) {
+      push @{$self->get_data()}, { 'datum' => $datum, 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
+#    }
+#  } else {
+#    my $datum_exists = scalar(
+#      grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()}
+#    );
+#    my $datum_exists = scalar(grep { $_->{'datum'} == $datum } @{$self->get_data()});
+#    if (!$datum_exists) {
+#      push @{$self->get_data()}, { 'datum' => $datum->clone(), 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
+#    }
+#  }
 }
 
 sub get_datum {
