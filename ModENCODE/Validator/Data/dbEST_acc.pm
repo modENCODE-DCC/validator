@@ -28,7 +28,7 @@ sub BUILD {
 
 sub validate {
   my ($self) = @_;
-  log_error "Pulling down EST information from Genbank...", "notice", "=";
+  log_error "Pulling down EST information from Genbank...", "notice", ">";
   my $success = 1;
   my @ids;
   foreach my $datum_hash (@{$self->get_data()}) {
@@ -36,32 +36,47 @@ sub validate {
   }
 
   my @all_results;
-  for (my $i = 0; $i < scalar(@ids) + 400; $i += 400) {
-    my $term = $ids[$i];
-    my $iplus = (scalar(@ids)-$i-1 < 400) ? scalar(@ids) : 400;
-    $term = join(" OR ", @ids[$i..$i+$iplus]);
+  my $i = 0;
+  while ($i < scalar(@ids)) {
+    my @term_set;
+    for (my $j = 0; $j < 40; $j++) {
+      if ($i < scalar(@ids)) {
+        push @term_set, $ids[$i];
+        $i++;
+      }
+    }
+    log_error "Searching ESTs from " . ($i - scalar(@term_set)) . " up to $i.", "notice";
+    my $term = join(" OR ", @term_set);
     my $results = $soap_client{ident $self}->run_eSearch({
         'eSearchRequest' => {
           'db' => 'nucest',
           'term' => $term,
           'tool' => 'modENCODE pipeline',
           'email' => 'yostinso@berkeleybop.org',
-          'usehistory' => 'y',
-          'retmax' => 1000,
+          'usehistory' => 'n',
+          'retmax' => 400,
         }
       }) ;
 
     $results->match('/Envelope/Body/Fault/faultstring/');
     my $faultstring = $results->valueof();
     if ($faultstring) {
-      log_error "Couldn't search for EST ID's; got response \"$faultstring\" from NCBI.", "error";
-      $success = 0;
+      log_error "Couldn't search for EST ID's; got response \"$faultstring\" from NCBI. Retrying.", "warning";
+      $i -= scalar(@term_set);
+      sleep 30;
       next;
     }
     $results->match('/Envelope/Body/eSearchResult/WebEnv');
     my $webenv = $results->valueof();
     $results->match('/Envelope/Body/eSearchResult/QueryKey');
     my $querykey = $results->valueof();
+
+    if (!length($querykey) || !length($webenv)) {
+      log_error "Couldn't search for EST ID's; got an unknown response from NCBI. Retrying.", "warning";
+      $i -= scalar(@term_set);
+      sleep 30;
+      next;
+    }
 
     my $fetch_results = $soap_client{ident $self}->run_eFetch({
         'eFetchRequest' => {
@@ -77,13 +92,20 @@ sub validate {
     $results->match('/Envelope/Body/Fault/faultstring/');
     $faultstring = $results->valueof();
     if ($faultstring) {
-      log_error "Couldn't retrieve EST by ID, even though search was successful; got response \"$faultstring\" from NCBI.", "error";
-      $success = 0;
+      log_error "Couldn't retrieve EST by ID, even though search was successful; got response \"$faultstring\" from NCBI. Retrying.", "warning";
+      $i -= scalar(@term_set);
+      sleep 30;
       next;
     }
     $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
+    if (!length($fetch_results->valueof())) {
+      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "warning";
+      $i -= scalar(@term_set);
+      sleep 30;
+      next;
+    }
     push @all_results, $fetch_results->valueof();
-    sleep 3; # Make no more than one request every 3 seconds
+    sleep 5; # Make no more than one request every 3 seconds
   }
 
   foreach my $datum_hash (@{$self->get_data()}) {
@@ -138,7 +160,7 @@ sub validate {
       }
       $datum_hash->{'is_valid'} = $datum_success;
     }
-    log_error "Done.\n", "notice", ".";
+    log_error "Done.\n", "notice", "<";
     return $success;
 }
 
