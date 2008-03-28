@@ -558,7 +558,51 @@ sub get_feature_id_by_name_and_type {
 
   $allow_isa ||= 0;
 
-  my $sth = $self->get_dbh()->prepare("SELECT f.feature_id, cvt.name as cvterm, cv.name as cv FROM feature f INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE f.name = ?");
+  my $sth = $self->get_dbh()->prepare("SELECT 
+    f.feature_id, cvt.name as cvterm, cv.name as cv 
+    FROM feature f 
+    INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id 
+    INNER JOIN cv ON cvt.cv_id = cv.cv_id 
+    INNER JOIN feature_dbxref fdbx ON fdbx.feature_id = f.feature_id
+    INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id
+    WHERE 
+    (f.name = ? OR dbx.accession = ?)
+    AND organism_id = 1");
+  $sth->execute($feature_name, $feature_name);
+  my @found_feature_ids;
+  while (my $row = $sth->fetchrow_hashref()) {
+    if (
+      (
+        (!$allow_isa && $row->{'cvterm'} eq $type->get_name())
+        ||
+        ($allow_isa && ModENCODE::Config::get_cvhandler()->term_isa(
+            $row->{'cv'}, 
+            $row->{'cvterm'}, 
+            $type->get_name()),
+        )
+      )
+      && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv()->get_name())
+    ) {
+      push @found_feature_ids, $row->{'feature_id'};
+    }
+  }
+  if (scalar(@found_feature_ids) == 0) {
+    log_error "Couldn't find feature '$feature_name' with type " . $type->to_string() . ".", "warning";
+    return undef;
+  } elsif (scalar(@found_feature_ids) > 1) {
+    log_error "Found more than one feature '$feature_name' with type " . $type->to_string() . ".", "warning";
+  }
+  return $found_feature_ids[0];
+}
+
+sub get_feature_id_by_approximate_name_and_type {
+  # Helper method for ModENCODE::Validator::Data::SO_transcript and possibly others
+  my ($self, $feature_name, $type, $allow_isa) = @_;
+
+  $allow_isa ||= 0;
+
+  $feature_name .= "%";
+  my $sth = $self->get_dbh()->prepare("SELECT f.feature_id, cvt.name as cvterm, cv.name as cv FROM feature f INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE f.name LIKE ? AND organism_id = 1 ORDER BY f.name DESC");
   $sth->execute($feature_name);
   my @found_feature_ids;
   while (my $row = $sth->fetchrow_hashref()) {
@@ -585,6 +629,8 @@ sub get_feature_id_by_name_and_type {
   }
   return $found_feature_ids[0];
 }
+
+
 
 sub get_feature {
   my ($self, $feature_id) = @_;
