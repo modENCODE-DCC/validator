@@ -220,7 +220,6 @@ sub term_isa {
   return 0 unless ($self->is_valid_term($cvname, $term) && $self->is_valid_term($cvname, $ancestor));
   my $cv = $self->get_cv_by_name($cvname);
   my $child_acc = $self->get_accession_for_term($cvname, $term);
-  log_error "Trying to get parents of $child_acc from $cvname", "notice";
   my $parents = $cv->{'graph'}->get_recursive_parent_terms_by_type($cvname . ':' . $child_acc);
   my @matching_parents = grep { $_->name() eq $ancestor } @$parents;
   return (scalar(@matching_parents) ? 1 : 0);
