@@ -14,6 +14,7 @@ use ModENCODE::Chado::Analysis;
 use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::ErrorHandler qw(log_error);
+use Data::Dumper;
 
 my %soap_client                 :ATTR;
 
@@ -45,7 +46,7 @@ sub validate {
         $i++;
       }
     }
-    log_error "Searching ESTs from " . ($i - scalar(@term_set)) . " up to $i.", "notice";
+    log_error "Searching ESTs from " . ($i - scalar(@term_set)) . " up to " . ($i-1) . ".", "notice";
     my $term = join(" OR ", @term_set);
     my $results = $soap_client{ident $self}->run_eSearch({
         'eSearchRequest' => {
@@ -53,7 +54,7 @@ sub validate {
           'term' => $term,
           'tool' => 'modENCODE pipeline',
           'email' => 'yostinso@berkeleybop.org',
-          'usehistory' => 'n',
+          'usehistory' => 'y',
           'retmax' => 400,
         }
       }) ;
@@ -61,7 +62,7 @@ sub validate {
     $results->match('/Envelope/Body/Fault/faultstring/');
     my $faultstring = $results->valueof();
     if ($faultstring) {
-      log_error "Couldn't search for EST ID's; got response \"$faultstring\" from NCBI. Retrying.", "warning";
+      log_error "Couldn't search for EST ID's; got response \"$faultstring\" from NCBI. Retrying.", "notice";
       $i -= scalar(@term_set);
       sleep 30;
       next;
@@ -72,7 +73,8 @@ sub validate {
     my $querykey = $results->valueof();
 
     if (!length($querykey) || !length($webenv)) {
-      log_error "Couldn't search for EST ID's; got an unknown response from NCBI. Retrying.", "warning";
+      log_error "Couldn't search for EST ID's; got an unknown response from NCBI. Retrying.", "notice";
+      print STDERR Dumper($results);
       $i -= scalar(@term_set);
       sleep 30;
       next;
@@ -92,14 +94,15 @@ sub validate {
     $results->match('/Envelope/Body/Fault/faultstring/');
     $faultstring = $results->valueof();
     if ($faultstring) {
-      log_error "Couldn't retrieve EST by ID, even though search was successful; got response \"$faultstring\" from NCBI. Retrying.", "warning";
+      log_error "Couldn't retrieve EST by ID, even though search was successful; got response \"$faultstring\" from NCBI. Retrying.", "notice";
       $i -= scalar(@term_set);
       sleep 30;
       next;
     }
     $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
     if (!length($fetch_results->valueof())) {
-      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "warning";
+      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
+      print STDERR Dumper($fetch_results);
       $i -= scalar(@term_set);
       sleep 30;
       next;
