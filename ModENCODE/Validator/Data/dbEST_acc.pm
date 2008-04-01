@@ -14,7 +14,6 @@ use ModENCODE::Chado::Analysis;
 use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::ErrorHandler qw(log_error);
-use Data::Dumper;
 
 my %soap_client                 :ATTR;
 
@@ -48,16 +47,25 @@ sub validate {
     }
     log_error "Searching ESTs from " . ($i - scalar(@term_set)) . " up to " . ($i-1) . ".", "notice";
     my $term = join(" OR ", @term_set);
-    my $results = $soap_client{ident $self}->run_eSearch({
-        'eSearchRequest' => {
-          'db' => 'nucest',
-          'term' => $term,
-          'tool' => 'modENCODE pipeline',
-          'email' => 'yostinso@berkeleybop.org',
-          'usehistory' => 'y',
-          'retmax' => 400,
-        }
-      }) ;
+    my $results;
+    eval {
+      $results = $soap_client{ident $self}->run_eSearch({
+          'eSearchRequest' => {
+            'db' => 'nucest',
+            'term' => $term,
+            'tool' => 'modENCODE pipeline',
+            'email' => 'yostinso@berkeleybop.org',
+            'usehistory' => 'y',
+            'retmax' => 400,
+          }
+        });
+    };
+    if (!$results) {
+      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
+      $i -= scalar(@term_set);
+      sleep 30;
+      next;
+    }
 
     $results->match('/Envelope/Body/Fault/faultstring/');
     my $faultstring = $results->valueof();
@@ -74,26 +82,35 @@ sub validate {
 
     if (!length($querykey) || !length($webenv)) {
       log_error "Couldn't search for EST ID's; got an unknown response from NCBI. Retrying.", "notice";
-      print STDERR Dumper($results);
+      $i -= scalar(@term_set);
+      sleep 30;
+      next;
+    }
+    my $fetch_results;
+
+    eval {
+      $fetch_results = $soap_client{ident $self}->run_eFetch({
+          'eFetchRequest' => {
+            'db' => 'nucest',
+            'WebEnv' => $webenv,
+            'query_key' => $querykey,
+            'tool' => 'modENCODE pipeline',
+            'email' => 'yostinso@berkeleybop.org',
+            'retmax' => 1000,
+          }
+        });
+    };
+
+    if (!$fetch_results) {
+      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
       $i -= scalar(@term_set);
       sleep 30;
       next;
     }
 
-    my $fetch_results = $soap_client{ident $self}->run_eFetch({
-        'eFetchRequest' => {
-          'db' => 'nucest',
-          'WebEnv' => $webenv,
-          'query_key' => $querykey,
-          'tool' => 'modENCODE pipeline',
-          'email' => 'yostinso@berkeleybop.org',
-          'retmax' => 1000,
-        }
-      });
-
-    $results->match('/Envelope/Body/Fault/faultstring/');
+    $fetch_results->match('/Envelope/Body/Fault/faultstring/');
     $faultstring = $results->valueof();
-    if ($faultstring) {
+    if ($faultstring && $faultstring ne '1') {
       log_error "Couldn't retrieve EST by ID, even though search was successful; got response \"$faultstring\" from NCBI. Retrying.", "notice";
       $i -= scalar(@term_set);
       sleep 30;
@@ -102,7 +119,6 @@ sub validate {
     $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
     if (!length($fetch_results->valueof())) {
       log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-      print STDERR Dumper($fetch_results);
       $i -= scalar(@term_set);
       sleep 30;
       next;

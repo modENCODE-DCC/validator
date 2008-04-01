@@ -189,7 +189,11 @@ sub gff_feature_to_chado_features : PRIVATE {
             'feature' => $target_feature,
             'analysis' => $analysis,
           });
-        $analysisfeature->set_rawscore($gff_obj->score()->value()) if $gff_obj->score();
+        if ($gff_obj->score()) {
+          my $rawscore = $gff_obj->score()->value();
+          $rawscore = undef if ($rawscore eq '.' || $rawscore eq '');
+          $analysisfeature->set_rawscore($rawscore);
+        }
         $target_feature->add_analysisfeature($analysisfeature);
         $features_by_id->{$target_name} = $target_feature;
       }
@@ -236,7 +240,11 @@ sub gff_feature_to_chado_features : PRIVATE {
           'feature' => $feature,
           'analysis' => $analysis,
         });
-      $analysisfeature->set_rawscore($gff_obj->score()->value()) if $gff_obj->score();
+      if ($gff_obj->score()) {
+        my $rawscore = $gff_obj->score()->value();
+        $rawscore = undef if ($rawscore eq '.' || $rawscore eq '');
+        $analysisfeature->set_rawscore($rawscore);
+      }
       $feature->add_analysisfeature($analysisfeature);
     }
   }

@@ -25,6 +25,7 @@ sub validate {
     if (length($datum_hash->{'datum'}->get_value())) {
       my $feature_id = $cached_feature_ids{ident $self}->{$datum_hash->{'datum'}->get_value()};
       if (!$feature_id) {
+        log_error "Fetching feature " . $datum_hash->{'datum'}->get_value(), "notice";
         $feature_id = $self->get_parser()->get_feature_id_by_name_and_type(
           $datum_hash->{'datum'}->get_value(),
           new ModENCODE::Chado::CVTerm({
@@ -40,6 +41,7 @@ sub validate {
         $success = 0;
         next;
       }
+      log_error "Loading feature " . $datum_hash->{'datum'}->get_value(), "notice";
       my $feature = $self->get_parser()->get_feature($feature_id);
       if (!$feature) {
         log_error "Couldn't get a feature object for supposed transcript " . $datum_hash->{'datum'}->get_value() . " with feature_id $feature_id.", "error";

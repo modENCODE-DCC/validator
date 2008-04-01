@@ -31,7 +31,8 @@ sub add_datum {
 #  if ($quick_check_equals) {
 #    my $datum_exists = scalar(grep { $_->{'datum'} == $datum } @{$self->get_data()});
 #    if (!$datum_exists) {
-      push @{$self->get_data()}, { 'datum' => $datum, 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
+
+      push @{$data{ident $self}}, { 'datum' => $datum, 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
 #    }
 #  } else {
 #    my $datum_exists = scalar(

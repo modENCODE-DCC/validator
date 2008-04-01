@@ -566,9 +566,9 @@ sub get_feature_id_by_name_and_type {
     INNER JOIN feature_dbxref fdbx ON fdbx.feature_id = f.feature_id
     INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id
     WHERE 
-    (f.name = ? OR dbx.accession = ?)
+    (f.name = ?)
     AND organism_id = 1");
-  $sth->execute($feature_name, $feature_name);
+  $sth->execute($feature_name);
   my @found_feature_ids;
   while (my $row = $sth->fetchrow_hashref()) {
     if (
@@ -584,6 +584,35 @@ sub get_feature_id_by_name_and_type {
       && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv()->get_name())
     ) {
       push @found_feature_ids, $row->{'feature_id'};
+    }
+  }
+  if (!scalar(@found_feature_ids)) {
+    my $sth = $self->get_dbh()->prepare("SELECT 
+      f.feature_id, cvt.name as cvterm, cv.name as cv 
+      FROM feature f 
+      INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id 
+      INNER JOIN cv ON cvt.cv_id = cv.cv_id 
+      INNER JOIN feature_dbxref fdbx ON fdbx.feature_id = f.feature_id
+      INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id
+      WHERE 
+      (dbx.accession = ?)
+      AND organism_id = 1");
+    $sth->execute($feature_name);
+    while (my $row = $sth->fetchrow_hashref()) {
+      if (
+        (
+          (!$allow_isa && $row->{'cvterm'} eq $type->get_name())
+          ||
+          ($allow_isa && ModENCODE::Config::get_cvhandler()->term_isa(
+              $row->{'cv'}, 
+              $row->{'cvterm'}, 
+              $type->get_name()),
+          )
+        )
+        && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv()->get_name())
+      ) {
+        push @found_feature_ids, $row->{'feature_id'};
+      }
     }
   }
   if (scalar(@found_feature_ids) == 0) {
