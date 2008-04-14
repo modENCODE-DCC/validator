@@ -290,13 +290,8 @@ sub validate_chado_feature : PRIVATE {
 
   if ($feature->get_type()) {
     if (!ModENCODE::Config::get_cvhandler()->is_valid_term($feature->get_type()->get_cv()->get_name(), $feature->get_type()->get_name())) {
-      log_error "Type '" . $feature->get_type()->get_cv()->get_name() . ":" . $feature->get_type()->get_name() . "' is not a valid CVTerm for feature '" . $feature->get_name() . "'";
-      $success = 0;
-    }
-  }
-  if ($feature->get_type()) {
-    if (!ModENCODE::Config::get_cvhandler()->is_valid_term($feature->get_type()->get_cv()->get_name(), $feature->get_type()->get_name())) {
-      log_error "Type '" . $feature->get_type()->get_cv()->get_name() . ":" . $feature->get_type()->get_name() . "' is not a valid CVTerm for feature '" . $feature->get_name() . "'";
+      my $feature_name = $feature->get_name() || $feature->get_uniquename();
+      log_error "Type '" . $feature->get_type()->get_cv()->get_name() . ":" . $feature->get_type()->get_name() . "' is not a valid CVTerm for feature '" . $feature_name . "'";
       $success = 0;
     }
   }
