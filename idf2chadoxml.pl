@@ -85,8 +85,12 @@ log_error "Done.", "notice", "<";
   # Validate and merge attached data files and remote resources (BED, Wiggle, ASN.1, dbEST, etc.)
   log_error "Reading data files.", "notice", ">";
   my $data_validator = new ModENCODE::Validator::Data();
-  $data_validator->validate($experiment);
-  $experiment = $data_validator->merge($experiment);
+  if ($data_validator->validate($experiment)) {
+    $experiment = $data_validator->merge($experiment);
+  } else {
+    log_error "Couldn't validate data columns!", "error";
+    exit;
+  }
   log_error "Done.", "notice", "<";
   $data_validator = undef;
 
