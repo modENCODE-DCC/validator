@@ -13,6 +13,7 @@ use ModENCODE::Chado::AnalysisFeature;
 use ModENCODE::Chado::Analysis;
 use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::FeatureLoc;
+use ModENCODE::Parser::Chado;
 use ModENCODE::ErrorHandler qw(log_error);
 
 my %soap_client                 :ATTR;
@@ -28,159 +29,248 @@ sub BUILD {
 
 sub validate {
   my ($self) = @_;
-  log_error "Pulling down EST information from Genbank...", "notice", ">";
   my $success = 1;
-  my @ids;
-  foreach my $datum_hash (@{$self->get_data()}) {
-    push @ids, $datum_hash->{'datum'}->get_value();
-  }
 
-  my @all_results;
-  my $i = 0;
-  while ($i < scalar(@ids)) {
-    my @term_set;
-    for (my $j = 0; $j < 40; $j++) {
-      if ($i < scalar(@ids)) {
-        push @term_set, $ids[$i];
-        $i++;
-      }
-    }
-    log_error "Searching ESTs from " . ($i - scalar(@term_set)) . " up to " . ($i-1) . ".", "notice";
-    my $term = join(" OR ", @term_set);
-    my $results;
-    eval {
-      $results = $soap_client{ident $self}->run_eSearch({
-          'eSearchRequest' => {
-            'db' => 'nucest',
-            'term' => $term,
-            'tool' => 'modENCODE pipeline',
-            'email' => 'yostinso@berkeleybop.org',
-            'usehistory' => 'y',
-            'retmax' => 400,
-          }
-        });
-    };
-    if (!$results) {
-      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-      $i -= scalar(@term_set);
-      sleep 30;
-      next;
-    }
+  # Get out the EST IDs we need to validate
+  my @data_to_validate = @{$self->get_data()};
+  my @data_left;
 
-    $results->match('/Envelope/Body/Fault/faultstring/');
-    my $faultstring = $results->valueof();
-    if ($faultstring) {
-      log_error "Couldn't search for EST ID's; got response \"$faultstring\" from NCBI. Retrying.", "notice";
-      $i -= scalar(@term_set);
-      sleep 30;
-      next;
-    }
-    $results->match('/Envelope/Body/eSearchResult/WebEnv');
-    my $webenv = $results->valueof();
-    $results->match('/Envelope/Body/eSearchResult/QueryKey');
-    my $querykey = $results->valueof();
+  log_error "Validating " . scalar(@data_to_validate) . " ESTs...", "notice", ">";
 
-    if (!length($querykey) || !length($webenv)) {
-      log_error "Couldn't search for EST ID's; got an unknown response from NCBI. Retrying.", "notice";
-      $i -= scalar(@term_set);
-      sleep 30;
-      next;
-    }
-    my $fetch_results;
-
-    eval {
-      $fetch_results = $soap_client{ident $self}->run_eFetch({
-          'eFetchRequest' => {
-            'db' => 'nucest',
-            'WebEnv' => $webenv,
-            'query_key' => $querykey,
-            'tool' => 'modENCODE pipeline',
-            'email' => 'yostinso@berkeleybop.org',
-            'retmax' => 1000,
-          }
-        });
-    };
-
-    if (!$fetch_results) {
-      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-      $i -= scalar(@term_set);
-      sleep 30;
-      next;
-    }
-
-    $fetch_results->match('/Envelope/Body/Fault/faultstring/');
-    $faultstring = $results->valueof();
-    if ($faultstring && $faultstring ne '1') {
-      log_error "Couldn't retrieve EST by ID, even though search was successful; got response \"$faultstring\" from NCBI. Retrying.", "notice";
-      $i -= scalar(@term_set);
-      sleep 30;
-      next;
-    }
-    $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
-    if (!length($fetch_results->valueof())) {
-      log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-      $i -= scalar(@term_set);
-      sleep 30;
-      next;
-    }
-    push @all_results, $fetch_results->valueof();
-    sleep 5; # Make no more than one request every 3 seconds
-  }
-
-  foreach my $datum_hash (@{$self->get_data()}) {
+  # Validate ESTs against ones we've already seen and store locally
+  log_error "Fetching " . scalar(@data_to_validate) . " ESTs from local modENCODE database...", "notice", ">";
+  my $parser = $self->get_parser_modencode();
+  while (my $datum_hash = shift @data_to_validate) {
     my $datum = $datum_hash->{'datum'}->clone();
-    my $id = $datum->get_value();
-    my $datum_success = 1;
-    my $result_item;
-    foreach my $gbseq (@all_results) {
-      if ($id eq $gbseq->{'GBSeq_primary-accession'}) {
-          $result_item = $gbseq;
-        }
+    my $id = $datum_hash->{'datum'}->get_value();
+    if (length($id)) {
+      my $feature = $parser->get_feature_by_genbank_id($id);
+      if (!$feature) {
+        push @data_left, $datum_hash;
+        next;
       }
-      if (!$result_item) {
-        log_error "Couldn't fetch the EST identified by $id from NCBI.";
-        $success = 0;
-        $datum_success = 0;
-      } else {
+      $datum->add_feature($feature);
+      $datum_hash->{'merged_datum'} = $datum;
+      $datum_hash->{'is_valid'} = 1;
+    }
+  }
+  @data_to_validate = @data_left;
+  @data_left = ();
+  log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
 
-        # Extract Chado feature information from the SOAP EFetch result
-        my ($dbest_id) = grep { $_ =~ m/^gnl\|dbEST\|/ } @{$result_item->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $dbest_id =~ s/^gnl\|dbEST\|//;
-        my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$result_item->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
-        my $genbank_acc = $result_item->{'GBSeq_primary-accession'};
-        my ($est_name) = ($result_item->{'GBSeq_definition'} =~ m/^(\S+)/);
-        my $sequence = $result_item->{'GBSeq_sequence'};
-        my $seqlen = length($sequence);
-
-        my $timeaccessioned = $result_item->{'GBSeq_create-date'};
-        my $timelastmodified = $result_item->{'GBSeq_update-date'};
-
-        my ($genus, $species) = ($result_item->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
-
-        # Create the feature object
-        my $feature = new ModENCODE::Chado::Feature({
-            'name' => $est_name,
-            'uniquename' => 'dbest:' . $dbest_id,
-            'residues' => $sequence,
-            'seqlen' => $seqlen,
-            'timeaccessioned' => $timeaccessioned,
-            'timelastmodified' => $timelastmodified,
-            'type' => new ModENCODE::Chado::CVTerm({
-                'name' => 'EST',
-                'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' })
-              }),
-            'organism' => new ModENCODE::Chado::Organism({
-                'genus' => $genus,
-                'species' => $species,
-              }),
-          });
-
+  # Validate remaining ESTs against FlyBase
+  if (scalar(@data_to_validate)) {
+    log_error "Falling back to fetching remaining " . scalar(@data_to_validate) . " ESTs from FlyBase...", "notice", ">";
+    $parser = $self->get_parser_flybase();
+    while (my $datum_hash = shift @data_to_validate) {
+      my $datum = $datum_hash->{'datum'}->clone();
+      my $id = $datum_hash->{'datum'}->get_value();
+      if (length($id)) {
+        my $feature = $parser->get_feature_by_genbank_id($id);
+        if (!$feature) {
+          push @data_left, $datum_hash;
+          next;
+        }
         $datum->add_feature($feature);
         $datum_hash->{'merged_datum'} = $datum;
+        $datum_hash->{'is_valid'} = 1;
       }
-      $datum_hash->{'is_valid'} = $datum_success;
     }
-    log_error "Done.\n", "notice", "<";
-    return $success;
+    @data_to_validate = @data_left;
+    @data_left = ();
+    log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
+  }
+
+  if (scalar(@data_to_validate)) {
+    log_error "Falling back to pulling down EST information from Genbank...", "notice", ">";
+
+    my $est_counter = 1;
+    my @all_results;
+    while (scalar(@data_to_validate)) {
+      # Generate search query "est1 OR est2 OR est3 OR ..."
+      my @term_set;
+      for (my $i = 0; $i < 40; $i++) {
+        my $datum_hash = shift @data_to_validate;
+        last unless $datum_hash;
+        $est_counter++;
+        push @term_set, $datum_hash if length($datum_hash->{'datum'}->get_value());
+      }
+      my $search_term = join(" OR ", map { $_->{'datum'}->get_value() } @term_set);
+      log_error "Searching ESTs from " . ($est_counter - scalar(@term_set)) . " to " . ($est_counter-1) . ".", "notice";
+
+      # Run query and get back the cookie that will let us fetch the result:
+      my $search_results;
+      eval {
+        $search_results = $soap_client{ident $self}->run_eSearch({
+            'eSearchRequest' => {
+              'db' => 'nucest',
+              'term' => $search_term,
+              'tool' => 'modENCODE pipeline',
+              'email' => 'yostinso@berkeleybop.org',
+              'usehistory' => 'y',
+              'retmax' => 400,
+            }
+          });
+      };
+      if (!$search_results) {
+        # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
+        log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
+        unshift @data_to_validate, @term_set;
+        sleep 30;
+        next;
+      }
+
+      if ($search_results->fault) {
+        # Got back a SOAP fault, which means our query got through but NCBI gave us junk back.
+        # Wait 30 seconds and retry - this seems to just happen sometimes.
+        log_error "Couldn't search for EST ID's; got response \"" . $search_results->faultstring . "\" from NCBI. Retrying.", "notice";
+        unshift @data_to_validate, @term_set;
+        sleep 30;
+        next;
+      }
+      # Pull out the cookie and query key that will allow us to actually fetch the results proper
+      $search_results->match('/Envelope/Body/eSearchResult/WebEnv');
+      my $webenv = $search_results->valueof();
+      $search_results->match('/Envelope/Body/eSearchResult/QueryKey');
+      my $querykey = $search_results->valueof();
+
+      # If we didn't get a valid query key or cookie, something screwy happened without a fault.
+      # Wait 30 seconds and retry.
+      if (!length($querykey) || !length($webenv)) {
+        log_error "Couldn't get a search cookie when searching for ESTs; got an unexpected response from NCBI. Retrying.", "notice";
+        unshift @data_to_validate, @term_set;
+        sleep 30;
+        next;
+      }
+
+      ######################################################################################
+
+      # Okay, got a valid query key and cookie, go ahead and fetch the actual results.
+      my $fetch_results;
+      eval {
+        $fetch_results = $soap_client{ident $self}->run_eFetch({
+            'eFetchRequest' => {
+              'db' => 'nucest',
+              'WebEnv' => $webenv,
+              'query_key' => $querykey,
+              'tool' => 'modENCODE pipeline',
+              'email' => 'yostinso@berkeleybop.org',
+              'retmax' => 1000,
+            }
+          });
+      };
+
+      if (!$fetch_results) {
+        # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
+        log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
+        unshift @data_to_validate, @term_set;
+        sleep 30;
+        next;
+      }
+
+      if ($fetch_results->fault) {
+        my $faultstring = $fetch_results->faultstring;
+        # Got back a SOAP fault, which means our query got through but NCBI gave us junk back.
+        # Sadly, this is also what happens when there are no results. The standard Eutils response 
+        # is "Error: download dataset is empty", which apparently translates to a SOAP fault. Since
+        # the search itself worked, we'll assume that NCBI didn't just die and that what we're really
+        # seeing is a lack of results, in which case push all of the ESTs in this package back on the
+        # stack.
+        push @data_left, @term_set;
+        sleep 5;
+        next;
+      }
+      $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
+      if (!length($fetch_results->valueof())) {
+        if (!$fetch_results->match('/Envelope/Body/eFetchResult')) {
+          # No eFetchResult result at all, which means we got back junk. Wait 30 seconds and retry.
+          log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
+          unshift @data_to_validate, @term_set;
+          sleep 30;
+          next;
+        } else {
+          # Got an empty result (this is what we're hoping for instead of the fault mentioned above)
+          log_error "Couldn't find any ESTs using when searching for '" . $search_term . "' at NCBI.", "warning";
+          push @data_left, @term_set;
+          sleep 5;
+          next;
+        }
+      }
+
+      # Got back an array of useful results. Figure out which of our current @term_set actually
+      # got returned. Record ones that we didn't get back in @data_left.
+      foreach my $datum_hash (@term_set) {
+        my $datum = $datum_hash->{'datum'}->clone();
+        my ($genbank_feature) = grep { $datum->get_value() eq $_->{'GBSeq_primary-accession'} } $fetch_results->valueof();
+        if ($genbank_feature) {
+          # Pull out enough information from the GenBank record to create a Chado feature
+          my ($dbest_id) = grep { $_ =~ m/^gnl\|dbEST\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $dbest_id =~ s/^gnl\|dbEST\|//;
+          my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
+          my $genbank_acc = $genbank_feature->{'GBSeq_primary-accession'};
+          my ($est_name) = ($genbank_feature->{'GBSeq_definition'} =~ m/^(\S+)/);
+          my $sequence = $genbank_feature->{'GBSeq_sequence'};
+          my $seqlen = length($sequence);
+          my $timeaccessioned = $genbank_feature->{'GBSeq_create-date'};
+          my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
+          my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
+
+          # Create the feature object
+          my $feature = new ModENCODE::Chado::Feature({
+              'name' => $est_name,
+              'uniquename' => $genbank_acc,
+              'residues' => $sequence,
+              'seqlen' => $seqlen,
+              'timeaccessioned' => $timeaccessioned,
+              'timelastmodified' => $timelastmodified,
+              'type' => new ModENCODE::Chado::CVTerm({
+                  'name' => 'EST',
+                  'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' })
+                }),
+              'organism' => new ModENCODE::Chado::Organism({
+                  'genus' => $genus,
+                  'species' => $species,
+                }),
+              'primary_dbxref' => new ModENCODE::Chado::DBXref({
+                  'accession' => $genbank_acc,
+                  'db' => new ModENCODE::Chado::DB({
+                      'name' => 'GB',
+                      'description' => 'GenBank',
+                    }),
+                }),
+              'dbxrefs' => [ new ModENCODE::Chado::DBXref({
+                  'accession' => $dbest_id,
+                  'db' => new ModENCODE::Chado::DB({
+                      'name' => 'dbEST',
+                      'description' => 'dbEST gi IDs',
+                    }),
+                }),
+              ],
+            });
+
+          # Add the feature object to a copy of the datum for later merging
+          $datum->add_feature($feature);
+          $datum_hash->{'merged_datum'} = $datum;
+          $datum_hash->{'is_valid'} = 1;
+        } else {
+          log_error "Couldn't find the EST identified by '" . $datum->get_value() . "' in search results from NCBI.", "warning";
+          push @data_left, $datum_hash;
+        }
+      }
+
+      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
+    }
+    @data_to_validate = @data_left;
+    @data_left = ();
+    log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
+  }
+  log_error "Done.", "notice", "<";
+  if (scalar(@data_to_validate)) {
+    my $est_list = "'" . join("', '", map { $_->{'datum'}->get_value() } @data_to_validate) . "'";
+    log_error "Can't validate all ESTs. There is/are " . scalar(@data_to_validate) . " EST(s) that could not be validated. See previous errors.", "error";
+    $success = 0;
+  }
+
+  return $success;
 }
 
 sub merge {
@@ -216,6 +306,30 @@ sub merge {
     }
   }
   return $validated_datum;
+}
+
+sub get_parser_flybase : PRIVATE {
+  my ($self) = @_;
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases flybase', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases flybase', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
+    });
+  return $parser;
+}
+
+sub get_parser_modencode : PRIVATE {
+  my ($self) = @_;
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases modencode', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases modencode', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
+    });
+  return $parser;
 }
 
 1;
