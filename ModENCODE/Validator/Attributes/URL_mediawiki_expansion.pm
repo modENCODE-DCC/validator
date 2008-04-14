@@ -76,9 +76,20 @@ sub validate {
             my $rank = 0;
             foreach my $formvalue (@{$formvalues->get_values()}) {
               my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
+              my $type = new ModENCODE::Chado::CVTerm({
+                  'name' => 'string',
+                  'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
+                });
               if (!length($term) && length($cv)) {
                 $term = $cv;
                 $cv = $result_data->get_types()->[0];
+                if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
+                  my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+                  $type = new ModENCODE::Chado::CVTerm({
+                      'name' => $term,
+                      'cv' => new ModENCODE::Chado::CV({ 'name' => $canonical_cvname }),
+                    });
+                }
               } elsif (!length($term)) {
                 $term = $formvalue;
               }
@@ -86,10 +97,7 @@ sub validate {
                   'heading' => $formvalues->get_name(),
                   'value' => $term,
                   'rank' => $rank,
-                  'type' => new ModENCODE::Chado::CVTerm({
-                      'name' => 'string',
-                      'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
-                    }),
+                  'type' => $type,
                 });
               $rank++;
               push @new_attributes, $new_attribute;
