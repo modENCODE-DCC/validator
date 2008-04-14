@@ -98,11 +98,11 @@ sub get_parser : PRIVATE {
   my ($self) = @_;
   if (!$parser{ident $self}) {
     $parser{ident $self} = new ModENCODE::Parser::Chado({
-        'dbname' => ModENCODE::Config::get_cfg()->val('database', 'dbname'),
-        'host' => ModENCODE::Config::get_cfg()->val('database', 'host'),
-        'port' => ModENCODE::Config::get_cfg()->val('database', 'port'),
-        'username' => ModENCODE::Config::get_cfg()->val('database', 'username'),
-        'password' => ModENCODE::Config::get_cfg()->val('database', 'password'),
+        'dbname' => ModENCODE::Config::get_cfg()->val('databases flybase', 'dbname'),
+        'host' => ModENCODE::Config::get_cfg()->val('databases flybase', 'host'),
+        'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
+        'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
+        'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
       });
   }
   return $parser{ident $self};
