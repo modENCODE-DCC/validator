@@ -156,7 +156,6 @@ sub merge {
         $protocol->set_description("Please see: " . $protocol_url);
       }
       # Protocol type
-      # TODO: Map the CV to a Chado CV if possible
       my ($protocol_type) = grep { $_->get_name() =~ /^\s*protocol *types?$/i } @{$protocol_def->get_values()};
       # Other protocol attributes
       foreach my $wiki_protocol_attr (@{$protocol_def->get_values()}) {
@@ -172,6 +171,12 @@ sub merge {
               'heading' => $wiki_protocol_attr->get_name(),
               'value' => $value,
               'rank' => $rank,
+              'type' => new ModENCODE::Chado::CVTerm({
+                  'name' => 'string',
+                  'cv' => new ModENCODE::Chado::CV({
+                      'name' => 'xsd',
+                    }),
+                }),
             });
           # If this field has controlled vocab(s), create a CVTerm for each value
           if (scalar(@{$wiki_protocol_attr->get_types()})) {
@@ -180,7 +185,6 @@ sub merge {
               $term = $cv;
               $cv = $wiki_protocol_attr->get_types()->[0];
             }
-            # TODO: Map the CV to a Chado CV if possible
             # Set the type_id of the attribute to this term
             my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
             $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
