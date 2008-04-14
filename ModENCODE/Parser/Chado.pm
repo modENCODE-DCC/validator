@@ -462,7 +462,9 @@ sub get_applied_protocol {
   if (my $cached_applied_protocol = $self->get_cache()->{'applied_protocol'}->{$applied_protocol_id}) {
     return $cached_applied_protocol;
   }
-  my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 'chadoxml_id' => $applied_protocol_id });
+  my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 
+      'chadoxml_id' => $applied_protocol_id 
+    });
   my $sth = $self->get_prepared_query("SELECT protocol_id FROM applied_protocol WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
   my ($protocol_id) = $sth->fetchrow_array();
@@ -751,6 +753,7 @@ sub get_feature {
 
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $feature = new ModENCODE::Chado::Feature({
+      'chadoxml_id' => $feature_id,
       'name' => $row->{'name'},
       'uniquename' => $row->{'uniquename'},
       'residues' => $row->{'residues'},
