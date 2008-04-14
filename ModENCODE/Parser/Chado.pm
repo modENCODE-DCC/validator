@@ -16,19 +16,23 @@ use ModENCODE::Chado::CV;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::Attribute;
 use ModENCODE::Chado::Feature;
+use ModENCODE::Chado::FeatureLoc;
+use ModENCODE::Chado::AnalysisFeature;
+use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::Organism;
 use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %dbh             :ATTR(                          :default<undef> );
-my %host            :ATTR( :name<host>,             :default<undef> );
-my %port            :ATTR( :name<port>,             :default<undef> );
-my %dbname          :ATTR( :name<dbname>,           :default<undef> );
-my %username        :ATTR( :name<username>,         :default<''> );
-my %password        :ATTR( :name<password>,         :default<''> );
-my %cache           :ATTR( :get<cache>              :default<{}> );
-my %protocol_slots  :ATTR(                          :default<[]> );
-my %experiment      :ATTR(                          :default<undef> );
+my %dbh              :ATTR(                          :default<undef> );
+my %host             :ATTR( :name<host>,             :default<undef> );
+my %port             :ATTR( :name<port>,             :default<undef> );
+my %dbname           :ATTR( :name<dbname>,           :default<undef> );
+my %username         :ATTR( :name<username>,         :default<''> );
+my %password         :ATTR( :name<password>,         :default<''> );
+my %cache            :ATTR( :get<cache>              :default<{}> );
+my %protocol_slots   :ATTR(                          :default<[]> );
+my %experiment       :ATTR(                          :default<undef> );
+my %prepared_queries :ATTR(                          :default<{}> );
 
 sub START {
   my ($self, $ident, $args) = @_;
@@ -40,13 +44,29 @@ sub START {
 sub DEMOLISH {
   my ($self) = @_;
   if ($dbh{ident $self}) {
+    foreach my $query (values(%{$prepared_queries{ident $self}})) {
+      $query->finish();
+    }
     $dbh{ident $self}->disconnect();
+  }
+}
+
+sub get_prepared_query : PRIVATE {
+  my ($self, $query) = @_;
+  if ($self->get_dbh()) {
+    if (!defined($prepared_queries{ident $self}->{$query})) {
+      $prepared_queries{ident $self}->{$query} = $self->get_dbh()->prepare($query);
+    }
+    return $prepared_queries{ident $self}->{$query};
+  } else {
+    log_error "Can't get the prepared query '$query' with no database connection.", "error";
+    exit;
   }
 }
 
 sub get_available_experiments {
   my ($self) = @_;
-  my $sth = $self->get_dbh()->prepare("SELECT experiment_id, uniquename, description FROM experiment");
+  my $sth = $self->get_prepared_query("SELECT experiment_id, uniquename, description FROM experiment");
   $sth->execute();
   my @experiments;
   while (my $row = $sth->fetchrow_hashref()) {
@@ -276,8 +296,6 @@ sub flatten_data : PRIVATE {
   my $cur_column = 0;
   if (!scalar(@$data_columns)) {
     push @$data_columns, $self->get_data_column_headings($datum);
-  } else {
-    # TODO: cur_column is not always 0; it needs to start wherever the current datum is
   }
   push @{$data_columns->[$cur_column++]}, $datum->get_value();
   push @{$data_columns->[$cur_column++]}, $datum->get_termsource()->get_db()->get_name() if $datum->get_termsource() && $datum->get_termsource()->get_db();
@@ -361,7 +379,7 @@ sub load_experiment {
 
   my @protocol_slots;
   # Get the first (leftmost) set of applied protocols used in this experiment
-  my $first_proto_sth = $self->get_dbh()->prepare("SELECT first_applied_protocol_id FROM experiment_applied_protocol WHERE experiment_id = ?");
+  my $first_proto_sth = $self->get_prepared_query("SELECT first_applied_protocol_id FROM experiment_applied_protocol WHERE experiment_id = ?");
   $first_proto_sth->execute($experiment_id);
   my @applied_protocols;
   while (my ($app_proto_id) = $first_proto_sth->fetchrow_array()) {
@@ -373,7 +391,7 @@ sub load_experiment {
 
   # Follow the linked list of applied_protocol->data->applied_protocol and
   # fill in the rest of the protocol slots
-  my $get_next_applied_protocols_sth = $self->get_dbh()->prepare("SELECT apd.applied_protocol_id FROM applied_protocol_data apd WHERE apd.data_id = ? AND apd.direction = 'input'");
+  my $get_next_applied_protocols_sth = $self->get_prepared_query("SELECT apd.applied_protocol_id FROM applied_protocol_data apd WHERE apd.data_id = ? AND apd.direction = 'input'");
   my %next_applied_protocols;
   do { # while (scalar(values(%next_applied_protocols)))
     my @applied_protocol_data;
@@ -413,7 +431,7 @@ sub load_experiment {
   } while (scalar(values(%next_applied_protocols)));
   $protocol_slots{ident $self} = \@protocol_slots;
 
-  my $experiment_sth = $self->get_dbh()->prepare("SELECT experiment_id, uniquename, description FROM experiment WHERE experiment_id = ?");
+  my $experiment_sth = $self->get_prepared_query("SELECT experiment_id, uniquename, description FROM experiment WHERE experiment_id = ?");
   $experiment_sth->execute($experiment_id);
   my $row = $experiment_sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -422,7 +440,7 @@ sub load_experiment {
       'uniquename' => $row->{'uniquename'},
       'applied_protocol_slots' => $self->get_normalized_protocol_slots(),
     });
-  my $experiment_prop_sth = $self->get_dbh()->prepare("SELECT name, type_id, dbxref_id, value, rank FROM experiment_prop WHERE experiment_id = ?");
+  my $experiment_prop_sth = $self->get_prepared_query("SELECT name, type_id, dbxref_id, value, rank FROM experiment_prop WHERE experiment_id = ?");
   $experiment_prop_sth->execute($experiment_id);
   while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
     map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -445,12 +463,12 @@ sub get_applied_protocol {
     return $cached_applied_protocol;
   }
   my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 'chadoxml_id' => $applied_protocol_id });
-  my $sth = $self->get_dbh()->prepare("SELECT protocol_id FROM applied_protocol WHERE applied_protocol_id = ?");
+  my $sth = $self->get_prepared_query("SELECT protocol_id FROM applied_protocol WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
   my ($protocol_id) = $sth->fetchrow_array();
   my $protocol = $self->get_protocol($protocol_id);
   $applied_protocol->set_protocol($protocol);
-  $sth = $self->get_dbh()->prepare("SELECT data_id, direction FROM applied_protocol_data WHERE applied_protocol_id = ?");
+  $sth = $self->get_prepared_query("SELECT data_id, direction FROM applied_protocol_data WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
   while (my $row = $sth->fetchrow_hashref()) {
     map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -470,7 +488,7 @@ sub get_protocol {
     return $cached_protocol;
   }
   my $protocol = new ModENCODE::Chado::Protocol({ 'chadoxml_id' => $protocol_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, version, description, dbxref_id FROM protocol WHERE protocol_id = ?");
+  my $sth = $self->get_prepared_query("SELECT name, version, description, dbxref_id FROM protocol WHERE protocol_id = ?");
   $sth->execute($protocol_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -479,7 +497,7 @@ sub get_protocol {
   $protocol->set_description($row->{'description'});
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
   $protocol->set_termsource($termsource) if $termsource;
-  $sth = $self->get_dbh()->prepare("SELECT attribute_id FROM protocol_attribute WHERE protocol_id = ?");
+  $sth = $self->get_prepared_query("SELECT attribute_id FROM protocol_attribute WHERE protocol_id = ?");
   $sth->execute($protocol_id);
   while (my ($attr_id) = $sth->fetchrow_array()) {
     $protocol->add_attribute($self->get_attribute($attr_id));
@@ -494,7 +512,7 @@ sub get_datum {
     return $cached_datum;
   }
   my $datum = new ModENCODE::Chado::Data({ 'chadoxml_id' => $datum_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
+  my $sth = $self->get_prepared_query("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -506,25 +524,25 @@ sub get_datum {
   my $type = $self->get_type($row->{'type_id'});
   $datum->set_type($type) if $type;
 
-  $sth = $self->get_dbh()->prepare("SELECT wiggle_data_id FROM data_wiggle_data WHERE data_id = ?");
+  $sth = $self->get_prepared_query("SELECT wiggle_data_id FROM data_wiggle_data WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($wiggle_data_id) = $sth->fetchrow_array()) {
     $datum->add_wiggle_data($self->get_wiggle_data($wiggle_data_id));
   }
 
-  $sth = $self->get_dbh()->prepare("SELECT feature_id FROM data_feature WHERE data_id = ?");
+  $sth = $self->get_prepared_query("SELECT feature_id FROM data_feature WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($feature_id) = $sth->fetchrow_array()) {
     $datum->add_feature($self->get_feature($feature_id));
   }
 
-  $sth = $self->get_dbh()->prepare("SELECT organism_id FROM data_organism WHERE data_id = ?");
+  $sth = $self->get_prepared_query("SELECT organism_id FROM data_organism WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($organism_id) = $sth->fetchrow_array()) {
     $datum->add_organism($self->get_organism($organism_id));
   }
 
-  $sth = $self->get_dbh()->prepare("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
+  $sth = $self->get_prepared_query("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($attr_id) = $sth->fetchrow_array()) {
     $datum->add_attribute($self->get_attribute($attr_id));
@@ -539,10 +557,11 @@ sub get_termsource {
     return $cached_dbxref;
   }
   return undef unless($dbxref_id);
-  my $sth = $self->get_dbh()->prepare("SELECT accession, version, db_id FROM dbxref WHERE dbxref_id = ?");
+  my $sth = $self->get_prepared_query("SELECT accession, version, db_id FROM dbxref WHERE dbxref_id = ?");
   $sth->execute($dbxref_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+  $row->{'accession'} =~ s/.*://; # Get rid of flybase DB:acc style accessions
   my $dbxref = new ModENCODE::Chado::DBXref({
       'accession' => $row->{'accession'},
       'version' => $row->{'version'},
@@ -558,7 +577,7 @@ sub get_feature_id_by_name_and_type {
 
   $allow_isa ||= 0;
 
-  my $sth = $self->get_dbh()->prepare("SELECT 
+  my $sth = $self->get_prepared_query("SELECT 
     f.feature_id, cvt.name as cvterm, cv.name as cv 
     FROM feature f 
     INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id 
@@ -587,7 +606,7 @@ sub get_feature_id_by_name_and_type {
     }
   }
   if (!scalar(@found_feature_ids)) {
-    my $sth = $self->get_dbh()->prepare("SELECT 
+    my $sth = $self->get_prepared_query("SELECT 
       f.feature_id, cvt.name as cvterm, cv.name as cv 
       FROM feature f 
       INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id 
@@ -631,7 +650,7 @@ sub get_feature_id_by_approximate_name_and_type {
   $allow_isa ||= 0;
 
   $feature_name .= "%";
-  my $sth = $self->get_dbh()->prepare("SELECT f.feature_id, cvt.name as cvterm, cv.name as cv FROM feature f INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE f.name LIKE ? AND organism_id = 1 ORDER BY f.name DESC");
+  my $sth = $self->get_prepared_query("SELECT f.feature_id, cvt.name as cvterm, cv.name as cv FROM feature f INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE f.name LIKE ? AND organism_id = 1 ORDER BY f.name DESC");
   $sth->execute($feature_name);
   my @found_feature_ids;
   while (my $row = $sth->fetchrow_hashref()) {
@@ -660,6 +679,32 @@ sub get_feature_id_by_approximate_name_and_type {
 }
 
 
+sub get_feature_by_genbank_id {
+  my ($self, $genbank_id, $types, $not_types) = @_;
+  if (my $cached_feature = $self->get_cache()->{'genbank_feature'}->{$genbank_id}) {
+    return $cached_feature;
+  }
+  return undef unless $genbank_id;
+  my $sth = $self->get_prepared_query("
+    SELECT f.feature_id FROM feature f 
+    INNER JOIN feature_dbxref fdbx ON f.feature_id = fdbx.feature_id 
+    INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id 
+    INNER JOIN db ON dbx.db_id = db.db_id
+    INNER JOIN organism o ON f.organism_id = o.organism_id
+    INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id
+    INNER JOIN cv ON cvt.cv_id = cv.cv_id
+    WHERE 
+    db.name = 'GB' 
+    AND o.genus = 'Drosophila' AND o.species = 'melanogaster'
+    AND cv.name = 'SO' AND (cvt.name != 'gene')
+    AND dbx.accession = ?
+    ");
+  $sth->execute($genbank_id);
+  my $row = $sth->fetchrow_hashref();
+  return undef if (!$row || !$row->{'feature_id'});
+  return $self->get_feature($row->{'feature_id'});
+}
+
 
 sub get_feature {
   my ($self, $feature_id) = @_;
@@ -667,13 +712,43 @@ sub get_feature {
     return $cached_feature;
   }
   return undef unless($feature_id);
-  my $sth = $self->get_dbh()->prepare("SELECT f.name, f.uniquename, f.residues, f.seqlen, f.organism_id, f.type_id, f.timeaccessioned, f.timelastmodified, f.is_analysis FROM feature f LEFT JOIN analysisfeature af ON f.feature_id = af.feature_id WHERE f.feature_id = ?");
+  my $sth = $self->get_prepared_query("SELECT 
+    f.name, f.uniquename, f.residues, f.seqlen, f.organism_id, f.type_id, 
+    f.timeaccessioned, f.timelastmodified, f.is_analysis,
+    f.dbxref_id as primary_dbxref_id
+    FROM feature f 
+    WHERE f.feature_id = ?");
   $sth->execute($feature_id);
   my $row = $sth->fetchrow_hashref();
-  my @analysisfeatures = ( $row->{'analysisfeature_id'} );
-  while (my $extra_row = $sth->fetchrow_hashref()) {
-    push @analysisfeatures, $row->{'analysisfeature_id'};
+
+  my @analysisfeatures;
+  $sth = $self->get_prepared_query("SELECT analysis_id FROM analysisfeature WHERE feature_id = ?");
+  $sth->execute($feature_id);
+  while (my $af_row = $sth->fetchrow_hashref()) {
+    push @analysisfeatures, $af_row->{'analysisfeature_id'};
   }
+
+  my @relationships;
+  $sth = $self->get_prepared_query("SELECT feature_relationship_id FROM feature_relationship WHERE object_id = ? OR subject_id = ?");
+  $sth->execute($feature_id, $feature_id);
+  while (my $fr_row = $sth->fetchrow_hashref()) {
+    push @relationships, $fr_row->{'feature_relationship_id'};
+  }
+
+  my @dbxrefs;
+  $sth = $self->get_prepared_query("SELECT dbxref_id FROM feature_dbxref WHERE feature_id = ?");
+  $sth->execute($feature_id);
+  while (my $dbx_row = $sth->fetchrow_hashref()) {
+    push @dbxrefs, $dbx_row->{'dbxref_id'};
+  }
+
+  my @locations;
+  $sth = $self->get_prepared_query("SELECT featureloc_id FROM featureloc WHERE feature_id = ?");
+  $sth->execute($feature_id);
+  while (my $dbx_row = $sth->fetchrow_hashref()) {
+    push @locations, $dbx_row->{'featureloc_id'};
+  }
+
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $feature = new ModENCODE::Chado::Feature({
       'name' => $row->{'name'},
@@ -685,14 +760,62 @@ sub get_feature {
       'is_analysis' => $row->{'is_analysis'},
       'type' => $self->get_type($row->{'type_id'}),
       'organism' => $self->get_organism($row->{'organism_id'}),
+      'primary_dbxref' => $self->get_termsource($row->{'primary_dbxref_id'}),
     });
-  foreach my $analysisfeature_id (@analysisfeatures) {
-    if ($analysisfeature_id) {
-      $feature->add_analysisfeature($self->get_analysisfeature($analysisfeature_id));
-    }
-  }
   $self->get_cache()->{'feature'}->{$feature_id} = $feature;
+
+  foreach my $analysisfeature_id (@analysisfeatures) {
+    $feature->add_analysisfeature($self->get_analysisfeature($analysisfeature_id));
+  }
+  foreach my $dbxref_id (@dbxrefs) {
+    $feature->add_dbxref($self->get_termsource($dbxref_id));
+  }
+  foreach my $location_id (@locations) {
+    $feature->add_location($self->get_featureloc($location_id));
+  }
+  foreach my $relationship_id (@relationships) {
+    $feature->add_relationship($self->get_feature_relationship($relationship_id));
+  }
   return $feature;
+}
+
+sub get_featureloc {
+  my ($self, $featureloc_id) = @_;
+  if (my $cached_featureloc = $self->get_cache()->{'featureloc'}->{$featureloc_id}) {
+    return $cached_featureloc;
+  }
+  my $sth = $self->get_prepared_query("SELECT fmin, fmax, rank, strand, srcfeature_id FROM featureloc WHERE featureloc_id = ?");
+  $sth->execute($featureloc_id);
+  my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+  my $featureloc = new ModENCODE::Chado::FeatureLoc({
+      'fmin' => $row->{'fmin'},
+      'fmax' => $row->{'fmax'},
+      'rank' => $row->{'rank'},
+      'strand' => $row->{'strand'},
+      'srcfeature' => $self->get_feature($row->{'srcfeature_id'}),
+    });
+  $self->get_cache()->{'featureloc'}->{$featureloc_id} = $featureloc;
+  return $featureloc;
+}
+
+sub get_feature_relationship {
+  my ($self, $feature_relationship_id) = @_;
+  if (my $cached_feature_relationship = $self->get_cache()->{'feature_relationship'}->{$feature_relationship_id}) {
+    return $cached_feature_relationship;
+  }
+  my $sth = $self->get_prepared_query("SELECT rank, subject_id, object_id, type_id FROM feature_relationship WHERE feature_relationship_id = ?");
+  $sth->execute($feature_relationship_id);
+  my $row = $sth->fetchrow_hashref();
+  map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+  my $feature_relationship = new ModENCODE::Chado::FeatureRelationship({
+      'rank' => $row->{'rank'},
+      'type' => $self->get_type($row->{'type_id'}),
+      'subject' => $self->get_feature($row->{'subject_id'}),
+      'object' => $self->get_feature($row->{'object_id'}),
+    });
+  $self->get_cache()->{'feature_relationship'}->{$feature_relationship_id} = $feature_relationship;
+  return $feature_relationship;
 }
 
 sub get_analysisfeature {
@@ -700,7 +823,7 @@ sub get_analysisfeature {
   if (my $cached_analysisfeature = $self->get_cache()->{'analysisfeature'}->{$analysisfeature_id}) {
     return $cached_analysisfeature;
   }
-  my $sth = $self->get_dbh()->prepare("SELECT rawscore, normscore, significance, identity, feature_id, analysis_id FROM analysisfeature WHERE analysisfeature_id = ?");
+  my $sth = $self->get_prepared_query("SELECT rawscore, normscore, significance, identity, feature_id, analysis_id FROM analysisfeature WHERE analysisfeature_id = ?");
   $sth->execute($analysisfeature_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -725,7 +848,7 @@ sub get_analysis {
   if (my $cached_analysis = $self->get_cache()->{'analysis'}->{$analysis_id}) {
     return $cached_analysis;
   }
-  my $sth = $self->get_dbh()->prepare("SELECT name, description, program, programversion, algorithm, sourcename, sourceversion, sourceuri, timeexecuted FROM analysis WHERE analysis_id = ?");
+  my $sth = $self->get_prepared_query("SELECT name, description, program, programversion, algorithm, sourcename, sourceversion, sourceuri, timeexecuted FROM analysis WHERE analysis_id = ?");
   $sth->execute($analysis_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -753,7 +876,7 @@ sub get_organism {
     return $cached_organism;
   }
   return undef unless($organism_id);
-  my $sth = $self->get_dbh()->prepare("SELECT genus, species FROM organism WHERE organism_id = ?");
+  my $sth = $self->get_prepared_query("SELECT genus, species FROM organism WHERE organism_id = ?");
   $sth->execute($organism_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -771,7 +894,7 @@ sub get_wiggle_data {
     return $cached_wiggle_data;
   }
   return undef unless($wiggle_data_id);
-  my $sth = $self->get_dbh()->prepare("SELECT type, name, visibility, color, altColor, priority, autoscale, gridDefault, maxHeightPixels, graphType, viewLimits, yLineMark, yLineOnOff, windowingFunction, smoothingWindow, data FROM wiggle_data WHERE wiggle_data_id = ?");
+  my $sth = $self->get_prepared_query("SELECT type, name, visibility, color, altColor, priority, autoscale, gridDefault, maxHeightPixels, graphType, viewLimits, yLineMark, yLineOnOff, windowingFunction, smoothingWindow, data FROM wiggle_data WHERE wiggle_data_id = ?");
   $sth->execute($wiggle_data_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -803,7 +926,7 @@ sub get_db {
     return $cached_db;
   }
   return undef unless ($db_id);
-  my $sth = $self->get_dbh()->prepare("SELECT name, url, description FROM db WHERE db_id = ?");
+  my $sth = $self->get_prepared_query("SELECT name, url, description FROM db WHERE db_id = ?");
   $sth->execute($db_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -822,7 +945,7 @@ sub get_type {
     return $cached_cvterm;
   }
   return undef unless($cvterm_id);
-  my $sth = $self->get_dbh()->prepare("SELECT cvt.name, cvt.definition, cvt.is_obsolete, cvt.dbxref_id, cv.name as cvname, cv.definition as cvdefinition FROM cvterm cvt INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE cvterm_id = ?");
+  my $sth = $self->get_prepared_query("SELECT cvt.name, cvt.definition, cvt.is_obsolete, cvt.dbxref_id, cv.name as cvname, cv.definition as cvdefinition FROM cvterm cvt INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE cvterm_id = ?");
   $sth->execute($cvterm_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -847,7 +970,7 @@ sub get_attribute {
     return $cached_attribute;
   }
   my $attribute = new ModENCODE::Chado::Attribute({ 'chadoxml_id' => $attribute_id });
-  my $sth = $self->get_dbh()->prepare("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
+  my $sth = $self->get_prepared_query("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
@@ -859,7 +982,7 @@ sub get_attribute {
   my $type = $self->get_type($row->{'type_id'});
   $attribute->set_type($type) if $type;
 
-  $sth = $self->get_dbh()->prepare("SELECT organism_id FROM attribute_organism WHERE attribute_id = ?");
+  $sth = $self->get_prepared_query("SELECT organism_id FROM attribute_organism WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   while (my ($organism_id) = $sth->fetchrow_array()) {
     $attribute->add_organism($self->get_organism($organism_id));
