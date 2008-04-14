@@ -45,24 +45,24 @@ if (!$experiment_id) {
 #  $data_validator->validate($experiment);
 
   # Validate and merge attached data files and remote resources (BED, Wiggle, ASN.1, dbEST, etc.)
-  log_error "Reading data files.", "notice", ">";
-  my $data_validator = new ModENCODE::Validator::Data();
-  $data_validator->validate($experiment);
-  $experiment = $data_validator->merge($experiment);
-  log_error "Done.", "notice", "<";
-  $data_validator = undef;
+#  log_error "Reading data files.", "notice", ">";
+#  my $data_validator = new ModENCODE::Validator::Data();
+#  $data_validator->validate($experiment);
+#  $experiment = $data_validator->merge($experiment);
+#  log_error "Done.", "notice", "<";
+#  $data_validator = undef;
 
-$writer->write_chadoxml($experiment);
-print "\n\n\n...................................................................................\n\n\n";
+#$writer->write_chadoxml($experiment);
+#print "\n\n\n...................................................................................\n\n\n";
 
   # Validate and merge term source (make sure terms exist in CVs, fetch missing accessions, etc.)
-  log_error "Validating term sources (DBXrefs) against known ontologies.", "notice", ">";
-  my $termsource_validator = new ModENCODE::Validator::TermSources();
-  $termsource_validator->validate($experiment);
-  log_error "Done.", "notice", "<";
-  log_error "Merging missing accessions and/or term names from known ontologies.", "notice", ">";
-  $experiment = $termsource_validator->merge($experiment);
-  log_error "Done.", "notice", "<";
+#  log_error "Validating term sources (DBXrefs) against known ontologies.", "notice", ">";
+#  my $termsource_validator = new ModENCODE::Validator::TermSources();
+#  $termsource_validator->validate($experiment);
+#  log_error "Done.", "notice", "<";
+#  log_error "Merging missing accessions and/or term names from known ontologies.", "notice", ">";
+#  $experiment = $termsource_validator->merge($experiment);
+#  log_error "Done.", "notice", "<";
 
 
 $writer->write_chadoxml($experiment);
