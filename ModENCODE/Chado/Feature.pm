@@ -21,8 +21,10 @@ my %type             :ATTR( :get<type>,                 :default<undef> );
 my %analysisfeatures :ATTR( :get<analysisfeatures>,     :default<[]> );
 my %locations        :ATTR( :get<locations>,            :default<[]> );
 my %relationships    :ATTR( :get<relationships>,        :default<[]> );
+my %dbxrefs          :ATTR( :get<dbxrefs>,              :default<[]> );
+my %primary_dbxref   :ATTR( :get<primary_dbxref>,       :default<undef> );
 
-sub BUILD {
+sub START {
   my ($self, $ident, $args) = @_;
   my $organism = $args->{'organism'};
   if (defined($organism)) {
@@ -53,6 +55,39 @@ sub BUILD {
       $self->add_relationship($relationship);
     }
   }
+  my $dbxrefs = $args->{'dbxrefs'};
+  if (defined($dbxrefs)) {
+    (ref($dbxrefs) eq "ARRAY") or croak("Can't set dbxrefs from a " . ref($dbxrefs) . ". Expected an ARRAY");
+    foreach my $dbxref (@$dbxrefs) {
+      $self->add_dbxref($dbxref);
+    }
+  }
+  my $primary_dbxref = $args->{'primary_dbxref'};
+  if (defined($primary_dbxref)) {
+    $self->set_primary_dbxref($primary_dbxref);
+  }
+}
+
+sub add_dbxref {
+  my ($self, $dbxref) = @_;
+  ($dbxref->isa('ModENCODE::Chado::DBXref')) or Carp::confess("Can't add a " . ref($dbxref) . " as a dbxref.");
+  return if scalar(grep { $dbxref->equals($_) } @{$self->get_dbxrefs()}); # No duplicates
+  push @{$dbxrefs{ident $self}}, $dbxref;
+  if (!$self->get_primary_dbxref()) {
+    $self->set_primary_dbxref($dbxref);
+  }
+}
+
+sub set_primary_dbxref {
+  my ($self, $dbxref) = @_;
+  ($dbxref->isa('ModENCODE::Chado::DBXref')) or Carp::confess("Can't add a " . ref($dbxref) . " as a primary_dbxref.");
+  my ($matching_dbxref) = grep { $dbxref->equals($_) } @{$self->get_dbxrefs()};
+  my $matching_dbxref;
+  if (!$matching_dbxref) {
+    $self->add_dbxref($dbxref);
+    $matching_dbxref = $dbxref;
+  }
+  $primary_dbxref{ident $self} = $matching_dbxref;
 }
 
 sub set_type {
@@ -118,6 +153,19 @@ sub equals {
     return 0 unless scalar(grep { $_->equals($analysisfeature) } @{$other->get_analysisfeatures()});
   }
 
+  my @dbxrefs = @{$self->get_dbxrefs()};
+  return 0 unless scalar(@dbxrefs) == scalar(@{$other->get_dbxrefs()});
+  foreach my $dbxref (@dbxrefs) {
+    return 0 unless scalar(grep { $_->equals($dbxref) } @{$other->get_dbxrefs()});
+  }
+
+  if ($self->get_primary_dbxref()) {
+    return 0 unless $other->get_primary_dbxref();
+    return 0 unless $self->get_primary_dbxref()->equals($other->get_primary_dbxref());
+  } else {
+    return 0 if $other->get_primary_dbxref();
+  }
+
 #  my @relationships = @{$self->get_relationships()};
 #  return 0 unless scalar(@relationships) == scalar(@{$other->get_relationships()});
 #  foreach my $relationship (@relationships) {
@@ -149,6 +197,10 @@ sub clone {
   foreach my $relationship (@{$self->get_relationships()}) {
     $clone->add_relationship($relationship->clone_for($self, $clone));
   }
+  foreach my $dbxref (@{$self->get_dbxrefs()}) {
+    $clone->add_dbxref($dbxref->clone($self));
+  }
+  $clone->set_primary_dbxref($self->get_primary_dbxref()->clone()) if $self->get_primary_dbxref();
   return $clone;
 }
 
@@ -170,6 +222,8 @@ sub mimic {
   $type{ident $self} = $other->get_type();
   $analysisfeatures{ident $self} = $other->get_analysisfeatures();
   $locations{ident $self} = $other->get_locations();
+  $dbxrefs{ident $self} = $other->get_dbxrefs();
+  $primary_dbxref{ident $self} = $other->get_primary_dbxref();
 #  $relationships{ident $self} = $other->get_relationships();
 }
 
