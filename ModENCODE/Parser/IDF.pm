@@ -517,6 +517,12 @@ sub BUILD {
                                                 my $protocol_parameters_obj = new ModENCODE::Chado::Attribute({
                                                     'heading' => 'Protocol Parameters',
                                                     'value' => $protocol_parameters,
+                                                    'type' => new ModENCODE::Chado::CVTerm({
+                                                        'name' => 'string',
+                                                        'cv' => new ModENCODE::Chado::CV({
+                                                            'name' => 'xsd',
+                                                          }),
+                                                      }),
                                                   });
                                                 $protocol_obj->add_attribute($protocol_parameters_obj);
                                               }
