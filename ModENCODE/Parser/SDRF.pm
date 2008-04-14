@@ -608,6 +608,14 @@ sub create_attribute {
           }),
       });
     $attribute->set_type($type);
+  } else {
+    $type = new ModENCODE::Chado::CVTerm({
+        'name' => 'string',
+        'cv' => new ModENCODE::Chado::CV({
+            'name' => 'xsd',
+          }),
+      });
+    $attribute->set_type($type);
   }
 
   # Term source
