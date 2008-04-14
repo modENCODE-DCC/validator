@@ -21,6 +21,7 @@ sub BUILD {
 
 sub get_url : PRIVATE {
   my ($self, $url) = @_;
+  sleep 1;
   return $useragent{ident $self}->request(new HTTP::Request('GET' => $url));
 }
 
@@ -243,11 +244,20 @@ sub is_valid_term {
     if ($cv->{'urltype'} =~ m/^URL/) {
       # URL term; have to try to get it
       if ($cv->{'urltype'} =~ m/^URL$/) {
-        my $res = $self->get_url($cv->{'url'} . $term);
-        if ($res->is_success) {
-          $cv->{'terms'}->{$term} = 1;
-        } else {
-          $cv->{'terms'}->{$term} = 0;
+        my $tries = 0;
+        while ($tries < 3) {
+          my $res = $self->get_url($cv->{'url'} . $term);
+          if ($res->is_success) {
+            $cv->{'terms'}->{$term} = 1;
+            last;
+          } else {
+            $cv->{'terms'}->{$term} = 0;
+            $tries++;
+            if ($tries < 3) {
+              log_error "Couldn't tell if URL " . $cv->{'url'} . $term . " was valid. Retrying.";
+              sleep 5;
+            }
+          }
         }
       } elsif ($cv->{'urltype'} =~ m/^URL_mediawiki(_expansion)?$/) {
         if (!$mediawiki_url_validator{ident $self}) {
