@@ -49,14 +49,16 @@ sub validate {
       }
       $success = 0 unless $est_validator->validate();
       log_error "Done.", "notice", "<";
-      my @temp_data = @{$est_validator->get_data()};
-      foreach my $temp_datum (@temp_data) {
-        foreach my $feature (@{$temp_datum->{'merged_datum'}->get_features()}) {
-          $features_by_acc{ident $self}->{$temp_datum->{'datum'}->get_value()} = $feature;
-          $datum->add_feature($feature);
+      if ($success) {
+        my @temp_data = @{$est_validator->get_data()};
+        foreach my $temp_datum (@temp_data) {
+          foreach my $feature (@{$temp_datum->{'merged_datum'}->get_features()}) {
+            $features_by_acc{ident $self}->{$temp_datum->{'datum'}->get_value()} = $feature;
+            $datum->add_feature($feature);
+          }
         }
+        $datum_hash->{'merged_datum'} = $datum;
       }
-      $datum_hash->{'merged_datum'} = $datum;
     }
     log_error "Done.", "notice", "<";
   }
