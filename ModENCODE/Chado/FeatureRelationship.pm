@@ -8,8 +8,8 @@ use Carp qw(carp croak);
 my %rank             :ATTR( :name<rank> );
 
 # Relationships
-my %object           :ATTR( :get<object>,               :default<undef> ); # Child
-my %subject          :ATTR( :get<subject>,              :default<undef> ); # Parent
+my %subject          :ATTR( :get<subject>,              :default<undef> ); # Subject does type to
+my %object           :ATTR( :get<object>,               :default<undef> ); # Object (e.g. transcript part_of gene)
 my %type             :ATTR( :get<type>,                 :default<undef> );
 
 sub BUILD {
