@@ -26,7 +26,7 @@ sub validate {
       my $feature_id = $cached_feature_ids{ident $self}->{$datum_hash->{'datum'}->get_value()};
       if (!$feature_id) {
         log_error "Fetching feature " . $datum_hash->{'datum'}->get_value(), "notice";
-        $feature_id = $self->get_parser()->get_feature_id_by_name_and_type(
+        $feature_id = $self->get_parser_modencode()->get_feature_id_by_name_and_type(
           $datum_hash->{'datum'}->get_value(),
           new ModENCODE::Chado::CVTerm({
               'name' => 'transcript',
@@ -34,6 +34,17 @@ sub validate {
             }),
           1,
         );
+        if (!$feature_id) {
+          log_error "Couldn't find a feature_id for transcript " . $datum_hash->{'datum'}->get_value() . " in modENCODE database. Trying FlyBase.", "notice";
+          $feature_id = $self->get_parser_flybase()->get_feature_id_by_name_and_type(
+            $datum_hash->{'datum'}->get_value(),
+            new ModENCODE::Chado::CVTerm({
+                'name' => 'transcript',
+                'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
+              }),
+            1,
+          );
+        }
         $cached_feature_ids{ident $self}->{$datum_hash->{'datum'}->get_value()} = $feature_id;
       }
       if (!$feature_id) {
@@ -42,7 +53,11 @@ sub validate {
         next;
       }
       log_error "Loading feature " . $datum_hash->{'datum'}->get_value(), "notice";
-      my $feature = $self->get_parser()->get_feature($feature_id);
+      my $feature = $self->get_parser_modencode()->get_feature($feature_id);
+      if (!$feature) {
+        log_error "Couldn't find a feature for transcript " . $datum_hash->{'datum'}->get_value() . " in modENCODE database. Trying FlyBase.", "notice";
+        $feature = $self->get_parser_flybase()->get_feature($feature_id);
+      }
       if (!$feature) {
         log_error "Couldn't get a feature object for supposed transcript " . $datum_hash->{'datum'}->get_value() . " with feature_id $feature_id.", "error";
         $success = 0;
@@ -94,18 +109,28 @@ sub merge {
   return $validated_datum;
 }
 
-sub get_parser : PRIVATE {
+sub get_parser_flybase : PRIVATE {
   my ($self) = @_;
-  if (!$parser{ident $self}) {
-    $parser{ident $self} = new ModENCODE::Parser::Chado({
-        'dbname' => ModENCODE::Config::get_cfg()->val('databases flybase', 'dbname'),
-        'host' => ModENCODE::Config::get_cfg()->val('databases flybase', 'host'),
-        'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
-        'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
-        'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
-      });
-  }
-  return $parser{ident $self};
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases flybase', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases flybase', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
+    });
+  return $parser;
+}
+
+sub get_parser_modencode : PRIVATE {
+  my ($self) = @_;
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases modencode', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases modencode', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
+    });
+  return $parser;
 }
 
 1;
