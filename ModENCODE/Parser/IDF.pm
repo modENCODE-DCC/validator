@@ -37,6 +37,7 @@ sub BUILD {
     IDF:                                experiment
                                         optional_metadata(?)
                                         contact
+                                        optional_metadata(?)
                                         experiment_instance(?)
                                         optional_metadata(?)
                                         protocol
@@ -52,7 +53,8 @@ sub BUILD {
                                           $experiment_obj->add_properties($item[3]);
                                           if (defined($item[4])) { $experiment_obj->add_properties($item[4]->[0]); }
                                           if (defined($item[5])) { $experiment_obj->add_properties($item[5]->[0]); }
-                                          return [$experiment_obj, $item[6], $item[7], $item[8], $success];
+                                          if (defined($item[6])) { $experiment_obj->add_properties($item[6]->[0]); }
+                                          return [$experiment_obj, $item[7], $item[8], $item[9], $success];
                                         }
                                         | <error>
 
@@ -401,6 +403,20 @@ sub BUILD {
                                                 'name' => 'PubMed ID',
                                               });
                                           }
+                                          if (defined($optional_metadata->{'Project Group'}) && length($optional_metadata->{'Project Group'}->[0])) {
+                                            push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                'value' => $optional_metadata->{'Project Group'}->[0],
+                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+                                                'name' => 'Project Group',
+                                              });
+                                          }
+                                          if (defined($optional_metadata->{'Project Subgroup'}) && length($optional_metadata->{'Project Subgroup'}->[0])) {
+                                            push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                'value' => $optional_metadata->{'Project Subgroup'}->[0],
+                                                'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+                                                'name' => 'Project Subgroup',
+                                              });
+                                          }
                                           if (defined($optional_metadata->{'Experiment Description'}) && length($optional_metadata->{'Experiment Description'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                 'value' => $optional_metadata->{'Experiment Description'}->[0],
@@ -410,7 +426,7 @@ sub BUILD {
                                           }
                                           $return = \@experiment_properties;
                                         }
-  optional_metadata_part:               pubmed_id | experiment_description_ref
+  optional_metadata_part:               pubmed_id | experiment_description_ref | submitting_project
 
   pubmed_id_heading:                    /PubMed *ID/i
   pubmed_id:                            <skip:'[\r\n \t]*'> pubmed_id_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
@@ -424,6 +440,20 @@ sub BUILD {
                                           $optional_metadata->{'Experiment Description'} = [] if (!defined($optional_metadata->{'Experiment Description'}));
                                           push @{$optional_metadata->{'Experiment Description'}}, @{$item[4]};
                                         }
+  submitting_project:                   submitting_project_group(?) submitting_project_subgroup(?)
+  submitting_project_group_heading:     /Project *Group/i
+  submitting_project_group:             <skip:'[\r\n \t]*'> submitting_project_group_heading <skip:'[ "]*\t[ "]*'> field_value(?) <skip:'[ "]*\t[ "\n\r]*'>
+                                        { 
+                                          $optional_metadata->{'Project Group'} = [] if (!defined($optional_metadata->{'Project Group'}));
+                                          push @{$optional_metadata->{'Project Group'}}, @{$item[4]};
+                                        }
+  submitting_project_subgroup_heading:  /Project *Subgroup/i
+  submitting_project_subgroup:          <skip:'[\r\n \t]*'> submitting_project_subgroup_heading <skip:'[ "]*\t[ "]*'> field_value(?) <skip:'[ "]*\t[ "\n\r]*'>
+                                        { 
+                                          $optional_metadata->{'Project Subgroup'} = [] if (!defined($optional_metadata->{'Project Subgroup'}));
+                                          push @{$optional_metadata->{'Project Subgroup'}}, @{$item[4]};
+                                        }
+
   date_of_experiment_heading:           /Date *of *Experiment/i
   date_of_experiment:                   <skip:'[\r\n \t]*'> date_of_experiment_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 

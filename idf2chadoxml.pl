@@ -13,6 +13,7 @@ use Carp qw(croak carp);
 use ModENCODE::Parser::IDF;
 use ModENCODE::Chado::XMLWriter;
 use ModENCODE::Validator::IDF_SDRF;
+use ModENCODE::Validator::ModENCODE_Projects;
 use ModENCODE::Validator::Wiki;
 use ModENCODE::Validator::TermSources;
 use ModENCODE::Validator::CVHandler;
@@ -58,8 +59,16 @@ log_error "Done.", "notice", "<";
   my $success = $idf_validator->validate($sdrf);
   $experiment = $idf_validator->merge($sdrf);
   log_error "Done.", "notice", "<";
-
   $sdrf = undef;
+
+  log_error "Validating presence of valid ModENCODE project/subproject names...", "notice", ">";
+  my $project_validator = new ModENCODE::Validator::ModENCODE_Projects();
+  if (!$project_validator->validate($experiment)) {
+    log_error "Refusing to continue validation without valid project/subproject names.";
+    exit;
+  }
+  $experiment = $project_validator->merge($experiment);
+  log_error "Done.", "notice", "<";
 
   log_error "Validating IDF and SDRF vs wiki...", "notice", ">";
 
