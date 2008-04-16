@@ -705,7 +705,6 @@ sub get_feature_by_genbank_id {
   my $row = $sth->fetchrow_hashref();
   return undef if (!$row || !$row->{'feature_id'});
   my $feature = $self->get_feature($row->{'feature_id'});
-  $feature->set_chadoxml_id(undef);
   return $feature;
 }
 

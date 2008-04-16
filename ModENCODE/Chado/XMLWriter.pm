@@ -187,7 +187,7 @@ sub write_datum : PRIVATE {
 
   foreach my $feature (@{$datum->get_features()}) {
     $self->println("<data_feature>");
-    if ($feature->get_chadoxml_id()) {
+    if ($feature->get_chadoxml_id() && $feature->get_chadoxml_id() !~ /^\d+$/) {
       $self->println("<feature_id>" . $feature->get_chadoxml_id() . "</feature_id>");
     } else {
       $feature->set_chadoxml_id($self->generate_uniqid("Feature"));
@@ -200,7 +200,7 @@ sub write_datum : PRIVATE {
 
   foreach my $wiggle_data (@{$datum->get_wiggle_datas()}) {
     $self->println("<data_wiggle_data>");
-    if ($wiggle_data->get_chadoxml_id()) {
+    if ($wiggle_data->get_chadoxml_id() && $wiggle_data->get_chadoxml_id() !~ /^\d+$/) {
       $self->println("<wiggle_data_id>" . $wiggle_data->get_chadoxml_id() . "</wiggle_data_id>");
     } else {
       $wiggle_data->set_chadoxml_id($self->generate_uniqid("Wiggle_Data"));
@@ -290,11 +290,11 @@ sub write_feature_relationship : PRIVATE {
 
   my $seen_subject = 1;
   my $seen_object = 1;
-  if (!$subject->get_chadoxml_id()) {
+  if (!$subject->get_chadoxml_id() || $subject->get_chadoxml_id() =~ /^\d+$/) {
     $seen_subject = 0;
     $subject->set_chadoxml_id($self->generate_uniqid("Feature"));
   }
-  if (!$object->get_chadoxml_id()) {
+  if (!$object->get_chadoxml_id() || $object->get_chadoxml_id() =~ /^\d+$/) {
     $seen_object = 0;
     $object->set_chadoxml_id($self->generate_uniqid("Feature"));
   }
@@ -341,7 +341,7 @@ sub write_analysisfeature : PRIVATE {
   $self->println("<significance>" . xml_escape($analysisfeature->get_significance()) . "</significance>") if length($analysisfeature->get_significance());
   $self->println("<identity>" . xml_escape($analysisfeature->get_identity()) . "</identity>") if length($analysisfeature->get_identity());
   if ($analysisfeature->get_feature()) {
-    if ($analysisfeature->get_feature()->get_chadoxml_id()) {
+    if ($analysisfeature->get_feature()->get_chadoxml_id() && $analysisfeature->get_feature()->get_chadoxml_id() !~ /^\d+$/) {
       $self->println("<feature_id>" . $analysisfeature->get_feature()->get_chadoxml_id() . "</feature_id>");
     } else {
       $analysisfeature->get_feature()->set_chadoxml_id($self->generate_uniqid("Feature"));
@@ -351,7 +351,7 @@ sub write_analysisfeature : PRIVATE {
     }
   }
   if ($analysisfeature->get_analysis()) {
-    if ($analysisfeature->get_analysis()->get_chadoxml_id()) {
+    if ($analysisfeature->get_analysis()->get_chadoxml_id() && $analysisfeature->get_analysis()->get_chadoxml_id() !~ /^\d+$/) {
       $self->println("<analysis_id>" . $analysisfeature->get_analysis()->get_chadoxml_id() . "</analysis_id>");
     } else {
       $analysisfeature->get_analysis()->set_chadoxml_id($self->generate_uniqid("Analysis"));
@@ -366,7 +366,7 @@ sub write_analysisfeature : PRIVATE {
 sub write_analysisfeature_later_for_feature : PRIVATE {
   my ($self, $analysisfeature, $feature) = @_;
   push @{$delayed_writes{ident $self}}, sub { 
-    if (!$analysisfeature->get_chadoxml_id()) {
+    if (!$analysisfeature->get_chadoxml_id() || $analysisfeature->get_chadoxml_id() =~ /^\d+$/) {
       $analysisfeature->set_chadoxml_id($self->generate_uniqid("AnalysisFeature"));
       $self->write_analysisfeature($analysisfeature, $feature); 
     }
@@ -376,7 +376,7 @@ sub write_analysisfeature_later_for_feature : PRIVATE {
 sub write_featureloc_later_for_feature : PRIVATE {
   my ($self, $featureloc, $feature) = @_;
   push @{$delayed_writes{ident $self}}, sub { 
-    if (!$featureloc->get_chadoxml_id()) {
+    if (!$featureloc->get_chadoxml_id() || $featureloc->get_chadoxml_id() =~ /^\d+$/) {
       $featureloc->set_chadoxml_id($self->generate_uniqid("FeatureLoc"));
       $self->write_featureloc($featureloc, $feature); 
     }
@@ -395,7 +395,7 @@ sub write_featureloc : PRIVATE {
   $self->println("<rank>" . xml_escape($featureloc->get_rank()) . "</rank>") if length($featureloc->get_rank());
   $self->println("<strand>" . xml_escape($featureloc->get_strand()) . "</strand>") if length($featureloc->get_strand());
   if ($featureloc->get_srcfeature()) {
-    if ($featureloc->get_srcfeature()->get_chadoxml_id()) {
+    if ($featureloc->get_srcfeature()->get_chadoxml_id() && $featureloc->get_srcfeature()->get_chadoxml_id() !~ /^\d+$/) {
       $self->println("<srcfeature_id>" . $featureloc->get_srcfeature()->get_chadoxml_id() . "</srcfeature_id>");
     } else {
       $featureloc->get_srcfeature()->set_chadoxml_id($self->generate_uniqid("Feature"));

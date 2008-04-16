@@ -12,7 +12,6 @@ use ModENCODE::Chado::Organism;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Config;
 
-my %parser                       :ATTR;
 my %cached_feature_ids           :ATTR( :default<{}> );
 
 sub validate {
