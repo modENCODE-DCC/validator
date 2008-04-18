@@ -28,9 +28,11 @@ sub BUILD {
 sub validate {
   my ($self, $experiment) = @_;
   my ($group) = grep { $_->get_name() eq "Project Group" } @{$experiment->get_properties()};
-  $group = $group->clone() if $group;
   my ($subgroup) = grep { $_->get_name() eq "Project Subgroup" } @{$experiment->get_properties()};
+
+  $group = $group->clone() if $group;
   $subgroup = $subgroup->clone() if $subgroup;
+
   my $group_name = $group->get_value() if $group;
   if (!length($group_name)) {
     log_error "Can't find any modENCODE project group - should be defined in the IDF.";
@@ -41,7 +43,7 @@ sub validate {
     log_error "Can't find a modENCODE project group matching '$group_name'. Options are: " . join(", ", keys(%{$project_names{ident $self}})) . ".";
     return 0;
   }
-  $group->set_name($matching_group_name);
+  $group->set_value($matching_group_name);
 
   if (!$subgroup || !length($subgroup->get_value())) {
     log_error "No modENCODE project sub-group defined - defaulting to main group '$matching_group_name'.", "warning";
@@ -72,7 +74,7 @@ sub merge {
     log_error "Can't find a modENCODE project group matching '$group_name'. Options are: " . join(", ", keys(%{$project_names{ident $self}})) . ".";
     return undef;
   }
-  $group->set_name($matching_group_name);
+  $group->set_value($matching_group_name);
 
   if (!$subgroup || !length($subgroup->get_value())) {
     log_error "No modENCODE project sub-group defined - defaulting to main group '$matching_group_name'.", "warning";
@@ -86,7 +88,7 @@ sub merge {
     log_error "Can't find a modENCODE project subgroup of $matching_group_name named '$subgroup_name'. Options are: " . join(", ", @{$project_names{ident $self}->{$matching_group_name}->{'subgroups'}}) . ".";
     return undef;
   }
-  $subgroup->set_name($matching_subgroup_name);
+  $subgroup->set_value($matching_subgroup_name);
   my $group_url = new ModENCODE::Chado::ExperimentProp({
       'value' => $project_names{ident $self}->{$matching_group_name}->{'url'},
       'type' => new ModENCODE::Chado::CVTerm({'name' => 'anyURI', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
