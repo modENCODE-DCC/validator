@@ -8,19 +8,38 @@ use ModENCODE::ErrorHandler qw(log_error);
 
 my %indent              :ATTR(                             :default<0> );
 my %indent_width        :ATTR( :name<indent_width>,        :default<2> );
-my %current_uniqid      :ATTR(                             :default<0> );
 my %data_this_proto     :ATTR(                             :default<{ 'input' => [], 'output' => []> });
 my %seen_relationships  :ATTR(                             :default<[]> );
 my %delayed_writes      :ATTR(                             :default<[]> );
+my %output_handle       :ATTR( :name<output_handle>,       :default<\*STDOUT> );
+my $current_uniqid = 0;
+my $additional_xml_writers = [];
 
 # Semi-macro-ified version (protocols are macro-d, data isn't)
+sub add_additional_xml_writer {
+  my $xml_writer = shift;
+  $xml_writer = shift if length(@_); # Allow use as either static or object method
+  push @$additional_xml_writers, $xml_writer;
+}
+
 sub write_chadoxml {
   my ($self, $experiment) = @_;
   $self->set_indent(0);
-  $self->reset_uniqid();
   $self->clear_seen_data();
   $self->println("<chadoxml>");
   $delayed_writes{ident $self} = [];
+
+  # Append things from additional element files (already-written features)
+  foreach my $xml_writer (@$additional_xml_writers) {
+    $self->println("<!-- begin imported section -->");
+    my $fh = $xml_writer->get_output_handle();
+    seek($fh, 0, 0);
+    while (my $line = <$fh>) {
+      $line =~ s/^\s*|\s*[\n\r]*$//g;
+      $self->println($line);
+    }
+    $self->println("<!-- end imported section -->");
+  }
 
   # Write all of the protocols
   my @seen_protocols;
@@ -228,6 +247,15 @@ sub write_datum : PRIVATE {
   }
 
   $self->println("</data>");
+}
+
+sub write_standalone_feature {
+  my ($self, $feature) = @_;
+  unless ($feature->get_chadoxml_id() && $feature->get_chadoxml_id() !~ /^\d+$/) {
+    $feature->set_chadoxml_id($self->generate_uniqid("Feature"));
+    $self->write_feature($feature);
+  }
+  return $feature->get_chadoxml_id();
 }
 
 sub write_feature : PRIVATE {
@@ -542,7 +570,7 @@ sub println {
   for (my $i = 0; $i > $diffincs; $i--) {
     $self->dec_indent();
   }
-  print $self->indent_txt() . $text . "\n";
+  print {$output_handle{ident $self}} $self->indent_txt() . $text . "\n";
   for (my $i = 0; $i < $diffincs; $i++) {
     $self->inc_indent();
   }
@@ -580,15 +608,10 @@ sub get_indent : PRIVATE {
   return $indent{ident $self};
 }
 
-sub reset_uniqid : PRIVATE {
-  my ($self) = @_;
-  $current_uniqid{ident $self} = 0;
-}
-
 sub generate_uniqid : PRIVATE {
   my ($self, $prefix) = @_;
-  $current_uniqid{ident $self}++;
-  return $prefix . "_" . $current_uniqid{ident $self};
+  $current_uniqid++;
+  return $prefix . "_" . $current_uniqid;
 }
 
 sub clear_seen_data : PRIVATE {

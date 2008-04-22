@@ -15,8 +15,11 @@ use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Parser::Chado;
 use ModENCODE::ErrorHandler qw(log_error);
+use File::Temp;
+use ModENCODE::Chado::XMLWriter;
 
 my %soap_client                 :ATTR;
+my %tmp_file                    :ATTR;
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -37,6 +40,19 @@ sub validate {
 
   log_error "Validating " . scalar(@data_to_validate) . " ESTs...", "notice", ">";
 
+  my $root_dir = $0;
+  $root_dir =~ s/[^\/]*$//;
+  $root_dir = "./" unless $root_dir =~ /\//;
+  my $tmp_file = new File::Temp(
+    'TEMPLATE' => "dbEST_acc_ESTs_XXXX",
+    'DIR' => $root_dir,
+    'SUFFIX' => '.xml',
+    'UNLINK' => 1,
+  );
+  my $xmlwriter = new ModENCODE::Chado::XMLWriter();
+  $xmlwriter->set_output_handle($tmp_file);
+  $xmlwriter->add_additional_xml_writer($xmlwriter);
+
   # Validate ESTs against ones we've already seen and store locally
   log_error "Fetching " . scalar(@data_to_validate) . " ESTs from local modENCODE database...", "notice", ">";
   my $parser = $self->get_parser_modencode();
@@ -49,11 +65,15 @@ sub validate {
         push @data_left, $datum_hash;
         next;
       }
-      $datum->add_feature($feature);
+      $xmlwriter->write_standalone_feature($feature);
+      my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
+
+      $datum->add_feature($placeholder_feature);
       $datum_hash->{'merged_datum'} = $datum;
       $datum_hash->{'is_valid'} = 1;
     }
   }
+
   @data_to_validate = @data_left;
   @data_left = ();
   log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
@@ -316,6 +336,7 @@ sub get_parser_flybase : PRIVATE {
       'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
       'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
       'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
+      'caching' => 0,
     });
   return $parser;
 }
@@ -328,6 +349,7 @@ sub get_parser_modencode : PRIVATE {
       'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
       'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
       'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
+      'caching' => 0,
     });
   return $parser;
 }

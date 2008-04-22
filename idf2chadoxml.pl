@@ -27,7 +27,6 @@ $ModENCODE::ErrorHandler::show_logtype = 1;
 ModENCODE::Config::set_cfg($root_dir . 'validator.ini');
 
 my $parser = new ModENCODE::Parser::IDF();
-my $writer = new ModENCODE::Chado::XMLWriter();
 
 log_error "Parsing IDF and SDRF...", "notice", ">";
 
@@ -112,8 +111,19 @@ log_error "Done.", "notice", "<";
   $experiment = $termsource_validator->merge($experiment);
   log_error "Done.", "notice", "<";
 
-
-$writer->write_chadoxml($experiment);
+  my $writer = new ModENCODE::Chado::XMLWriter();
+  my $fh;
+  if ($ARGV[1]) {
+    my $success = open($fh, "+>", $ARGV[1]);
+    if (!$success) {
+      log_error "Cannot write experiment to file $ARGV[1], defaulting to STDOUT. $!", "warning";
+      exit;
+    } else {
+      $writer->set_output_handle($fh);
+    }
+  }
+  $writer->write_chadoxml($experiment);
+  close $fh if $fh;
 #print $experiment->to_string();
 
 
