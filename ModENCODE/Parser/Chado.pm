@@ -34,6 +34,7 @@ my %cache_array      :ATTR(                          :default<{}> );
 my %protocol_slots   :ATTR(                          :default<[]> );
 my %experiment       :ATTR(                          :default<undef> );
 my %prepared_queries :ATTR(                          :default<{}> );
+my %no_relationships :ATTR( :name<no_relationships>, :default<0> );
 
 sub START {
   my ($self, $ident, $args) = @_;
@@ -764,10 +765,12 @@ sub get_feature {
   }
 
   my @relationships;
-  $sth = $self->get_prepared_query("SELECT feature_relationship_id FROM feature_relationship WHERE object_id = ? OR subject_id = ?");
-  $sth->execute($feature_id, $feature_id);
-  while (my $fr_row = $sth->fetchrow_hashref()) {
-    push @relationships, $fr_row->{'feature_relationship_id'};
+  unless ($self->get_no_relationships()) {
+    $sth = $self->get_prepared_query("SELECT feature_relationship_id FROM feature_relationship WHERE object_id = ? OR subject_id = ?");
+    $sth->execute($feature_id, $feature_id);
+    while (my $fr_row = $sth->fetchrow_hashref()) {
+      push @relationships, $fr_row->{'feature_relationship_id'};
+    }
   }
 
   my @dbxrefs;
