@@ -8,6 +8,18 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::DB;
 use ModENCODE::ErrorHandler qw(log_error);
 
+sub check_and_update_features {
+  my ($self, $features) = @_;
+  foreach my $feature (@$features) {
+    if ($self->validate_chado_feature($feature)) {
+      $self->merge_chado_feature($feature);
+    } else {
+      return 0;
+    }
+  }
+  return 1;
+}
+
 sub merge {
   my ($self, $experiment) = @_;
   $experiment = $experiment->clone();

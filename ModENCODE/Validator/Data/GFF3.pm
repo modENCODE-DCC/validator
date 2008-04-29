@@ -15,6 +15,9 @@ use ModENCODE::Chado::Analysis;
 use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Validator::TermSources;
+use File::Temp;
+use ModENCODE::Chado::XMLWriter;
 
 my %cached_gff_features         :ATTR( :default<{}> );
 my %features_by_uniquename      :ATTR( :default<{}> );
@@ -23,6 +26,21 @@ sub validate {
   my ($self) = @_;
   log_error "Parsing attached GFF3 files.", "notice", ">";
   my $success = 1;
+
+  my $root_dir = $0;
+  $root_dir =~ s/[^\/]*$//;
+  $root_dir = "./" unless $root_dir =~ /\//;
+  my $tmp_file = new File::Temp(
+    'TEMPLATE' => "GFF3_XXXX",
+    'DIR' => $root_dir,
+    'SUFFIX' => '.xml',
+    'UNLINK' => 1,
+  );
+
+  my $xmlwriter = new ModENCODE::Chado::XMLWriter();
+  $xmlwriter->set_output_handle($tmp_file);
+  $xmlwriter->add_additional_xml_writer($xmlwriter);
+  my $term_source_validator = new ModENCODE::Validator::TermSources();
 
   my %features_by_id;
   foreach my $datum_hash (@{$self->get_data()}) {
@@ -36,7 +54,7 @@ sub validate {
         $success = 0;
         next;
       }
-      log_error "Parsing GFF file " . $gff_file . "...", "notice", "=";
+      log_error "Parsing GFF file " . $gff_file . "...", "notice", ">";
       unless (open GFF, $gff_file) {
         log_error "Cannot open GFF file '$gff_file' for reading.";
         $success = 0;
@@ -57,13 +75,20 @@ sub validate {
             next;
           }
           if ($feature) {
-            $datum->add_feature($feature);
+            if ($term_source_validator->check_and_update_features([$feature])) {
+              $xmlwriter->write_standalone_feature($feature);
+              my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
+
+              $datum->add_feature($placeholder_feature);
+            } else {
+              $success = 0;
+            }
           }
         }
       }
       $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
       close GFF;
-      log_error "Done.\n", "notice", ".";
+      log_error "Done.\n", "notice", "<";
     }
 
     $datum_hash->{'merged_datum'} = $datum;

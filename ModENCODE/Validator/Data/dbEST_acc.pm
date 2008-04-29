@@ -15,6 +15,7 @@ use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Parser::Chado;
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Validator::TermSources;
 use File::Temp;
 use ModENCODE::Chado::XMLWriter;
 
@@ -56,6 +57,8 @@ sub validate {
   # Validate ESTs against ones we've already seen and store locally
   log_error "Fetching " . scalar(@data_to_validate) . " ESTs from local modENCODE database...", "notice", ">";
   my $parser = $self->get_parser_modencode();
+  my $term_source_validator = new ModENCODE::Validator::TermSources();
+
   while (my $datum_hash = shift @data_to_validate) {
     my $datum = $datum_hash->{'datum'}->clone();
     my $id = $datum_hash->{'datum'}->get_value();
@@ -65,12 +68,16 @@ sub validate {
         push @data_left, $datum_hash;
         next;
       }
-      $xmlwriter->write_standalone_feature($feature);
-      my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
+      if ($term_source_validator->check_and_update_features([$feature])) {
+        $xmlwriter->write_standalone_feature($feature);
+        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
 
-      $datum->add_feature($placeholder_feature);
-      $datum_hash->{'merged_datum'} = $datum;
-      $datum_hash->{'is_valid'} = 1;
+        $datum->add_feature($placeholder_feature);
+        $datum_hash->{'merged_datum'} = $datum;
+        $datum_hash->{'is_valid'} = 1;
+      } else {
+        $success = 0;
+      }
     }
   }
 
