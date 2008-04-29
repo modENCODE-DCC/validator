@@ -84,6 +84,12 @@ sub validate {
               $success = 0;
             }
           }
+          foreach my $key (keys(%features_by_id)) {
+            my $feature = $features_by_id{$key};
+            if ($feature && $feature->get_chadoxml_id()) {
+              $features_by_id{$key} = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
+            }
+          }
         }
       }
       $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
