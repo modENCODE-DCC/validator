@@ -82,16 +82,21 @@ sub validate {
   if (scalar(@data_to_validate)) {
     log_error "Falling back to fetching remaining " . scalar(@data_to_validate) . " ESTs from FlyBase...", "notice", ">";
     $parser = $self->get_parser_flybase();
+    my $i = 0;
     while (my $datum_hash = shift @data_to_validate) {
       my $datum = $datum_hash->{'datum'}->clone();
       my $id = $datum_hash->{'datum'}->get_value();
       if (length($id)) {
+        $i++;
         my $feature = $parser->get_feature_by_genbank_id($id);
         if (!$feature) {
           push @data_left, $datum_hash;
           next;
         }
-        $datum->add_feature($feature);
+        $xmlwriter->write_standalone_feature($feature);
+        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
+
+        $datum->add_feature($placeholder_feature);
         $datum_hash->{'merged_datum'} = $datum;
         $datum_hash->{'is_valid'} = 1;
       }
@@ -338,6 +343,7 @@ sub get_parser_flybase : PRIVATE {
       'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
       'caching' => 0,
     });
+  $parser->set_no_relationships(1);
   return $parser;
 }
 
@@ -351,6 +357,7 @@ sub get_parser_modencode : PRIVATE {
       'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
       'caching' => 0,
     });
+  $parser->set_no_relationships(1);
   return $parser;
 }
 
