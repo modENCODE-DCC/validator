@@ -15,9 +15,6 @@ use ModENCODE::Chado::Analysis;
 use ModENCODE::Chado::FeatureRelationship;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::ErrorHandler qw(log_error);
-use ModENCODE::Validator::TermSources;
-use File::Temp;
-use ModENCODE::Chado::XMLWriter;
 
 my %cached_gff_features         :ATTR( :default<{}> );
 my %features_by_uniquename      :ATTR( :default<{}> );
@@ -27,20 +24,6 @@ sub validate {
   log_error "Parsing attached GFF3 files.", "notice", ">";
   my $success = 1;
 
-  my $root_dir = $0;
-  $root_dir =~ s/[^\/]*$//;
-  $root_dir = "./" unless $root_dir =~ /\//;
-  my $tmp_file = new File::Temp(
-    'TEMPLATE' => "GFF3_XXXX",
-    'DIR' => $root_dir,
-    'SUFFIX' => '.xml',
-    'UNLINK' => 1,
-  );
-
-  my $xmlwriter = new ModENCODE::Chado::XMLWriter();
-  $xmlwriter->set_output_handle($tmp_file);
-  $xmlwriter->add_additional_xml_writer($xmlwriter);
-  my $term_source_validator = new ModENCODE::Validator::TermSources();
 
   my %features_by_id;
   foreach my $datum_hash (@{$self->get_data()}) {
@@ -75,20 +58,7 @@ sub validate {
             next;
           }
           if ($feature) {
-            if ($term_source_validator->check_and_update_features([$feature])) {
-              $xmlwriter->write_standalone_feature($feature);
-              my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
-
-              $datum->add_feature($placeholder_feature);
-            } else {
-              $success = 0;
-            }
-          }
-          foreach my $key (keys(%features_by_id)) {
-            my $feature = $features_by_id{$key};
-            if ($feature && $feature->get_chadoxml_id()) {
-              $features_by_id{$key} = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
-            }
+            $datum->add_feature($feature);
           }
         }
       }
@@ -135,8 +105,8 @@ sub gff_feature_to_chado_features : PRIVATE {
 
   my $this_seq_region = $gff_io->sequence_region($gff_obj->seq_id());
   my $this_seq_region_feature = $features_by_id->{$this_seq_region->seq_id()};
-  if (!$this_seq_region) {
-    $this_seq_region = new ModENCODE::Chado::Feature({
+  if (!$this_seq_region_feature) {
+    $this_seq_region_feature = new ModENCODE::Chado::Feature({
         'uniquename' => $this_seq_region->seq_id(),
         'type' => new ModENCODE::Chado::CVTerm({
             'name' => $this_seq_region->type()->name(),
