@@ -113,8 +113,141 @@ sub validate {
     log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
   }
 
+  # Validate remaining ESTs against GenBank by primary ID
   if (scalar(@data_to_validate)) {
-    log_error "Falling back to pulling down EST information from Genbank...", "notice", ">";
+    log_error "Falling back to pulling down EST information from Genbank by primary ID...", "notice", ">";
+    my $est_counter = 1;
+    my @all_results;
+    while (scalar(@data_to_validate)) {
+      # Generate search query "est1,est2,est3,..."
+      my @term_set;
+      for (my $i = 0; $i < 40; $i++) {
+        my $datum_hash = shift @data_to_validate;
+        last unless $datum_hash;
+        $est_counter++;
+        push @term_set, $datum_hash if length($datum_hash->{'datum'}->get_value());
+      }
+      my $fetch_term = join(",", map { $_->{'datum'}->get_value() } @term_set);
+      log_error "Fetching ESTs from " . ($est_counter - scalar(@term_set)) . " to " . ($est_counter-1) . ".", "notice";
+
+      # Run query and get back the cookie that will let us fetch the result:
+      my $fetch_results;
+      eval {
+        $fetch_results = $soap_client{ident $self}->run_eFetch({
+            'eFetchRequest' => {
+              'db' => 'nucest',
+              'id' => $fetch_term,
+              'tool' => 'modENCODE pipeline',
+              'email' => 'yostinso@berkeleybop.org',
+              'retmax' => 400,
+            }
+          });
+      };
+      if (!$fetch_results) {
+        # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
+        log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
+        unshift @data_to_validate, @term_set;
+        sleep 30;
+        next;
+      }
+
+      if ($fetch_results->fault) {
+        # Got back a SOAP fault, which means our query got through but NCBI gave us junk back.
+        # Wait 30 seconds and retry - this seems to just happen sometimes.
+        log_error "Couldn't fetch ESTs by primary ID; got response \"" . $fetch_results->faultstring . "\" from NCBI. Retrying.", "notice";
+        unshift @data_to_validate, @term_set;
+        sleep 30;
+        next;
+      }
+      # Pull out the results
+      $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
+      if (!length($fetch_results->valueof())) {
+        if (!$fetch_results->match('/Envelope/Body/eFetchResult')) {
+          # No eFetchResult result at all, which means we got back junk. Wait 30 seconds and retry.
+          log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
+          unshift @data_to_validate, @term_set;
+          sleep 30;
+          next;
+        } else {
+          # Got an empty result (this is what we're hoping for instead of the fault mentioned above)
+          log_error "Couldn't find any ESTs using when fetching for '" . $fetch_term . "' at NCBI.", "warning";
+          push @data_left, @term_set;
+          sleep 5;
+          next;
+        }
+      }
+
+      ######################################################################################
+
+
+      # Got back an array of useful results. Figure out which of our current @term_set actually
+      # got returned. Record ones that we didn't get back in @data_left.
+      foreach my $datum_hash (@term_set) {
+        my $datum = $datum_hash->{'datum'}->clone();
+        my ($genbank_feature) = grep { $datum->get_value() eq $_->{'GBSeq_primary-accession'} } $fetch_results->valueof();
+        if ($genbank_feature) {
+          # Pull out enough information from the GenBank record to create a Chado feature
+          my ($dbest_id) = grep { $_ =~ m/^gnl\|dbEST\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $dbest_id =~ s/^gnl\|dbEST\|//;
+          my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
+          my $genbank_acc = $genbank_feature->{'GBSeq_primary-accession'};
+          my ($est_name) = ($genbank_feature->{'GBSeq_definition'} =~ m/^(\S+)/);
+          my $sequence = $genbank_feature->{'GBSeq_sequence'};
+          my $seqlen = length($sequence);
+          my $timeaccessioned = $genbank_feature->{'GBSeq_create-date'};
+          my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
+          my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
+
+          # Create the feature object
+          my $feature = new ModENCODE::Chado::Feature({
+              'name' => $est_name,
+              'uniquename' => $genbank_acc,
+              'residues' => $sequence,
+              'seqlen' => $seqlen,
+              'timeaccessioned' => $timeaccessioned,
+              'timelastmodified' => $timelastmodified,
+              'type' => new ModENCODE::Chado::CVTerm({
+                  'name' => 'EST',
+                  'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' })
+                }),
+              'organism' => new ModENCODE::Chado::Organism({
+                  'genus' => $genus,
+                  'species' => $species,
+                }),
+              'primary_dbxref' => new ModENCODE::Chado::DBXref({
+                  'accession' => $genbank_acc,
+                  'db' => new ModENCODE::Chado::DB({
+                      'name' => 'GB',
+                      'description' => 'GenBank',
+                    }),
+                }),
+              'dbxrefs' => [ new ModENCODE::Chado::DBXref({
+                  'accession' => $dbest_id,
+                  'db' => new ModENCODE::Chado::DB({
+                      'name' => 'dbEST',
+                      'description' => 'dbEST gi IDs',
+                    }),
+                }),
+              ],
+            });
+
+          # Add the feature object to a copy of the datum for later merging
+          $datum->add_feature($feature);
+          $datum_hash->{'merged_datum'} = $datum;
+          $datum_hash->{'is_valid'} = 1;
+        } else {
+          log_error "Couldn't find the EST identified by '" . $datum->get_value() . "' in search results from NCBI.", "warning";
+          push @data_left, $datum_hash;
+        }
+      }
+
+      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
+    }
+    @data_to_validate = @data_left;
+    @data_left = ();
+    log_error "Done.", "notice", "<";
+  }
+  if (scalar(@data_to_validate)) {
+    log_error "Falling back to pulling down EST information from Genbank by searching...", "notice", ">";
 
     my $est_counter = 1;
     my @all_results;
