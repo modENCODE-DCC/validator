@@ -22,7 +22,7 @@ use ModENCODE::Validator::Data;
 use ModENCODE::ErrorHandler qw(log_error);
 use ModENCODE::Config;
 
-$ModENCODE::ErrorHandler::show_logtype = 1;
+ModENCODE::ErrorHandler::set_logtype(ModENCODE::ErrorHandler::LOGGING_PREFIX_ON);
 
 ModENCODE::Config::set_cfg($root_dir . 'validator.ini');
 
