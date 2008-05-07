@@ -1,4 +1,114 @@
 package ModENCODE::Validator::Data;
+=pod
+
+=head1 NAME
+
+ModENCODE::Validator::Data - Delegator used to apply validators to BIR-TAB data
+columns.
+
+=head1 SYNOPSIS
+
+This class is designed to be run on an
+L<Experiment|ModENCODE::Chado::Experiment> object. It will then call any of the
+validators defined in the L<Class::Std> L</BUILD()> method on the appropriate
+data columns. To add new third-party data validators, you should extend this
+class and just overried the C<BUILD> method to attach the additional data
+validators.
+
+=head1 USAGE
+
+=head2 Extending for Other Modules
+
+The L</BUILD()> method sets the contents of the C<%validators{ident $self}>
+hash. The keys of the hash are the L<CVTerm|ModENCODE::Chado::CVTerm> types of
+the attribute column (e.g. C<SO:transcript>). The value of the hash is the
+validator that should be run on any columns with that type. For instance:
+
+  $validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript();
+
+The above line specifies that the L<ModENCODE::Validator::Data::SO_transcript>
+validator should be used on any data column that with a
+L<CVTerm|ModENCODE::Chado::CVTerm> type of C<SO:transcript>. Each value in the
+data column will be added to the validator using its
+L<add_attribute|ModENCODE::Validator::Data::Data/add_datum($datum,
+$applied_protocol)> method.
+
+=head2 Running
+
+  my $data_validator = new ModENCODE::Validator::Data();
+  my $success = $data_validator->validate($experiment);
+  if ($success) {
+    $experiment = $data_validator->merge($experiment);
+  }
+
+Once a ModENCODE::Validator::Data object (or extending subclass) has been
+created, you can validate the data columns associated with all L<applied
+protocols|ModENCODE::Chado::AppliedProtocol> in an
+L<Experiment|ModENCODE::Chado::Experiment> object by using the
+</validate($experiment)> method and then merge in any changes made by the
+validators using L</merge($experiment)>.
+
+=head1 FUNCTIONS
+
+=over
+
+=item BUILD()
+
+Constructor called on any objects created by L<Class::Std>. See the
+documentation for L<Class::Std/BUILD()> for more information on when this method
+is called. In this class, it is used to define which data validators should be
+used for which columns. (See L<Extending for Other Modules|/Extending for Other
+Modules>.) Note that every C<BUILD> method in the class hierarchy will be
+called, so if you don't want to use the default validators in a subclass, you'll
+want to clean out the C<%validators{ident $self}> hash.
+
+=item validate($experiment)
+
+Collects all of the data columns associated with any L<applied
+protocols|ModENCODE::Chado::AppliedProtocol> in the
+L<Experiment|ModENCODE::Chado::Experiment> object in C<$experiment>. For each
+L<ModENCODE::Chado::Data> found, it calls the
+L<add_datum|ModENCODE::Validator::Data::Data/add_datum($datum,
+$applied_protocol)> method of any validator defined in the C<%validators{ident
+$self}> hash for the datums's L<CVTerm|ModENCODE::Chado::CVTerm> type. Once all
+data have been apportioned to their appropriate validator(s), the
+L<validate()|ModENCODE::Validator::Data::Data/validate()> method of each
+validator is called. If all of the C<validate> calls return true, then this
+C<validate($experiment)> call returns 1, otherwise it returns 0.
+
+For any datum with no validator associated with the type, a warning is printed
+and the datum is left untouched, assumed to be a free text field.
+
+=item merge($experiment)
+
+Collects all of the data columns associated with any L<applied
+protocols|ModENCODE::Chado::AppliedProtocol> in the
+L<Experiment|ModENCODE::Chado::Experiment> object in C<$experiment>. For each
+L<ModENCODE::Chado::Data> found, it calls the
+L<add_datum|ModENCODE::Validator::Data::Data/add_datum($datum,
+$applied_protocol)> method of any validator defined in the C<%validators{ident
+$self}> hash for the datums's L<CVTerm|ModENCODE::Chado::CVTerm> type. Once all
+data have been apportioned to their appropriate mergers(s), the
+L<merge()|ModENCODE::Validator::Data::Data/merge()> method of each validator is
+called. The C<merge> method of each validator should return the C<$datum>, with
+any changes made. The datum object passed in is then updated to match the new
+datum, using the L<ModENCODE::Chado::Data/mimic($datum)> method.
+
+=back
+
+=head1 SEE ALSO
+
+L<Class::Std>, L<ModENCODE::Validator::Attributes::Attributes>,
+L<ModENCODE::Chado::Attribute>, L<ModENCODE::Chado::DBXref>,
+L<ModENCODE::Chado::CVTerm>, L<ModENCODE::Chado::Experiment>,
+L<ModENCODE::Chado::AppliedProtocol>, L<ModENCODE::Validator::Data::Data>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 use ModENCODE::Validator::Data::BED;
 use ModENCODE::Validator::Data::dbEST_acc;
@@ -13,7 +123,7 @@ use ModENCODE::ErrorHandler qw(log_error);
 
 my %validators                  :ATTR( :get<validators>,                :default<{}> );
 
-sub START {
+sub BUILD {
   my ($self, $ident, $args) = @_;
   # TODO: Figure out how to be more canonical about CV names w/ respect to validation function identifiers
   $validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });

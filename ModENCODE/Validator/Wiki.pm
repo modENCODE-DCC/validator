@@ -1,5 +1,151 @@
 package ModENCODE::Validator::Wiki;
+=pod
 
+=head1 NAME
+
+ModENCODE::Validator::Wiki - Validator that will validate a BIR-TAB
+L<ModENCODE::Chado::Experiment> object by verifying it against a MediaWiki
+installation running the DBFields extensions with appropriate templates for
+protocols installed.
+
+=head1 SYNOPSIS
+
+This class uses the SOAP web services provided by the MediaWiki DBFields
+extension to ensure that protocols described in a BIR-TAB SDRF/IDF match
+protocol definitions on the wiki. It will also pull additional fields out of the
+DBFields forms and attach them to the L<ModENCODE::Chado::Protocol> objects in
+the L<Experiment|ModENCODE::Chado::Experiment> object being validated.
+
+There are four special field names that should exist in the DBFields form for
+any protocol being validated: C<input types>, C<output types>, C<protocol
+types>, and C<short description> (these fields are case insensitive). The first
+three of these should ideally be linked to a controlled vocabulary as part of
+the DBFields form; this controlled vocabulary will allow the terms pulled in to
+be converted to L<CVTerms|ModENCODE::Chado::CVTerm>.
+
+=head1 USAGE
+
+=head2 Inputs/Outputs
+
+The C<input types> and C<output types> fields should contain semicolon-separated
+entries in the form:
+
+  CV:cvterm [field name]
+
+Where C<CV> is a L<CV|ModENCODE::Chado::CV>, C<cvterm> is a
+L<CVTerm|ModENCODE::Chado::CVTerm>, and field name is a string matching up to
+the L<name|ModENCODE::Chado::Data/get_name() | set_name($name)> field of a
+L<Data|ModENCODE::Chado::Data> object. For each
+L<ModENCODE::Chado::AppliedProtocol> in the
+L<Experiment|ModENCODE::Chado::Experiment> being validated, the DBFields form
+(kept in the protocol's
+L<description|ModENCODE::Chado::Protocol/get_description() |
+set_description($description)>) is fetched and used to ensure that there is an
+input to the L<AppliedProtocol|ModENCODE::Chado::AppliedProtocol> for each field
+in C<input types> and an output for each field in C<output types>. In each case,
+a I<single> field may optionally have no name (e.g. C<CV:cvterm> without
+C<[field name>). If there is a (single) field from the
+L<SDRF|ModENCODE::Parser::SDRF>/L<AppliedProtocol|ModENCODE::Chado::AppliedProtocol> that has not yet been
+matched to a type, the unnamed one will be used. If there is more than one such
+unnamed field, or if there are any fields that cannot be matched between the
+L<AppliedProtocol|ModENCODE::Chado::AppliedProtocol> and DBFields information,
+then validation fails. This means that validation will always fail if there are
+a different number of inputs or outputs in the
+L<AppliedProtocol|ModENCODE::Chado::AppliedProtocol> as compared to the
+DBFields data. (Validation also fails if there is no DBFields entry at all for a
+protocol.)
+
+Furthermore, if the C<input types> or C<output types> field in the DBFields form
+has an associated controlled vocabulary, then all of the generated
+L<CVTerms|ModENCODE::Chado::CVTerm> are checked against the controlled
+vocabulary using
+L<ModENCODE::Validator::CVHandler/is_valid_term($cvname, $term)>.
+
+=head2 Protocol Type(s)
+
+The C<protocol types> field contains semicolon-separated types for the protocol;
+these must match the C<Protocol Type> field from the IDF, which are stored as
+protocol attributes. This field is most useful when there is a controlled
+vocabulary associated with the DBFields form field. When this is the case, not
+only must the terms be consistent, but they must exist in the controlled
+vocabulary; this is checked using the
+L<ModENCODE::Validator::CVHandler/is_valid_term($cvname, $term)>
+method.
+
+=head2 Short Description
+
+The contents of this field are used to replace the
+L<Protocol's|ModENCODE::Chado::Protocol>
+L<description|ModENCODE::Chado::Protocol/get_description() |
+set_description($description)> during the merging process. If there is no short
+description, then the protocol's description is set to the URL of the wiki page
+containing the DBFields form being used and a warning message is printed.
+
+=head2 Configuration
+
+The validation requires valid credentials to login to the MediaWiki instance, as
+well as the SOAP service definition URL (WSDL). These can be configured in the
+C<[wiki]> section of the ini-file loaded by L<ModENCODE::Config>. (For more
+information on configuring, see the L<[wiki] section|ModENCODE::Config/[wiki]> in
+L<ModENCODE::Config>.
+
+=head2 Running the Validator
+
+To run the validator:
+
+  my $wiki_validator = new ModENCODE::Validator::Wiki();
+  if ($wiki_validator->validate($experiment)) {
+    $experiment = $wiki_validator->merge($experiment);
+    my $applied_protocl = $experiment->get_applied_protocols_at_slot(0)->[0];
+    print $applied_protocol->get_input_data()->[0]->get_type()->to_string();
+  }
+
+=head1 FUNCTIONS
+
+=over
+
+=item validate($experiment)
+
+Ensures that the L<Experiment|ModENCODE::Chado::Experiment> specified in
+C<$experiment> contains only
+L<AppliedProtocols|ModENCODE::Chado::AppliedProtocol> with
+L<Protocols|ModENCODE::Chado::Protocol> that match the protocols defined using
+the DBFields extension for MediaWiki. Returns 0 if the protocols do not match
+the templates, or 1 if they do.
+
+=item merge($experiment)
+
+Updates any L<Protocols|ModENCODE::Chado::Protocol> to include L<controlled
+vocabulary terms|ModENCODE::Chado::CVTerm> for any
+L<Data|ModENCODE::Chado::Data> associated with those terms by types defined in
+the C<input types> and C<output types> fields from a DBFields form. Also updates
+the L<description|ModENCODE::Chado::Protocol/get_description() |
+set_description($description)> for any L<Protocols|ModENCODE::Chado::Protocol>
+based on the C<short description> field in the DBFields form. Returns the
+updated L<ModENCODE::Chado::Experiment> object.
+
+=back
+
+=head1 SEE ALSO
+
+L<Class::Std>, L<SOAP::Lite>, L<SOAP::Data>,
+L<ModENCODE::Validator::Wiki::FormData>,
+L<ModENCODE::Validator::Wiki::FormValues>,
+L<ModENCODE::Validator::Wiki::LoginResult>, L<ModENCODE::Validator::CVHandler>,
+L<ModENCODE::Validator::Attributes>, L<ModENCODE::Validator::Data>,
+L<ModENCODE::Validator::IDF_SDRF>, L<ModENCODE::Validator::CVHandler>,
+L<ModENCODE::Validator::TermSources>, L<ModENCODE::Chado::Experiment>,
+L<ModENCODE::Chado::ExperimentProp>, L<ModENCODE::Chado::Protocol>,
+L<ModENCODE::Chado::Data>, L<ModENCODE::Chado::Attribute>,
+L<ModENCODE::Chado::Feature>, L<ModENCODE::Chado::CVTerm>,
+L<ModENCODE::Chado::DBXref>, L<ModENCODE::Chado::DB>, L<ModENCODE::Chado::CV>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 use Class::Std;
 use Carp qw(croak carp);

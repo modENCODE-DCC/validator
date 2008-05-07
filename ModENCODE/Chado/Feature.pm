@@ -1,4 +1,237 @@
 package ModENCODE::Chado::Feature;
+=pod
+
+=head1 NAME
+
+ModENCODE::Chado::Feature - A class representing a simplified Chado I<feature>
+object.
+
+=head1 SYNOPSIS
+
+This class is an object-oriented representation of an entry in a Chado
+B<feature> table. It provides accessors for the various attributes of a feature
+that are stored in the feature table itself, plus accessors for relationships to
+certain other Chado tables (such as B<organism>, B<feature_relationship>, etc.)
+
+=head1 USAGE
+
+=head2 Implications Of Class::Std
+
+=over
+
+As with all of the ModENCODE::Chado::* object classes, this module utilizes
+L<Class::Std> to enforce object-oriented programming practices. Therefore, many
+of the accessor functions are automatically generated, and are of the form
+<get|set>_<attribute>, e.g. $obj->L<get_name()|/get_name() | set_name($name)> or
+$obj->L<set_name()|/get_name() | set_name($name)>.
+
+ModENCODE::Chado::* objects can also be created with values at initialization
+time by passing in a hash. For instance, 
+C<my $obj = new ModENCODE::Chado::Feature({ 'name' =E<gt> 'myfeature', 'residues' =E<gt> 'GATTACA' });>
+will create a new Feature object with a name of 'myfeature' and 'GATTACA' as the
+residues. For complex types (other Chado objects), the default L<Class::Std>
+setters and initializers have been replaced with subroutines that make sure
+the type of the object being passed in is correct.
+
+=back
+
+=head2 Using ModENCODE::Chado::Feature
+
+=over
+
+  my $feature = new ModENCODE::Chado::Feature({
+    # Simple attributes
+    'chadoxml_id'       => 'Feature_111',
+    'name'              => 'AT19612.5prime',
+    'uniquename'        => 'BF485572',
+    'residues'          => 'GATTACA',
+    'seqlen'            => 7,
+    'timeaccessioned'   => '2008-01-24',
+    'timelastmodified'  => '2008-01-26',
+    'is_analysis'       => 0,
+
+    # Object relationships
+    'organism'          => new ModENCODE::Chado::Organism(),
+    'type'              => new ModENCODE::Chado::CVTerm(),
+    'analysisfeatures'  => [ new ModENCODE::Chado::AnalysisFeature(), ... ],
+    'locations'         => [ new ModENCODE::Chado::Location(), ... ],
+    'relationships'     => [ new ModENCODE::Chado::Relationship(), ... ],
+    'dbxrefs'           => [ new ModENCODE::Chado::DBXref(), ... ],
+    'primary_dbxref'    => new ModENCODE::Chado::DBXref(),
+  });
+
+  $feature->set_name('New Name);
+  my $feature_name = $feature->get_name();
+  print $feature->to_string();
+
+=back
+
+=head1 ACCESSORS
+
+=over
+
+=item get_chadoxml_id() | set_chadoxml_id($chadoxml_id)
+
+The I<chadoxml_id> is used by L<ModENCODE::Chado::XMLWriter> to keep track of
+the ChadoXML Macro ID (used to refer to the same feature in XML multiple times).
+It is also populated when using L<ModENCODE::Parser::Chado> to pull data out of
+a Chado database. (Note that the XMLWriter will generate new I<chadoxml_id>s in
+this case; it does so whenever the I<chadoxml_id> is purely numeric.
+
+=item get_name() | set_name($name)
+
+The name of this Chado feature; it corresponds to the feature.name field in a
+Chado database.
+
+=item get_uniquename() | set_uniquename($uniquename)
+
+The uniquename of this Chado feature; it corresponds to the feature.uniquename
+field in a Chado database.
+
+=item get_residues() | set_residues($residues)
+
+The residues of this Chado feature; it corresponds to the feature.residues field
+in a Chado database.
+
+=item get_seqlen() | set_seqlen($seqlen)
+
+The seqlen of this Chado feature; it corresponds to the feature.seqlen field in
+a Chado database.
+
+=item get_timeaccessioned() | set_timeaccessioned($timeaccessioned)
+
+The timeaccessioned of this Chado feature; it corresponds to the
+feature.timeaccessioned field in a Chado database. Should be in a format that
+Perl L<DBI> can understand as a timestamp, for instance C<2008-02-21 14:45:01>.
+
+=item get_timelastmodified() | set_timelastmodified($timelastmodified)
+
+The timelastmodified of this Chado feature; it corresponds to the
+feature.timelastmodified field in a Chado database. Should be in a format that
+Perl L<DBI> can understand as a timestamp, for instance C<2008-02-21 14:45:01>.
+
+=item get_is_analysis() | set_is_analysis($is_analysis)
+
+Whether or not this Chado feature is an analysis feature. It corresponds to the
+feature.is_analysis field in a Chado database and is treated as a boolean value
+by Perl L<DBI>. B<0> is false, most other values (including B<1>) are true.
+
+=item get_organism() | set_organism($organism)
+
+The organism of this Chado feature. This must be a L<ModENCODE::Chado::Organism>
+or conforming subclass (via C<isa>). The organism object corresponds to the
+organism in the Chado organism table, and the feature.organism_id field is used
+to track the relationship.
+
+=item get_type() | set_type($type)
+
+The type of this Chado feature. This must be a L<ModENCODE::Chado::CVTerm> or
+conforming subclass (via C<isa>). The type object corresponds to a cvterm in the
+Chado cvterm table, and the feature.type_id field is used to track the
+relationship.
+
+=item get_analysisfeatures() | add_analysisfeature($analysisfeature)
+
+A list of all the analysisfeatures associated with this Chado feature. The
+getter returns an arrayref of L<ModENCODE::Chado::AnalysisFeature> objects, and
+the adder adds another analysisfeature to the list. The analysisfeature objects
+must be a L<ModENCODE::Chado::AnalysisFeature> or conforming subclass (via
+C<isa>).  The analysisfeature objects corresponds to the analysisfeatures in the
+Chado analysisfeature table, and the analysisfeature.feature_id field is used to
+track the relationship.
+
+=item get_locations() | add_location($location)
+
+A list of all the locations associated with this Chado feature. The getter
+returns an arrayref of L<ModENCODE::Chado::FeatureLoc> objects, and the adder
+adds another location to the list. The location objects must be a
+L<ModENCODE::Chado::FeatureLoc> or conforming subclass (via C<isa>).  The
+location objects corresponds to the locations in the Chado featureloc table, and
+the featureloc.feature_id field is used to track the relationship.
+
+=item get_relationships() | add_relationship($relationship)
+
+A list of all the relationships associated with this Chado feature. The getter
+returns an arrayref of L<ModENCODE::Chado::FeatureRelationship> objects, and the
+adder adds another relationship to the list. The relationship objects must be a
+L<ModENCODE::Chado::FeatureRelationship> or conforming subclass (via C<isa>).
+The relationship objects corresponds to the relationships in the Chado
+feature_relationship table. This feature object can be either the object or
+subject of the relationship, which means it will be tracked either in
+feature_relationship.object_id or feature_relationship.subject_id.
+
+=item get_dbxrefs() | add_dbxref($dbxref)
+
+A list of all the dbxrefs associated with this Chado feature. The getter returns
+an arrayref of L<ModENCODE::Chado::DBXref> objects, and the adder adds another
+dbxref to the list. The dbxref objects must be a L<ModENCODE::Chado::DBXref> or
+conforming subclass (via C<isa>).  The dbxref objects corresponds to the dbxrefs
+in the Chado feature_dbxref table, and the feature_dbxref.feature_id and
+feature_dbxref.dbxref_id fields are used to track the relationship.
+
+B<NOTE:> If a dbxref is set using L<set_primary_dbxref|/get_primary_dbxref() |
+set_primary_dbxref($dbxref)>, and does not already exist in the list of dbxrefs,
+it will be added. Likewise, if no primary dbxref is yet set and one it added to
+the list of dbxrefs, it will be set as the primary dbxref.
+
+=item get_primary_dbxref() | set_primary_dbxref($primary_dbxref)
+
+The primary dbxref of this Chado feature. This must be a
+L<ModENCODE::Chado::DBXref> or conforming subclass (via C<isa>). The dbxref
+object corresponds to a dbxref in the Chado dbxref table, and the
+feature.dbxref_id field is used to track the relationship.
+
+B<NOTE:> If a primary_dbxref is set using this function, and does not yet exist
+in the list of all dbxrefs returned by L<get_dbxrefs()|/get_dbxrefs() |
+add_dbxref($dbxref)>, then it will be added to that list. Likewise, if no
+primary dbxref is yet set and one it added to the list of dbxrefs, it will be
+set as the primary dbxref.
+
+=back
+
+=head1 UTILITY FUNCTIONS
+
+=over
+
+=item equals($obj)
+
+Returns true if this feature and $obj are equal. Checks all simple and complex
+attributes I<except for the relationships attribute> (to avoid deep graph
+traversal). Also requires that this object and $obj are of the exact same type.
+(A parent class != a subclass, even if all attributes are the same.)
+
+=item clone()
+
+Returns a deep copy of this object, recursing to clone all complex type
+attributes. Uses the special utility function
+L<ModENCODE::Chado::FeatureRelationship::clone_for($self, $clone)|ModENCODE::Chado::FeatureRelationship/clone_for($uncloned_parent,
+$cloned_parent)> to allow deep cloning of relationships.
+
+=item mimic($feature)
+
+Given a ModENCODE::Chado::Feature, sets all of the attributes of this feature to
+be the same as $feature, I<except for the relationship attribute> (to avoid deep
+graph traversal).
+
+=item to_string()
+
+Return a string representation of this feature. Attempts to follow relationships
+and print all related features. (May be very slow; mostly useful for debugging.)
+
+=back
+
+=head1 SEE ALSO
+
+L<Class::Std>, L<ModENCODE::Chado::Organism>, L<ModENCODE::Chado::CVTerm>,
+L<ModENCODE::Chado::AnalysisFeature>, L<ModENCODE::Chado::FeatureLoc>,
+L<ModENCODE::Chado::FeatureRelationship>, L<ModENCODE::Chado::DBXref>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 
 use strict;
 use Class::Std;

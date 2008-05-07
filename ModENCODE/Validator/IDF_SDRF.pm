@@ -1,5 +1,190 @@
 package ModENCODE::Validator::IDF_SDRF;
+=pod
 
+=head1 NAME
+
+ModENCODE::Validator::IDF_SDRF - Validator that will validate a BIR-TAB IDF
+document against SDRF document(s) and return a merged
+L<Experiment|ModENCODE::Chado::Experiment> object.
+
+=head1 SYNOPSIS
+
+This class should be used to work with the output of L<ModENCODE::Parser::IDF>
+and L<ModENCODE::Parser::SDRF>. Instances of this validator should be
+initialized with the L<experiment|ModENCODE::Chado::Experiment>,
+L<protocols|ModENCODE::Chado::Protocol>, and L<dbxref|ModENCODE::Chado::DBXref>s
+returned by the L<ModENCODE::Parser::IDF/parse($document)> method, and then used
+to validate the SDRF experiment object(s).
+
+=head1 USAGE
+
+To initialize the validator:
+
+  my $parser = new ModENCODE::Parser::IDF();
+  my ($experiment, $protocols, $sdrfs, $dbxrefs) = $parser->parse('IDF.txt');
+  my $idf_sdrf_validator = new ModENCODE::Validator::IDF_SDRF({
+    'idf_experiment' => $experiment,
+    'protocols' => $protocols,
+    'termsources' => $dbxrefs
+  });
+
+(You can also use L<set_idf_experiment($experiment)|/get_idf_experiment() |
+set_idf_experiment($experiment)>, L<set_protocols($protocols)|/get_protocols() |
+set_protocols($protocols)>, and/or
+L<set_termsources($termsources)|/get_termsources() |
+set_termsources($termsources)> to set the values after the object has been
+created.)
+
+Once you've initialized the validator, you should validate and merge all of the
+SDRF L<Experiment|ModENCODE::Chado::Experiment> objects:
+
+  foreach my $sdrf (@$sdrfs) {
+    if ($idf_sdrf_validator->validate($sdrf)) {
+      $experiment = $idf_sdrf_validator->merge($sdrf);
+      $idf_sdrf_validator->set_experiment($experiment);
+    } else {
+      die "Couldn't validate " . $sdrf->to_string();
+    }
+  }
+
+=head1 VALIDATION AND MERGING
+
+=head2 Validation
+
+During the validation step, this validator checks that:
+
+=begin html
+
+<ul>
+  <li>All protocols in the SDRF are defined in the IDF.</li>
+  <li>All input data to protocols mentioned in the IDF are used in the SDRF
+      (and vice versa)</li>
+  <li>All values in C<Term Source REF> columns in the SDRF are defined as term
+      sources in the IDF.</li>
+</ul>
+
+=end html
+
+=begin roff
+
+=over
+
+=item * All protocols in the SDRF are defined in the IDF.
+
+=item * All input data to protocols mentioned in the IDF are used in the SDRF
+(and vice versa)
+
+=item * All values in C<Term Source REF> columns in the SDRF are defined as term
+sources in the IDF.
+
+=back
+
+=end roff
+
+=head2 Merging
+
+During the merging step, this validator returns an
+L<Experiment|ModENCODE::Chado::Experiment> object with:
+
+=begin html
+
+<ul>
+  <li>Experiment properties with a controlled term from a term source
+      (L<DBXref|ModENCODE::Chado::DBXref>) are updated to include the
+      L<DB|ModENCODE::Chado::DB> object for the term source.</li>
+  <li>Protocol objects from columns in the SDRF are merged with the protocol
+      definitions in the IDF to include the protocol
+      L<Attributes|ModENCODE::Chado::Attributes>, description, definition,
+      etc.</li>
+  <li>If there are outputs from previous L<applied
+      protocol|ModENCODE::Chado::AppliedProtocol>s that act as implied inputs to
+      other applied protocols, they are removed unless they are specifically
+      mentioned as inputs in the IDF.</li>
+  <li>Any Term Source REF fields in the SDRF are processed to include the
+      L<DB|ModENCODE::Chado::DB> object for the term source.</li>
+</ul>
+
+=end html
+
+=begin roff
+
+=over
+
+=item * Experiment properties with a controlled term from a term source
+(L<DBXref|ModENCODE::Chado::DBXref>) are updated to include the
+L<DB|ModENCODE::Chado::DB> object for the term source.
+
+=item * Protocol objects from columns in the SDRF are merged with the protocol
+definitions in the IDF to include the protocol
+L<Attributes|ModENCODE::Chado::Attributes>, description, definition, etc.
+
+=item * If there are outputs from previous L<applied
+protocol|ModENCODE::Chado::AppliedProtocol>s that act as implied inputs to other
+applied protocols, they are removed unless they are specifically mentioned as
+inputs in the IDF.
+
+=item * Any Term Source REF fields in the SDRF are processed to include the
+L<DB|ModENCODE::Chado::DB> object for the term source.
+
+=back
+
+=end roff
+
+=head1 FUNCTIONS
+
+=over
+
+=item get_idf_experiment() | set_idf_experiment($experiment)
+
+Get the current L<ModENCODE::Chado::Experiment> object that is being used as the
+base IDF experiment object, or set the IDF experiment to C<$experiment>.
+
+=item get_protocols() | set_protocols($protocols)
+
+Get the current arrayref of L<ModENCODE::Chado::Protocol> objects that are being
+used as the list of protocol definitions from the IDF, or set the list to
+C<$protocols>.
+
+=item get_termsources() | set_termsources($termsources)
+
+Get the current arrayref of L<ModENCODE::Chado::DBXref> objects that are being
+used as the list of term source definitions from the IDF, or set the list to
+C<$termsources>.
+
+=item validate($experiment)
+
+Ensures that the IDF L<experiment|ModENCODE::Chado::Experiment>,
+L<protocols|ModENCODE::Chado::Protocol>, and
+L<termsources|ModENCODE::Chado::DBXref> are consistent with the SDRF
+L<experiment|ModENCODE::Chado::Experiment> in C<$experiment>. For more
+information, see L</Validation>.
+
+=item merge($experiment)
+
+Merges the IDF L<experiment|ModENCODE::Chado::Experiment>,
+L<protocols|ModENCODE::Chado::Protocol>, and
+L<termsources|ModENCODE::Chado::DBXref> and the SDRF
+L<experiment|ModENCODE::Chado::Experiment> in C<$experiment> into a new
+L<Experiment|ModENCODE::Chado::Experiment> object, which is returned. For more
+information, see L</Merging>.
+
+=back
+
+=head1 SEE ALSO
+
+L<Class::Std>, L<ModENCODE::Validator::Attributes>,
+L<ModENCODE::Validator::Data>, L<ModENCODE::Validator::ModENCODE_Projects>,
+L<ModENCODE::Validator::TermSources>, L<ModENCODE::Validator::Wiki>,
+L<ModENCODE::Chado::Attribute>, L<ModENCODE::Chado::DBXref>,
+L<ModENCODE::Chado::Experiment>, L<ModENCODE::Chado::AppliedProtocol>,
+L<ModENCODE::Chado::Data>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 use Class::Std;
 use Carp qw(croak);
@@ -105,6 +290,8 @@ sub merge {
 
 sub validate {
   my ($self, $sdrf_experiment) = @_;
+  croak "Cannot validate an SDRF without an IDF object. Please call " .  ref($self) . "->set_idf_experiment(\$idf_experiment)" unless $self->get_idf_experiment();
+  croak "Cannot validate an SDRF without any protocol objects. Please call " .  ref($self) . "->set_protocols(\\\@protocols)" unless scalar(@{$self->get_protocols()});
   my $success = 1;
   $sdrf_experiment = $sdrf_experiment->clone(); # Don't actually change the SDRF that was passed in
   # Protocols

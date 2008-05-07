@@ -1,5 +1,111 @@
 package ModENCODE::Validator::TermSources;
+=pod
 
+=head1 NAME
+
+ModENCODE::Validator::TermSources - Validator that will validate a BIR-TAB
+L<ModENCODE::Chado::Experiment> object by verifying all of the
+L<ModENCODE::Chado::DBXref>s against the L<ModENCODE::Chado::DB> they are part
+of.
+
+=head1 SYNOPSIS
+
+This class should be used to validate all of the
+L<DBXrefs|ModENCODE::Chado::DBXref> attached to any
+L<protocol|ModENCODE::Chado::Protocol>, L<experiment
+property|ModENCODE::Chado::ExperimentProp>, L<datum|ModENCODE::Chado::Data>,
+L<attribute|ModENCODE::Chado::Attribute>, L<controlled vocabulary
+term|ModENCODE::Chado::CVTerm>, or L<feature|ModENCODE::Chado::Feature> in a
+BIR-TAB L<ModENCODE::Chado::Experiment> object.
+
+The validation is done by using
+L<ModENCODE::Validator::CVHandler/is_valid_term($cvname, $term)> and assuming
+that the L<DBXref's|ModENCODE::Chado::DBXref> accession is a valid term in a
+controlled vocabulary identified by the name of the attached
+L<DB|ModENCODE::Chado::DB>. Because of this, you should run this validator
+before any validators that modify the experiment object by pulling in
+L<DBXrefs|ModENCODE::Chado::DBXref> that are not verifiable by the
+L<CVHandler|ModENCODE::Validator::CVHandler>.
+
+=head1 USAGE
+
+This validator will scan through all of the L<ModENCODE::Chado|index> object
+types mentioned above that are part of an experiment, recursing from the
+experiment object down through applied protocols to data, then to features, and
+so forth. It will check every L<DBXref|ModENCODE::Chado::DBXref> it runs across
+by calling L<is_valid_term($cvname,
+$term)|ModENCODE::Validator::CVHandler/is_valid_term($cvname, $term)> with a
+C<$cvname> equal to the L<DBXref's|ModENCODE::Chado::DBXref>
+L<DB's|ModENCODE::Chado::DB> name and a C<$term> equal to the
+L<DBXref's|ModENCODE::Chado::DBXref> accession. If any term is invalid, then an
+error is printed and the experiment fails to validate. If it runs across a
+L<CVTerm|ModENCODE::Chado::CVTerm> with no attached
+L<DBXref|ModENCODE::Chado::DBXref>, then it will generate a new one for it and
+validate it as well. Furthermore, if there is a DBXref with no accession, the
+accession is assumed to be the value of the containing element (the name of a
+protocol, value of a datum, etc.) and is validated as such.
+
+If the experiment validates successfully, then any missing
+L<DBXref|ModENCODE::Chado::DBXref> or missing accession is filled in. If there
+are multiple names being used for the same L<CV|ModENCODE::Chado::CV> or
+L<DB|ModENCODE::Chado::DB> as determined by
+L<ModENCODE::Validator::CVHandler/get_cv_by_name($cvname)>, then the canonical
+one is used to replace any of the synonyms so that the names are consistent.
+
+To run the validator:
+
+  my $termsource_validator = new ModENCODE::Validator::TermSources();
+  if ($termsource_validator->validate($experiment)) {
+    $experiment = $termsource_validator->merge($experiment);
+    print $experiment->get_properties()->[0]->get_dbxref()->get_name();
+  }
+
+=head1 FUNCTIONS
+
+=over
+
+=item check_and_update_features($features)
+
+Given an arrayref of L<Features|ModENCODE::Chado::Feature> in C<$feature>,
+validate any L<DBXrefs|ModENCODE::Chado::DBXref> linked to them or any related
+features, L<CVTerms|ModENCODE::Chado::CVTerm>, etc., then merge in any changes.
+Return 1 on success or 0 on failure. (The features are merged in-place.)
+
+=item validate($experiment)
+
+Ensures that the L<Experiment|ModENCODE::Chado::Experiment> specified in
+C<$experiment> contains only valid L<DBXrefs|ModENCODE::Chado::DBXref> as determined by
+L<is_valid_term($cvname,
+$term)|ModENCODE::Validator::CVHandler/is_valid_term($cvname, $term)>. Returns 1
+on success, 0 on failure.
+
+=item merge($experiment)
+
+Updates any L<DBXrefs|ModENCODE::Chado::DBXref> to have an associated
+L<DB|ModENCODE::Chado::DB> and accession. Also ensures that
+L<DB|ModENCODE::Chado::DB> and L<CV|ModENCODE::Chado::CV> names are consistent
+and synonyms are not being used. Returns the updated
+L<ModENCODE::Chado::Experiment> object.
+
+=back
+
+=head1 SEE ALSO
+
+L<Class::Std>, L<ModENCODE::Validator::CVHandler>,
+L<ModENCODE::Validator::Attributes>, L<ModENCODE::Validator::Data>,
+L<ModENCODE::Validator::IDF_SDRF>, L<ModENCODE::Validator::CVHandler>,
+L<ModENCODE::Validator::Wiki>, L<ModENCODE::Chado::Experiment>,
+L<ModENCODE::Chado::ExperimentProp>, L<ModENCODE::Chado::Protocol>,
+L<ModENCODE::Chado::Data>, L<ModENCODE::Chado::Attribute>,
+L<ModENCODE::Chado::Feature>, L<ModENCODE::Chado::CVTerm>,
+L<ModENCODE::Chado::DBXref>, L<ModENCODE::Chado::DB>, L<ModENCODE::Chado::CV>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 use Class::Std;
 use Carp qw(croak carp);
@@ -471,7 +577,6 @@ sub get_term_and_accession : PRIVATE {
   }
   return (wantarray ? ($term, $accession) : { 'term' => $term, 'accession' => $accession });
 }
-
 
 sub is_valid : PRIVATE {
   my ($self, $termsource, $term, $accession) = @_;

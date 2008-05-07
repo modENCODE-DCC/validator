@@ -1,5 +1,190 @@
 package ModENCODE::Chado::XMLWriter;
+=pod
 
+=head1 NAME
+
+ModENCODE::Chado::XMLWriter - Class for writing L<stag-storenode.pl>-compatible
+ChadoXML for loading an L<ModENCODE::Chado::Experiment> object into a Chado
+database with the BIR-TAB extension installed.
+
+=head1 SYNOPSIS
+
+This class is used to write ChadoXML compatible with a Chado database with the
+BIR-TAB extension installed. It is known to work with the L<stag-storenode.pl>
+utility distributed with L<DBIx::DBStag>, and may be compatible with
+L<XML::Xort>. It can be used to write either an entire
+L<Experiment|ModENCODE::Chado::Experiment> object, or single features at a time
+(see L</PREWRITTEN FEATURES>).
+
+=head1 USAGE
+
+The usual use of C<XMLWriter> is to write an entire
+L<ModENCODE::Chado::Experiment> object out to ChadoXML in preparation for
+loading it. This is done with the L</write_chadoxml($experiment)> method. By
+default, the XML will be written to C<STDOUT>, but you can set the L<output
+handle|/get_output_handle() | set_output_handle($file_handle)> if you want to
+output to a file.
+
+  open FH, "+>output.xml";
+  my $xmlwriter = new ModENCODE::Chado::XMLWriter({
+    'output_handle' => \*FH
+  });
+  $xmlwriter->write_chadoxml($experiment)
+
+The ChadoXML generated utilizes the "macro" syntax of ChadoXML; most elements
+(in particular, features) are only printed in full once, and thereafter referred
+to by their I<id>s. For instance:
+
+  <feature id="Feature_1">
+    <name>Some feature</name>
+    ...
+  </feature>
+  <feature_relationship>
+    <object_id>Feature_1</object_id>
+    <subject_id>
+      <feature>
+        <name>Another feature</name>
+        ...
+      </feature>
+    </subject_id>
+  </feature_relationship>
+
+You can also use an C<XMLWriter> to write out single features and their attached
+data (which may include related features) using
+L</write_standalone_feature($feature)>. Note that unlike
+L</write_chadoxml($experiment)>, this will not writer the C<E<lt>chadoxmlE<gt>>
+start and end tags.
+
+=head2 Macro IDs
+
+As part of generating "macro" syntax, an C<XMLWriter> will alter many of the
+L<ModENCODE::Chado|index> objects being written by setting the C<chadoxml_id>
+field to track the macro I<id>. The features you pass in will therefore not be
+identical after writing them; they will have newly set C<chadoxml_id>s unless
+they were set beforehand. Any C<chadoxml_id>s created by this parser will be of
+the form C<FeatureType_123>.
+
+L<ModENCODE::Parser::Chado> also sets C<chadoxml_id>s to the internal database
+IDs, which are purely numberic. Since this would otherwise cause the XMLWriter
+to never write out the full versions of those features, purely numeric
+C<chadoxml_id>s are treated the same as blank ones, and replaced with
+C<FeatureType_123> style IDs.
+
+=head1 PREWRITTEN FEATURES
+
+In order to cut down on memory usage, some modules (such as
+L<ModENCODE::Validator::Data::dbEST_acc>) use C<XMLWriter> to write out features
+to temporary files as they are validated. Each module will use its own
+C<XMLWriter>, with its own L<file handle|/get_output_handle() |
+set_output_handle($file_handle)>. In order to merge all these files together,
+the calling module should call the static method
+L</add_additional_xml_writer($writer)>, like so:
+
+  my $pre_feature = new ModENCODE::Chado::Feature(\%attribs);
+  my $pre_writer = new ModENCODE::Chado::XMLWriter();
+  $pre_writer->set_output_handle($tmp_file);
+
+  # Can use both static or instance version of method:
+  $pre_writer->add_additional_xml_writer($pre_writer);
+  # OR
+  ModENCODE::Chado::XMLWriter::add_additional_xml_writer($pre_writer);
+
+  # Write the feature to the temporary file
+  $pre_writer->write_standalone_feature($pre_feature);
+
+Whenever any C<XMLWriter>'s L</write_chadoxml($experiment)> method is called, it
+will first iterate through the "additional" C<XMLWriter>s and copy the contents
+of their output files into the beginning of the ChadoXML being written.
+
+  $main_writer->write_chadoxml($experiment);
+
+The resulting ChadoXML will look like:
+
+  <chadoxml>
+    <!-- begin imported section -->
+    <feature id="Feature_1">
+      <name>Prewritten feature</name>
+      ...
+    </feature>
+    <!-- end imported section -->
+    <experiment>
+      ...
+      <feature id="Feature_2">
+        <name>Feature from experiment object</name>
+        ...
+        <feature_relationship>
+          <feature_id>Feature_1</feature>
+          ...
+        </feature_relationship>
+      </feature>
+    </experiment>
+  </chadoxml>
+
+Note that any L<Features|ModENCODE::Chado::Feature> in the main
+L<Experiment|ModENCODE::Chado::Experiment> object will have been replaced with
+placeholder features with only the
+L<chadoxml_id|ModENCODE::Chado::Feature/get_chadoxml_id() |
+set_chadoxml_id($chadoxml_id)> set. Thus, when the main C<XMLWriter> attempts to
+print the feature, it will just print the ChadoXML Macro ID as it will with any
+other features that have been previously printed.
+
+=head1 FUNCTIONS
+
+=over
+
+=item get_indent_width() | set_indent_width($width)
+
+Get or set the number of spaces to indent each level of the XML. Default is two
+(2) spaces. Note that spaces don't really matter to XML parsers, so changing
+this is purely for readability (or possibly overzealous storage-optimization).
+
+=item get_output_handle() | set_output_handle($file_handle)
+
+Get a reference to the filehandle that any XML output will be written to. For
+XMLWriters where you will use L</write_standalone_feature($feature)>, this should
+probably be a temporary file generated with L<File::Temp>. It should I<not> be
+C<STDERR> or C<STDOUT> or another write-only handle. For
+L</write_chadoxml($experiment)>, this can be any file that can be written to
+(including C<STDERR> and C<STDOUT>).
+
+=item add_additional_xml_writer($writer)
+
+Static method that adds the C<XMLWriter> passed in as C<$writer> to a private
+static array of C<XMLWriter>s. The L</write_chadoxml($experiment)> method then
+gets the file handles associated with those C<XMLWriter>s (using
+L<get_output_handle()|/get_output_handle() | set_output_handle($file_handle)>,
+pulls the content from them, and writes it to the current C<XMLWriters> output
+handle.
+
+=item write_chadoxml($experiment)
+
+Writes out the L<ModENCODE::Chado::Experiment> object in C<$experiment> as
+ChadoXML. Additionally, if there are any C<XMLWriter>s that were passed to the static
+method L</add_additional_xml_writer($writer)>, then the XML content they have
+written is inserted immediately after the opening C<E<lt>chadoxmlE<gt>>.
+
+=item write_standalone_feature($feature)
+
+Writes out a L<ModENCODE::Chado::Feature> and any associated objects (which may
+include other features, relationships, etc.) as ChadoXML, and adds
+C<chadoxml_id>s to the features created that can be used later as ChadoXML
+"macro" IDs. (See L</Macro IDs>.) Note that any XML fragments written with this
+function is not wrapped inside a C<E<lt>chadoxmlE<gt>> block and is thus not a
+valid XML document.
+
+=back
+
+=SEE ALSO
+
+L<Class::Std>, L<ModENCODE::Chado::Experiment>, L<ModENCODE::Chado::Feature>,
+L<File::Temp>, L<XML::Xort>, L<stag-storenode.pl>
+
+=AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 use Class::Std;
 use Carp qw(croak carp);

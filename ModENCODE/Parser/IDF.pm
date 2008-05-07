@@ -1,5 +1,108 @@
 package ModENCODE::Parser::IDF;
+=pod
 
+=head1 NAME
+
+ModENCODE::Parser::IDF - Parser and grammar validator for the IDF file for a
+BIR-TAB data package.
+
+=head1 SYNOPSIS
+
+This module applies a L<Parse::RecDescent> grammar to a BIR-TAB IDF document and
+converts it into a barebones L<ModENCODE::Chado::Experiment> representing the
+metadata in the IDF, plus a set of L<ModENCODE::Chado::Protocol>s and
+L<ModENCODE::Chado::DBXref> controlled vocabulary sources. It also reads the
+SDRF document(s) listed in the IDF, passing them to L<ModENCODE::Parser::SDRF>
+to convert into L<Experiment|ModENCODE::Chado::Experiment> objects.
+
+For more information on the BIR-TAB file formats, please see:
+L<http://wiki.modencode.org/project/index.php/BIR-TAB_specification>.
+
+=head1 USAGE
+
+  my $parser = new ModENCODE::Parser::IDF();
+  my $result = $parser->parse("/path/to/idf_file.tsv");
+  my ($experiment, $protocols, $sdrfs, $termsources) = @$result;
+  print $experiment->to_string();
+
+The format for a valid BIR-TAB IDF document is more thoroughly covered in the
+BIR-TAB specification, but you may be able to glean some additional information
+from examining the grammar defined in this module. Some coverage of the
+conventions used in this module's L<Parse::RecDescent> grammar is therefore
+worthwhile.
+
+L<Parse::RecDescent> is a top-down recursive-descent text parser. The basic
+style is:
+
+  Atom_Name: atom_definition { $return = "Result: " . $item[1]; }
+
+Where atom_definition can any number of other atom names or regular expressions,
+among other things. (See the full L<RecDescent|Parse::RecDescent> documentation
+for more information.)
+
+The top-level feature in this IDF parser is the C<IDF> element, which is made up
+of each of the sections of an IDF document: an C<experiment> followed by various
+C<optional_metadata>, followed by C<contact> infromation, then another chance
+for C<optional_metadata>, and so forth. Within the braces (C<{ }>), the return
+values of each atom are stored as L<ModENCODE::Chado|index> objects.
+
+Each atom defining an IDF section group (such as C<experiment>) allows any
+number of the row headings for that section. A C<experiment> section, for
+instance, consists of one-or-more C<experiment_part>s, where an
+C<experiment_part> can be an C<investigation_title>, C<experimental_design>, or
+C<experimental_factor>. A global hash called C<$experiment> defined at the
+beginning of the grammar is used to store each C<experiment_part> as it is
+parsed.  Once a full C<experiment> section has been processed, a set of
+L<experiment properties|ModENCODE::Chado::ExperimentProp> is created using the
+values of C<$experiment>. The properties are then returned to the top-level
+C<IDF> element, which adds them to a global
+L<Experiment|ModENCODE::Chado::Experiment> object. This style of processing -
+populate a hash with all the values from a section, then return to the parent
+atom - is used throughout the grammar.
+
+Failure to process the IDF file (due to missing sections, misspelled row
+headings, etc.) generally causes the L<RecDescent|Parse::RecDescent> parser to
+fail (in which case it outputs some potentially useful debugging information),
+logs an error, and causes the parser to return 0.
+
+When the C<sdrf_file> atom is encountered, a new L<ModENCODE::Parser::SDRF>
+parser is created and given the SDRF file(s) listed in the IDF document. Failure
+to parse the SDRF file(s) similary results in the IDF parser returning 0.
+
+Furthermore, passing in a missing or unreadable filename to the parser also
+leads to an 0 response and an error.
+
+=head1 FUNCTIONS
+
+=over
+
+=item parse($document)
+
+Attempt to parse the IDF file referenced by the filename passed in as
+C<$document>. Returns 0 on failure, otherwise returns an arrayref containing (in
+order) a barebones L<ModENCODE::Chado::Experiment> object for the IDF, the set
+of L<ModENCODE::Chado::Protocol>s defined in the IDF, the
+L<Experiment|ModENCODE::Chado::Experiment> object(s) associated with the SDRF
+files referenced, and the L<ModENCODE::Chado::DBXref> term sources listed in the
+IDF.
+
+  [ $experiment, \@protocols, \@sdrfs, \@termsources ]
+
+=back
+
+=head1 SEE ALSO
+
+L<Class::Std>, L<Parse::RecDescent>, L<ModENCODE::Validator::IDF_SDRF>,
+L<ModENCODE::Parser::SDRF>, L<ModENCODE::Chado::Experiment>,
+L<ModENCODE::Chado::Protocol>, L<ModENCODE::Chado::DBXref>,
+L<http://wiki.modencode.org/project/index.php/BIR-TAB_specification>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 
 use Class::Std;
@@ -16,6 +119,7 @@ use ModENCODE::Chado::Protocol;
 use ModENCODE::Chado::Attribute;
 use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::DB;
+use ModENCODE::ErrorHandler qw(log_error);
 
 my %grammar     :ATTR;
 
@@ -424,6 +528,7 @@ sub BUILD {
                                                 'name' => 'Experiment Description',
                                               });
                                           }
+                                          $optional_metadata = {};
                                           $return = \@experiment_properties;
                                         }
   optional_metadata_part:               pubmed_id | experiment_description_ref | submitting_project
@@ -699,17 +804,19 @@ sub BUILD {
 sub parse {
   my ($self, $document) = @_;
      
-#  my ($path) = ($document =~ m/(.*)(?=\/)/);
-#  $grammar{ident $self} =~ s/([^\{])\{/\1\{ my \$path = '$path\/';/;
-
-
   if ( -r $document ) {
     local $/;
-    open FH, "<$document" or croak "Couldn't read file $document";
+    if (!open(FH, "<$document")) {
+      log_error "Couldn't read file $document";
+      return 0;
+    }
     $document = <FH>;
     close FH;
   } else {
-    croak "Can't find file '$document'";
+    if (!open(FH, "<$document")) {
+      log_error "Can't find file '$document'";
+      return 0;
+    }
   }
   $document =~ s/\A [" ]*/\t/gxms;
   $document =~ s/\t"/\t/gxms;

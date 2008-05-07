@@ -1,4 +1,118 @@
 package ModENCODE::Validator::Data::dbEST_acc;
+=pod
+
+=head1 NAME
+
+ModENCODE::Validator::Data::dbEST_acc - Class for validating and updating
+BIR-TAB L<Data|ModENCODE::Chado::Data> objects containing GenBank accessions for
+ESTs to include L<Features|ModENCODE::Chado::Feature> for those ESTs.
+
+=head1 SYNOPSIS
+
+This class is meant to be used to build a L<ModENCODE::Chado::Feature> object
+(and associated L<CVTerms|ModENCODE::Chado::CVTerm> and
+LOrganismDBXref|ModENCODE::Chado::Organism>s) for a provided GenBank EST
+accession. EST information will potentially be fetched from a few different
+sources, depending on availability. If the EST in question is already in the
+local modENCODE Chado database (defined in the C<[databases modencode]> section of
+the ini-file loaded by L<ModENCODE::Config>), then a feature will be created
+from there. If it's unavailable in the modENCODE database, this module will fall
+back to the FlyBase Chado database defined in the C<[databases flybase]> section
+of the ini-file. If the EST still cannot be found, a search is run via the
+GenBank SOAP eutils interface, and the EST feature is built from the GenBank
+dbEST record.
+
+=head1 USAGE
+
+The goal of using multiple sources is to reduce the impact on outside
+repositories (e.g. FlyBase and GenBank), since these resources are often under
+load or are otherwise restricting connections. This also ends up vastly
+increasing speed for large numbers of ESTs that can be found in one of the
+databases.
+
+When given L<ModENCODE::Chado::Data> objects with values that are GenBank EST
+accessions, this module first uses
+L<ModENCODE::Parser::Chado/get_feature_by_genbank_id($genbank_id)> to fetch the
+EST from the modENCODE database, then again to fetch the EST from FlyBase. If
+both of these fail, all of the EST accessions left are grouped into batches of
+40, and sent to the GenBank eSearch service of eUtils (using the SOAP interface,
+rather than the regular URL-based interface). The features returned by the
+search are then pulled down using the SOAP eFetch service, and then all of the
+features returned are scanned to make sure they actually match the ESTs being
+searched for and aren't just fuzzy search results.
+
+To use this validator in a standalone way:
+
+  my $datum = new ModENCODE::Chado::Data({
+    'value' => 'ESTACCESSION'
+  });
+  my $validator = new ModENCODE::Validator::Data::dbEST_acc();
+  $validator->add_datum($datum, $applied_protocol);
+  if ($validator->validate()) {
+    my $new_datum = $validator->merge($datum);
+    print $new_datum->get_features()->[0]->get_name();
+  }
+
+Note that this class is not meant to be used directly, rather it is mean to be
+used within L<ModENCODE::Validator::Data>.
+
+=head1 PREWRITTEN FEATURES
+
+In order to cut down on memory usage, this modules opens a temporary file in the
+directory that the Perl script exists in (not necessarily the current
+directory), and adds it to the list of temporary files that will be written out
+by L<ModENCODE::Chado::XMLWriter|ModENCODE::Chado::XMLWriter/PREWRITTEN
+FEATURES>. Admittedly, this creates some strong linkages between the validation
+code and the XMLWriter, so it should probably be made optional eventually. The
+L<ModENCODE::Chado::Feature>s actually generated during the L</merge($datum,
+$applied_protocol)> step are therefore just placeholder features with the
+L<chadoxml_id|ModENCODE::Chado::Feature/get_chadoxml_id() |
+set_chadoxml_id($chadoxml_id)> set to the same value as the feature written out
+to XML.
+
+=head1 FUNCTIONS
+
+=over
+
+=item validate()
+
+Makes sure that all of the data added using L<add_datum($datum,
+$applied_protocol)|ModENCODE::Validator::Data::Data/add_datum($datum,
+$applied_protocol)> have values that exist as GenBank EST accession in either
+the local modENCODE database, FlyBase, or GenBank.
+
+=item merge($datum, $applied_protocol)
+
+Given an original L<datum|ModENCODE::Chado::Data> C<$datum>,
+returns a copy of that datum with a newly attached feature based on an EST
+record in either the local modENCODE database, FlyBase, or GenBank for the value
+in that C<$datum>.
+
+B<NOTE:> In addition to attaching features to the current C<$datum>, if there is
+a GFF3 datum (as validated by L<ModENCODE::Validator::Data::GFF3>) attached to
+the same C<$applied_protocol>, then the features within it are scanned for any
+with the name equal to the EST accession - if these are found, they are replaced
+(using L<ModENCODE::Chado::Feature/mimic($feature)>).
+
+=back
+
+=head1 SEE ALSO
+
+L<ModENCODE::Chado::Data>, L<ModENCODE::Validator::Data>,
+L<ModENCODE::Validator::Data::Data>, L<ModENCODE::Chado::Feature>,
+L<ModENCODE::Chado::CVTerm>, L<ModENCODE::Chado::Organism>,
+L<ModENCODE::Chado::FeatureLoc>, L<ModENCODE::Validator::Data::BED>,
+L<ModENCODE::Validator::Data::Result_File>,
+L<ModENCODE::Validator::Data::SO_transcript>,
+L<ModENCODE::Validator::Data::WIG>, L<ModENCODE::Validator::Data::GFF3>,
+L<ModENCODE::Validator::Data::dbEST_acc_list>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 use base qw( ModENCODE::Validator::Data::Data );
 use Class::Std;
@@ -9,10 +123,6 @@ use ModENCODE::Chado::Feature;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Organism;
-use ModENCODE::Chado::AnalysisFeature;
-use ModENCODE::Chado::Analysis;
-use ModENCODE::Chado::FeatureRelationship;
-use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Parser::Chado;
 use ModENCODE::ErrorHandler qw(log_error);
 use ModENCODE::Validator::TermSources;

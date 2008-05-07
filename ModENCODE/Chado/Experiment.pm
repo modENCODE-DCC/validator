@@ -1,5 +1,237 @@
 package ModENCODE::Chado::Experiment;
+=pod
 
+=head1 NAME
+
+ModENCODE::Chado::Experiment - A class representing a simplified Chado
+I<experiment> object.  B<NOTE:> The experiment table only exists in Chado
+instances with the BIR-TAB extension installed.
+
+=head1 SYNOPSIS
+
+This class is an object-oriented representation of an entry in a Chado
+B<experiment> table. It provides accessors for the various attributes of an
+experiment that are stored in the experiment table itself, plus accessors for
+relationships to certain other Chado tables (i.e. B<applied_protocol> and
+B<experiment_prop>).
+
+=head1 USAGE
+
+=head2 Implications Of Class::Std
+
+=over
+
+As with all of the ModENCODE::Chado::* object classes, this module utilizes
+L<Class::Std> to enforce object-oriented programming practices. Therefore, many
+of the accessor functions are automatically generated, and are of the form
+<get|set>_<attribute>, e.g. $obj->L<get_uniquename()|/get_uniquename() |
+set_uniquename($uniquename)> or $obj->L<set_uniquename()|/get_uniquename() |
+set_uniquename($uniquename)>.
+
+ModENCODE::Chado::* objects can also be created with values at initialization
+time by passing in a hash. For instance, C<my $obj = new
+ModENCODE::Chado::Protocol({ 'uniquename' =E<gt> 'An Experiment', 'descripton'
+=E<gt> 'An experiment was run.' });> will create a new Experiment object with a
+uniquename of 'An Experiment' and a description of 'An experiment was run.'. For
+complex types (other Chado objects), the default L<Class::Std> setters and
+initializers have been replaced with subroutines that make sure the type of the
+object being passed in is correct.
+
+=back
+
+=head2 Using ModENCODE::Chado::Experiment
+
+=over
+
+  my $experiment = new ModENCODE::Chado::Experiment({
+    # Simple attributes
+    'chadoxml_id'               => 'Experiment_111',
+    'uniquename'                => 'An Experiment',
+    'description'               => 'A Description',
+
+    # Object relationships
+    'properties'                => [ new ModENCODE::Chado::ExperimentProp(), ... ]
+    'applied_protocol_slots'    => [ 
+        [ new ModENCODE::Chado::AppliedProtocol(), ... ],
+        [ new ModENCODE::Chado::AppliedProtocol(), ... ],
+        ...
+    ]
+  });
+
+  $experiment->set_uniquename('a uniquename');
+  my $uniquename = $experiment->get_uniquename();
+  print $experiment->to_string();
+
+=back
+
+=head1 ACCESSORS
+
+=over
+
+=item get_chadoxml_id() | set_chadoxml_id($chadoxml_id)
+
+The I<chadoxml_id> is used by L<ModENCODE::Chado::XMLWriter> to keep track of
+the ChadoXML Macro ID (used to refer to the same feature in XML multiple times).
+It is also populated when using L<ModENCODE::Parser::Chado> to pull data out of
+a Chado database. (Note that the XMLWriter will generate new I<chadoxml_id>s in
+this case; it does so whenever the I<chadoxml_id> is purely numeric.
+
+=item get_uniquename() | set_uniquename($uniquename)
+
+The uniquename of this Chado experiment; it corresponds to the
+experiment.uniquename field in a Chado database.
+
+=item get_description() | set_description($description)
+
+The description of this Chado experiment; it corresponds to the
+experiment.description field in a Chado database.
+
+=item get_properties() | add_property($property) | add_properties(\@properties)
+
+A list of all the properties associated with this Chado experiment. The getter
+returns an arrayref of L<ModENCODE::Chado::ExperimentProp> objects, and the
+adders add a single property or an arraref or multiple properties to the list.
+The property objects must be a L<ModENCODE::Chado::ExperimentProp> or conforming
+subclass (via C<isa>).  The property objects corresponds to the properties in
+the Chado experiment_prop table, and the experiment_prop.experiment_id field is
+used to track the relationship.
+
+=back
+
+=head2 Applied Protocols
+
+=head3 Overview of applied protocols
+
+The experiment object tracks all of the L<applied
+protocols|ModENCODE::Chado::AppliedProtocol> used as part of this experiment in
+an array of arrays called C<applied_protocol_slots>. The structure reflects the
+shape of a columnar BIR-TAB SDRF file: The first entry in the outer array
+corresponds to the first protocol column in an SDRF, the second entry to the
+second protocol column, etc. Each inner array contains an entry for each
+application of a protocol in that column/slot.
+
+For instance, given an SDRF:
+ Parameter Value [in]  Protocol REF  Result Value [out]  Protocol REF
+ "1st input"           ProtocolA     "1st output"        ProtocolB
+ "2nd input"           ProtocolA     "2nd output"        ProtocolB
+ "3rd input"           ProtocolA     "2nd output"        ProtocolB
+
+First let's consider ProtocolA. There are two applications of the protocol (even
+though there are three rows). The first application takes in I<1st input> and
+outputs I<1st output>. The second application takes in I<2nd input> and I<3rd
+input> and outputs I<2nd output>. Therefore, the first "slot" in
+C<applied_protocol_slots> will have two applied protocols. The second slot will
+have two applications of ProtocolB: the one that takes in I<1st output> and the
+one that takes in I<2nd output>.
+
+The resulting C<applied_protocol_slots> could be created like so:
+
+  $input1 = new ModENCODE::Chado::Data({
+    'heading' => 'Parameter Value',
+    'name'    => 'in',
+    'value'   => '1st input'
+  });
+  $input2 = new ModENCODE::Chado::Data({
+    'heading' => 'Parameter Value',
+    'name'    => 'in',
+    'value'   => '2nd input'
+  });
+  $input3 = new ModENCODE::Chado::Data({
+    'heading' => 'Parameter Value',
+    'name'    => 'in',
+    'value'   => '3rd input'
+  });
+  $output1 = new ModENCODE::Chado::Data({
+    'heading' => 'Result Value',
+    'name'    => 'out',
+    'value'   => '1st output'
+  });
+  $output2 = new ModENCODE::Chado::Data({
+    'heading' => 'Result Value',
+    'name'    => 'out',
+    'value'   => '2nd output'
+  });
+  $apA_on_input1_output1 = new ModENCODE::Chado::AppliedProtocol({
+    'input_data' => [ $input1 ],
+    'output_data' => [ $output1 ]
+  });
+  $apA_on_input2and3_output2 = new ModENCODE::Chado::AppliedProtocol({
+    'input_data' => [ $input2, $input3 ],
+    'output_data' => [ $output2 ]
+  });
+  $apB_on_output1 = new ModENCODE::Chado::AppliedProtocol({
+    'input_data' => [ $output1 ],
+  });
+  $apB_on_output2 = new ModENCODE::Chado::AppliedProtocol({
+    'input_data' => [ $output2 ],
+  });
+
+  $applied_protocol_slots = [
+    [ $apA_on_input1_output1, $apA_on_input2and3_output2 ],
+    [ $apB_on_output1, $apB_on_output2 ]
+  ];
+
+=head3 Accessing applied protocols 
+
+=over
+
+=item get_num_applied_protocol_slots()
+
+Return the number of applied protocol slots. This corresponds to the number of
+protocol columns in a BIR-TAB SDRF document.
+
+=item get_applied_protocols_at_slot($slotnum)
+
+Return an array of the L<applied protocols|ModENCODE::Chado::AppliedProtocol> at
+slot C<$slotnum>. This corresponds to the C<$slotnum>th protocol column in a
+BIR-TAB SDRF document.
+
+=item add_applied_protocol_to_slot($applied_protocol, $slotnum)
+
+Given a L<ModENCODE::Chado::AppliedProtocol> or conforming subclass (via
+C<isa>), attempt to add the applied protocol to the list of protocols at slot
+C<$slotnum>. If the applied protocol has already been inserted (by checking
+L<ModENCODE::Chado::AppliedProtocol::equals($obj)|ModENCODE::Chado::AppliedProtocol/equals($obj)>,
+then it is not inserted again, but no error occurs.
+
+=back
+
+=head1 UTILITY FUNCTIONS
+
+=over
+
+=item equals($obj)
+
+Returns true if this experiment and $obj are equal. Checks all simple and
+complex attributes. Also requires that this object and $obj are of the exact
+same type. (A parent class != a subclass, even if all attributes are the same.)
+
+=item clone()
+
+B<Unlike> most of the other ModENCODE::Chado::* features, this function returns
+a partially shallow copy of this Experiment object. It copies the simple
+attributes, and deep-copies the experiment properties, but does not deep-copy
+the applied protocols; it merely copies the references. 
+
+=item to_string()
+
+Return a string representation of this experiment. Attempts to print all applied
+protocols. (May be very slow; mostly useful for debugging.)
+
+=back
+
+=head1 SEE ALSO
+
+L<Class::Std>, L<ModENCODE::Chado::AppliedProtocol>,
+L<ModENCODE::Chado::Protocol>, L<ModENCODE::Chado::ExperimentProp>,
+L<ModENCODE::Chado::Data>
+
+=head1 AUTHOR
+
+E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
+L<http://www.modencode.org>.
+
+=cut
 use strict;
 use Class::Std;
 use Carp qw(croak carp);
@@ -11,8 +243,8 @@ my %uniquename              :ATTR( :name<uniquename>,          :default<undef> )
 my %description             :ATTR( :name<description>,         :default<''> );
 
 # Relationships
-my %applied_protocol_slots  :ATTR( :get<applied_protocol_slots>,  :default<[]> );
 my %properties              :ATTR( :get<properties>,              :default<[]> );
+my %applied_protocol_slots  :ATTR( :get<applied_protocol_slots>,  :default<[]> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
