@@ -144,7 +144,7 @@ sub set_values {
         }
       }
     } elsif (ref($set_values) eq 'ModENCODE::Validator::Wiki::FormValues') {
-      push @{$values{$ident}}, $set_values;
+      push @{$values{ident $self}}, $set_values;
     } elsif (ref($set_values) eq 'HASH') {
       foreach my $valuekey (keys(%$set_values)) {
         foreach my $value (@{$set_values->{$valuekey}}) {
