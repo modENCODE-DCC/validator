@@ -324,7 +324,7 @@ sub BUILD {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = $item[5][0] || undef;
-                                            return $self->create_output($item[1], $value, $item[3], $type, $item[7], $item[8], $values);
+                                            return $self->create_datum($item[1], $value, $item[3], $type, $item[7], $item[8], $values);
                                           };
                                         }
 
