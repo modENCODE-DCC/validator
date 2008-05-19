@@ -99,7 +99,7 @@ sub BUILD {
 }
 
 sub set_values {
-  my ($self, $set_values) = @_;
+  my ($self, $values) = @_;
   if (defined($values)) {
     if (ref($values) ne 'ARRAY' && ref($values) ne 'ArrayOfStrings') {
       $values = [ $values ];
@@ -108,6 +108,7 @@ sub set_values {
       $self->add_value($value);
     }
   }
+}
 
 sub add_type {
   my ($self, $type) = @_;
