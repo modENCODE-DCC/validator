@@ -90,7 +90,7 @@ use strict;
 # Attributes
 my %name             :ATTR( :name<name> );
 my %types            :ATTR( :name<types>, :default<[]> );
-my %values           :ATTR( :name<values>, :default<[]> );
+my %values           :ATTR( :get<values>, :init_arg<values>, :default<[]> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
