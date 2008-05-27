@@ -281,6 +281,10 @@ sub merge {
   }
   foreach my $sdrf_term (@sdrf_terms) {
     my ($idf_term) = grep { $_->get_db()->get_name() eq $sdrf_term->get_db()->get_name() } @{$self->get_termsources()};
+    if (!$idf_term) {
+      log_error "Cannot find the Term Source REF definition for " . $sdrf_term->get_db()->get_name() . " in the IDF, although it is referenced in the SDRF.", "error";
+      exit;
+    }
     $sdrf_term->set_db($idf_term->get_db());
     $sdrf_term->set_version($idf_term->get_version());
   }
