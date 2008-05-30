@@ -614,6 +614,7 @@ sub term_isa {
   return 0 unless ($self->is_valid_term($cvname, $term) && $self->is_valid_term($cvname, $ancestor));
   my $cv = $self->get_cv_by_name($cvname);
   return 0 unless $cv->{'graph'};
+  $cvname = $cv->{'names'}->[0];
   my $child_acc = $self->get_accession_for_term($cvname, $term);
   my $parents = $cv->{'graph'}->get_recursive_parent_terms_by_type($cvname . ':' . $child_acc);
   my @matching_parents = grep { $_->name() eq $ancestor } @$parents;
