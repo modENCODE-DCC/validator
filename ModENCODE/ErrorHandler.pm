@@ -67,6 +67,8 @@ output on the same line (e.g. C<Parsing foo... Done.>).
 
 =over
 
+=item C<blank> means add newline
+
 =item C<E<gt>> means increase indent and add newline
 
 =item C<E<lt>> means decrease indent and add newline

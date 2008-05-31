@@ -116,6 +116,7 @@ use ModENCODE::Validator::Data::Result_File;
 use ModENCODE::Validator::Data::GFF3;
 use ModENCODE::Validator::Data::SO_transcript;
 use ModENCODE::Validator::Data::dbEST_acc_list;
+use ModENCODE::Validator::Data::TA_acc;
 #use ModENCODE::Validator::Data::NCBITrace;
 use Class::Std;
 use Carp qw(croak carp);
@@ -132,6 +133,7 @@ sub BUILD {
   $validators{$ident}->{'modencode:accession_number_list_data_file'} = new ModENCODE::Validator::Data::dbEST_acc_list({ 'data_validator' => $self });
   $validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript({ 'data_validator' => $self });
   $validators{$ident}->{'Result File'} = new ModENCODE::Validator::Data::Result_File({ 'data_validator' => $self });
+  $validators{$ident}->{'modencode:TraceArchive_record'} = new ModENCODE::Validator::Data::TA_acc({ 'data_validator' => $self });
   #$validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
 }
 
