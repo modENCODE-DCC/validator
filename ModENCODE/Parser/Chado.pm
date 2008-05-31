@@ -848,8 +848,6 @@ sub get_feature_id_by_name_and_type {
     FROM feature f 
     INNER JOIN cvterm cvt ON f.type_id = cvt.cvterm_id 
     INNER JOIN cv ON cvt.cv_id = cv.cv_id 
-    INNER JOIN feature_dbxref fdbx ON fdbx.feature_id = f.feature_id
-    INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id
     WHERE 
     (f.name = ?)
     AND organism_id = 1");
@@ -901,10 +899,10 @@ sub get_feature_id_by_name_and_type {
     }
   }
   if (scalar(@found_feature_ids) == 0) {
-    log_error "Couldn't find feature '$feature_name' with type " . $type->to_string() . ".", "warning";
     return undef;
   } elsif (scalar(@found_feature_ids) > 1) {
     log_error "Found more than one feature '$feature_name' with type " . $type->to_string() . ".", "warning";
+    log_error join(", ", @found_feature_ids), "notice";
   }
   return $found_feature_ids[0];
 }

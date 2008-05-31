@@ -452,7 +452,7 @@ sub write_feature : PRIVATE {
   $self->println("<seqlen>" . xml_escape($feature->get_seqlen()) . "</seqlen>") if length($feature->get_seqlen());
   $self->println("<timeaccessioned>" . xml_escape($feature->get_timeaccessioned()) . "</timeaccessioned>") if length($feature->get_timeaccessioned());
   $self->println("<timelastmodified>" . xml_escape($feature->get_timelastmodified()) . "</timelastmodified>") if length($feature->get_timelastmodified());
-  $self->println("<is_analysis>" . xml_escape($feature->get_is_analysis()) . "</is_analysis>");
+  $self->println("<is_analysis>" . xml_escape($feature->get_is_analysis()) . "</is_analysis>") if length(xml_escape($feature->get_is_analysis()));
 
   if ($feature->get_type()) {
     $self->println("<type_id>");

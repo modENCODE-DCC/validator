@@ -106,7 +106,7 @@ use ModENCODE::Chado::Organism;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Config;
 
-my %cached_feature_ids           :ATTR( :default<{}> );
+my %cached_features              :ATTR( :default<{}> );
 
 sub validate {
   my ($self) = @_;
@@ -116,10 +116,10 @@ sub validate {
   my @ids;
   foreach my $datum_hash (@{$self->get_data()}) {
     if (length($datum_hash->{'datum'}->get_value())) {
-      my $feature_id = $cached_feature_ids{ident $self}->{$datum_hash->{'datum'}->get_value()};
-      if (!$feature_id) {
+      my $feature = $cached_features{ident $self}->{$datum_hash->{'datum'}->get_value()};
+      if (!$feature) {
         log_error "Fetching feature " . $datum_hash->{'datum'}->get_value(), "notice";
-        $feature_id = $self->get_parser_modencode()->get_feature_id_by_name_and_type(
+        my $feature_id = $self->get_parser_modencode()->get_feature_id_by_name_and_type(
           $datum_hash->{'datum'}->get_value(),
           new ModENCODE::Chado::CVTerm({
               'name' => 'transcript',
@@ -127,34 +127,30 @@ sub validate {
             }),
           1,
         );
-        if (!$feature_id) {
-          log_error "Couldn't find a feature_id for transcript " . $datum_hash->{'datum'}->get_value() . " in modENCODE database. Trying FlyBase.", "notice";
-          $feature_id = $self->get_parser_flybase()->get_feature_id_by_name_and_type(
-            $datum_hash->{'datum'}->get_value(),
-            new ModENCODE::Chado::CVTerm({
-                'name' => 'transcript',
-                'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
-              }),
-            1,
-          );
+        if ($feature_id) {
+          $feature = $self->get_parser_modencode()->get_feature($feature_id);
         }
-        $cached_feature_ids{ident $self}->{$datum_hash->{'datum'}->get_value()} = $feature_id;
       }
-      if (!$feature_id) {
-        log_error "Couldn't get a feature_id for supposed transcript " . $datum_hash->{'datum'}->get_value() . ".", "error";
-        $success = 0;
-        next;
-      }
-      log_error "Loading feature " . $datum_hash->{'datum'}->get_value(), "notice";
-      my $feature = $self->get_parser_modencode()->get_feature($feature_id);
       if (!$feature) {
         log_error "Couldn't find a feature for transcript " . $datum_hash->{'datum'}->get_value() . " in modENCODE database. Trying FlyBase.", "notice";
-        $feature = $self->get_parser_flybase()->get_feature($feature_id);
+        my $feature_id = $self->get_parser_flybase()->get_feature_id_by_name_and_type(
+          $datum_hash->{'datum'}->get_value(),
+          new ModENCODE::Chado::CVTerm({
+              'name' => 'transcript',
+              'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
+            }),
+          1,
+        );
+        if ($feature_id) {
+          $feature = $self->get_parser_flybase()->get_feature($feature_id);
+        }
       }
       if (!$feature) {
-        log_error "Couldn't get a feature object for supposed transcript " . $datum_hash->{'datum'}->get_value() . " with feature_id $feature_id.", "error";
+        log_error "Couldn't get a feature object for supposed transcript " . $datum_hash->{'datum'}->get_value() . ".", "error";
         $success = 0;
         next;
+      } else {
+        $cached_features{ident $self}->{$datum_hash->{'datum'}->get_value()} = $feature;
       }
       my $datum = $datum_hash->{'datum'}->clone();
       $datum->add_feature($feature);
@@ -210,6 +206,7 @@ sub get_parser_flybase : PRIVATE {
       'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
       'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
       'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
+      'no_relationships' => 1,
     });
   return $parser;
 }
@@ -222,6 +219,7 @@ sub get_parser_modencode : PRIVATE {
       'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
       'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
       'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
+      'no_relationships' => 1,
     });
   return $parser;
 }
