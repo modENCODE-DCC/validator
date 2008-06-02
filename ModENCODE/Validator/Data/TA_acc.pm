@@ -151,8 +151,12 @@ sub parse_traceXML : PRIVATE {
         my $ti = $node->findvalue('./ti');
         my $trace_name = $node->findvalue('./trace_name');
         my $load_date = $node->findvalue('.//load_date');
-#       print "processed $count: $ti | $trace_name | $load_date \n";                              
-        my $single_trace = { "trace_id" => $ti, "name" => $trace_name, "load_date" => $load_date };
+	my $organism = $node->findvalue('.//species_code');
+	$organism = ucfirst(lc($organism));
+	my ($genus, $species) = ($organism =~ m/^(\S+)\s+(.*)$/);
+	
+#       print "processed $count: $ti | $trace_name | $load_date | $genus $species \n";                              
+        my $single_trace = { "trace_id" => $ti, "name" => $trace_name, "load_date" => $load_date, "genus" => $genus, "species" => $species };
         push @trace_data, $single_trace;
         $count++;
     }
@@ -204,13 +208,13 @@ sub validate {
   my $est_counter = 0;
   # Validate remaining Trace IDs against Trace Archive by primary ID
   if (scalar(@data_to_validate)) {
-    log_error "Pulling down Trace information from Trace Archive by ID in batches of 40...", "notice", ">";
+    log_error "Pulling down Trace information from Trace Archive by ID in batches of 200...", "notice", ">";
     my $trace_counter = 1;
     my @all_results;
     while (scalar(@data_to_validate)) {
       # Generate search query "est1,est2,est3,..."
       my @term_set;
-      for (my $i = 0; $i < 40; $i++) {
+      for (my $i = 0; $i < 200; $i++) {
         my $datum_hash = shift @data_to_validate;
         last unless $datum_hash;
         $est_counter++;
@@ -250,7 +254,8 @@ sub validate {
           my $ti = $trace->{'trace_id'};
           my $trace_name = $trace->{'name'};
           my $load_date = $trace->{'load_date'};
-
+	  my $species   = $trace->{'species'};
+	  my $genus     = $trace->{'genus'};
           #create the feature object
           my $feature = new ModENCODE::Chado::Feature({
               'name' => $trace_name,
@@ -259,6 +264,10 @@ sub validate {
               'type' => new ModENCODE::Chado::CVTerm({
                 'name' => 'TraceArchive_record',  ##this should be changed to trace_archive_record        
                 'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
+                }),
+              'organism' => new ModENCODE::Chado::Organism({
+                  'genus' => $genus,
+                  'species' => $species,
                 }),
               'primary_dbxref' => new ModENCODE::Chado::DBXref({
                 'accession' => $ti,
