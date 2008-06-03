@@ -324,16 +324,7 @@ sub gff_feature_to_chado_features : PRIVATE {
     $gff_obj_id = ($gff_obj->get_Annotations('ID'))[0]->value();
   }
 
-  # Deal with typing the sequence region
-  if ($gff_obj->seq_id() eq $gff_io->sequence_region($gff_obj->seq_id()) && 
-    defined($gff_obj_id) && $gff_obj_id eq $gff_io->seq_region($gff_obj->seq_id())->seq_id() &&
-    length($gff_obj->type())) {
-    # If we have a feature with the same ID as the seqregion, then assign its type to
-    # the seqregion, instead of relying on the default "region"
-    my $type = new Bio::Annotation::OntologyTerm();
-    $gff_io->seq_region($gff_obj->seq_id())->type->name($gff_io->seq_region()->type()->name());
-  }
-
+  # Get the sequence region feature, or create one if it doesn't yet exist
   my $this_seq_region = $gff_io->sequence_region($gff_obj->seq_id());
   my $this_seq_region_feature = $features_by_id->{$this_seq_region->seq_id()};
   if (!$this_seq_region_feature) {
@@ -357,6 +348,14 @@ sub gff_feature_to_chado_features : PRIVATE {
     }
     $features_by_id->{$this_seq_region->seq_id()} = $this_seq_region_feature;
   }
+
+  # Deal with typing the sequence region
+  if ($gff_obj_id eq $this_seq_region->seq_id()) {
+    # If we have a feature with the same ID as the seqregion, then assign its type to
+    # the seqregion, instead of relying on the default "region"
+    $this_seq_region_feature->get_type()->set_name($gff_obj->type()->name());
+  }
+
 
   # Build this feature
   my ($feature_start, $feature_end) = ($gff_obj->location()->start(), $gff_obj->location()->end());
