@@ -117,6 +117,7 @@ use ModENCODE::Validator::Data::GFF3;
 use ModENCODE::Validator::Data::SO_transcript;
 use ModENCODE::Validator::Data::dbEST_acc_list;
 use ModENCODE::Validator::Data::TA_acc;
+use ModENCODE::Validator::Data::URL_mediawiki_expansion;
 #use ModENCODE::Validator::Data::NCBITrace;
 use Class::Std;
 use Carp qw(croak carp);
@@ -134,6 +135,7 @@ sub BUILD {
   $validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript({ 'data_validator' => $self });
   $validators{$ident}->{'Result File'} = new ModENCODE::Validator::Data::Result_File({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:TraceArchive_record'} = new ModENCODE::Validator::Data::TA_acc({ 'data_validator' => $self });
+  $validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'data_validator' => $self });
   #$validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
 }
 
@@ -159,6 +161,12 @@ sub merge {
     $datum = $datum->{'datum'};
     my $datum_type = $datum->get_type();
     my $validator = $self->get_validator_for_type($datum_type);
+
+    if (!$validator && $datum->get_termsource() && $datum->get_termsource()->get_db()) {
+      my $datum_termsource_type = $datum->get_termsource()->get_db()->get_description();
+      $validator =  $validators{ident $self}->{$datum_termsource_type};
+    }
+
     next unless $validator;
     my $newdatum = $validator->merge($datum, $applied_protocol);
     croak "Cannot merge data columns if they do not validate" unless $newdatum;
@@ -210,6 +218,12 @@ sub validate {
     my $datum_type = $datum->get_type();
     my $parser_module = $datum_type->get_cv()->get_name() . ":" . $datum_type->get_name();
     my $validator = $self->get_validator_for_type($datum_type);
+
+    if (!$validator && $datum->get_termsource() && $datum->get_termsource()->get_db()) {
+      my $datum_termsource_type = $datum->get_termsource()->get_db()->get_description();
+      $validator =  $validators{ident $self}->{$datum_termsource_type};
+    }
+
     # Special case: Any field with a heading of "Result File" should be checked as a generic data file
     if ($datum->get_heading() =~ m/Result *Files?/i) {
       my $file_validator = $validators{ident $self}->{'Result File'};
