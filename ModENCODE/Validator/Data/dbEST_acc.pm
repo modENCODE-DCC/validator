@@ -151,18 +151,18 @@ sub validate {
 
   log_error "Validating " . scalar(@data_to_validate) . " ESTs...", "notice", ">";
 
-  my $root_dir = $0;
-  $root_dir =~ s/[^\/]*$//;
-  $root_dir = "./" unless $root_dir =~ /\//;
-  my $tmp_file = new File::Temp(
-    'TEMPLATE' => "dbEST_acc_ESTs_XXXX",
-    'DIR' => $root_dir,
-    'SUFFIX' => '.xml',
-    'UNLINK' => 1,
-  );
-  my $xmlwriter = new ModENCODE::Chado::XMLWriter();
-  $xmlwriter->set_output_handle($tmp_file);
-  $xmlwriter->add_additional_xml_writer($xmlwriter);
+#  my $root_dir = $0;
+#  $root_dir =~ s/[^\/]*$//;
+#  $root_dir = "./" unless $root_dir =~ /\//;
+#  my $tmp_file = new File::Temp(
+#    'TEMPLATE' => "dbEST_acc_ESTs_XXXX",
+#    'DIR' => $root_dir,
+#    'SUFFIX' => '.xml',
+#    'UNLINK' => 1,
+#  );
+#  my $xmlwriter = new ModENCODE::Chado::XMLWriter();
+#  $xmlwriter->set_output_handle($tmp_file);
+#  $xmlwriter->add_additional_xml_writer($xmlwriter);
 
   # Validate ESTs against ones we've already seen and store locally
   log_error "Fetching " . scalar(@data_to_validate) . " ESTs from local modENCODE database...", "notice", ">";
@@ -179,10 +179,11 @@ sub validate {
         next;
       }
       if ($term_source_validator->check_and_update_features([$feature])) {
-        $xmlwriter->write_standalone_feature($feature);
-        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
+#        $xmlwriter->write_standalone_feature($feature);
+#        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
 
-        $datum->add_feature($placeholder_feature);
+#        $datum->add_feature($placeholder_feature);
+        $datum->add_feature($feature);
         $datum_hash->{'merged_datum'} = $datum;
         $datum_hash->{'is_valid'} = 1;
       } else {
@@ -210,10 +211,11 @@ sub validate {
           push @data_left, $datum_hash;
           next;
         }
-        $xmlwriter->write_standalone_feature($feature);
-        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
+#        $xmlwriter->write_standalone_feature($feature);
+#        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
 
-        $datum->add_feature($placeholder_feature);
+#        $datum->add_feature($placeholder_feature);
+        $datum->add_feature($feature);
         $datum_hash->{'merged_datum'} = $datum;
         $datum_hash->{'is_valid'} = 1;
       }

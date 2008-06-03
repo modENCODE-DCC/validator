@@ -295,7 +295,7 @@ sub validate {
       }
       $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
       close GFF;
-      log_error "Done.\n", "notice", "<";
+      log_error "Done.", "notice", "<";
     }
 
     $datum_hash->{'merged_datum'} = $datum;
