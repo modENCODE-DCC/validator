@@ -843,8 +843,6 @@ sub xml_escape {
   my ($value) = @_;
   $value =~ s/>/&gt;/g;
   $value =~ s/</&lt;/g;
-  $value =~ s/"/&quot;/g;
-  $value =~ s/'/&#39;/g;
   $value =~ s/&/&amp;/g;
   return $value;
 }
