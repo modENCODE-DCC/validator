@@ -330,6 +330,7 @@ sub gff_feature_to_chado_features : PRIVATE {
   if (!$this_seq_region_feature) {
     $this_seq_region_feature = new ModENCODE::Chado::Feature({
         'uniquename' => $this_seq_region->seq_id(),
+        'name' => $this_seq_region->seq_id(),
         'type' => new ModENCODE::Chado::CVTerm({
             'name' => $this_seq_region->type()->name(),
             'cv' => new ModENCODE::Chado::CV({ 
