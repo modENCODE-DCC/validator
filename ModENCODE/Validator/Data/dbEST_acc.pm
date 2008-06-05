@@ -574,7 +574,34 @@ sub merge {
               # it may have to other features in the GFF, then return the updated feature as
               # part of the validated_datum
               croak "Unable to continue; the validated dbEST_acc datum " . $validated_datum->to_string() . " has more than one associated feature!" if (scalar(@{$validated_datum->get_features()}) > 1);
-              $gff_feature->mimic($validated_datum->get_features()->[0]);
+              # Rather than blindly mimic, we need to merge the feature from GFF with the fetched feature
+              my $fetched_feature = $validated_datum->get_features()->[0];
+              # Always override: name, uniquename, residues, seqlen,
+              # timeaccessioned, timelastmodified, is_analysis, organism, type
+              $gff_feature->set_name($fetched_feature->get_name());
+              $gff_feature->set_uniquename($fetched_feature->get_uniquename());
+              $gff_feature->set_residues($fetched_feature->get_residues());
+              $gff_feature->set_seqlen($fetched_feature->get_seqlen());
+              $gff_feature->set_timeaccessioned($fetched_feature->get_timeaccessioned());
+              $gff_feature->set_timelastmodified($fetched_feature->get_timelastmodified());
+              $gff_feature->set_is_analysis($fetched_feature->get_is_analysis());
+              $gff_feature->set_organism($fetched_feature->get_organism());
+              $gff_feature->set_type($fetched_feature->get_type());
+
+              # Add any additional analysisfeatures
+              foreach my $analysisfeature (@{$fetched_feature->get_analysisfeatures()}) {
+                $gff_feature->add_analysisfeature($analysisfeature);
+              }
+              # Add any additional locations
+              foreach my $location (@{$fetched_feature->get_locations()}) {
+                $gff_feature->add_location($location);
+              }
+              # Add any additional dbxrefs
+              foreach my $dbxref (@{$fetched_feature->get_dbxrefs()}) {
+                $gff_feature->add_dbxref($dbxref);
+              }
+              # Leave the primary_dbxref alone
+
               $validated_datum->set_features( [$gff_feature] );
             }
           }
