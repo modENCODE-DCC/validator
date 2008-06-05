@@ -361,6 +361,17 @@ sub merge {
     }
   }
 
+
+  my ($experiment_description) = grep { $_->get_name() eq "Experiment Description" } @{$experiment->get_properties()};
+  if ($protocol_defs_by_url{ident $self}->{$experiment_description->get_value()}) {
+    my $wiki_experiment_description_def = $protocol_defs_by_url{ident $self}->{$experiment_description->get_value()};
+    use Data::Dumper;
+    my ($description) = grep { $_->get_name() eq "short description" } @{$wiki_experiment_description_def->get_string_values()};
+    $description = $description->get_values()->[0];
+    $experiment_description->set_value($description);
+    log_error "Setting experiment description from wiki.", "notice";
+  }
+
   log_error "Done.", "notice", "<";
   return $experiment;
 }
@@ -391,6 +402,10 @@ sub validate {
   # Get unique protocol names and descriptions
   my @unique_protocol_names = (); foreach my $name (keys(%protocols)) { if (!scalar(grep { $_ eq $name } @unique_protocol_names)) { push @unique_protocol_names, $name; } };
   my @unique_protocol_descriptions = (); foreach my $protocols (values(%protocols)) { foreach my $protocol (@$protocols) { if (!scalar(grep { $_ eq $protocol->get_description() } @unique_protocol_descriptions) && ($protocol->get_description() !~ m/^\s*$/)) { push @unique_protocol_descriptions, $protocol->get_description(); } } };
+
+  # Tack on the experiment description
+  my ($experiment_description) = grep { $_->get_name() eq "Experiment Description" } @{$experiment->get_properties()};
+  push @unique_protocol_descriptions, $experiment_description->get_value();
 
   # Attempt to login using wiki credentials
   my $login = $soap_client->getLoginCookie(
