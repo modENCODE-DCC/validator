@@ -79,6 +79,49 @@ value|ModENCODE::Validator::Wiki::FormValues> with a name of C<$key>, then
 C<$value> is added to that form value's list of values, and any types in
 C<$types> are added to that form value's list of types.
 
+=item get_string_values() | set_string_values($values)
+
+Return an array of L<ModENCODE::Validator::Wiki::FormValues> objects for the
+DBFields form that is being fetched. Note that the name C<FormValues> is a
+little misleading; a single L<FormValues|ModENCODE::Validator::Wiki::FormValues>
+object is equivalent to just a single hash key and an array of values like C<{
+$key =E<gt> \@values }>
+
+The string values, unlike the regular values, should only contain a single
+key/value pair, with the full contents of all the values in their original,
+unsplit form. Furthermore, form value types are ignored (and stripped in most
+cases). When setting values, C<$values> should be either an arrayref,
+I<OR> an C<ArrayOfFormValues> (the SOAP type returned by DBFields, which can be
+treated as an arrayref), I<OR> a single
+L<FormValues|ModENCODE::Validator::Wiki::FormValues> object, I<OR> a hashref.
+
+If C<$values> is an arrayref or an C<ArrayOfFormValues>, then each entry must
+either be a L<FormValues|ModENCODE::Validator::Wiki::FormValues> object, in
+which case it is added to this object's list of form values, or it can be the
+SOAP type C<FormValues>, in which case it is passed to the
+L<constructor|ModENCODE::Validator::Wiki::FormValues/new(\%args)> for a
+L<FormValues|ModENCODE::Validator::Wiki::FormValues> object and the resulting
+object is added to the list of form values.
+
+If C<$values> is a single L<FormValues|ModENCODE::Validator::Wiki::FormValues>
+object, then it is set as the sole entry in this object's list of form values.
+
+If C<$values> is a hashref, then each each unique key/value pair is added to
+this object's list of form values using L</add_value($key, $types, $value)>.
+
+=item add_string_value($key, $value)
+
+If this object's list of form values does not contain a L<form
+value|ModENCODE::Validator::Wiki::FormValues> with a name of C<$key>, then a new
+L<FormValues|ModENCODE::Validator::Wiki::FormValues> object is created and added
+to this object's list of form values with a name of C<$key>, types of C<$types>,
+and a value of C<$value>.
+
+If this object's list of string form values does contain a L<form
+value|ModENCODE::Validator::Wiki::FormValues> with a name of C<$key>, then
+C<$value> is added to that form value's list of values, and any types in
+C<$types> are added to that form value's list of types.
+
 =item new(\%args)
 
 Construct a new C<FormData> object for the arguments in C<%args>. The default
