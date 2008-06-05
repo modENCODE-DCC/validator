@@ -14,6 +14,7 @@ use ModENCODE::Parser::IDF;
 use ModENCODE::Chado::XMLWriter;
 use ModENCODE::Validator::IDF_SDRF;
 use ModENCODE::Validator::ModENCODE_Projects;
+use ModENCODE::Validator::ModENCODE_Dates;
 use ModENCODE::Validator::Wiki;
 use ModENCODE::Validator::TermSources;
 use ModENCODE::Validator::CVHandler;
@@ -67,6 +68,15 @@ log_error "Done.", "notice", "<";
     exit;
   }
   $experiment = $project_validator->merge($experiment);
+  log_error "Done.", "notice", "<";
+
+  log_error "Validating presence of valid public release and generation dates...", "notice", ">";
+  my $date_validator = new ModENCODE::Validator::ModENCODE_Dates();
+  if (!$date_validator->validate($experiment)) {
+    log_error "Refusing to continue validation without valid public release or data generation dates.";
+    exit;
+  }
+  $experiment = $date_validator->merge($experiment);
   log_error "Done.", "notice", "<";
 
   log_error "Validating IDF and SDRF vs wiki...", "notice", ">";
