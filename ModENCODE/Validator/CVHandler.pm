@@ -554,6 +554,43 @@ sub get_accession_for_term {
   return $accession;
 }
 
+sub get_cvname_and_accession_for_term : PRIVATE {
+  my ($self, $cvname, $term) = @_;
+  my $cv = $self->get_cv_by_name($cvname);
+  croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
+  if ($cv->{'urltype'} =~ m/^URL_DBFields$/) {
+    my $res = $self->get_url($cv->{'url'} . $term);
+    if ($res->is_success) {
+      if ($res->content =~ m/<name>.*\Q$term\E<\/name>/) {
+        my ($accession) = ($res->content =~ m/<accession>([^<]+)<\/accession>/);
+        if (!length($accession)) {
+          log_error "Unable to find accession for $term in $cvname", "warning";
+          $accession = $term;
+        }
+        return $accession;
+      } else {
+        log_error "Unable to find accession for $term in $cvname";
+      }
+    } else {
+      log_error "Unable to find accession for $term in $cvname";
+    }
+  } elsif ($cv->{'urltype'} =~ m/^URL/i) {
+    if ($self->is_valid_term($cvname, $term)) {
+      return $term; # No accession other than the term for URL-based ontologies
+    } else {
+      return;
+    }
+  }
+  my ($matching_node) = grep { $_->name =~ m/^(.*:)?\Q$term\E$/ || $_->acc =~ m/^(.*:)?\Q$term\E$/ } @{$cv->{'nodes'}};
+  if (!$matching_node) {
+    log_error "Unable to find accession for $term in $cvname" unless $matching_node;
+    return;
+  }
+  my $accession = $matching_node->acc;
+  ($cvname, $accession) = ($accession =~ /^(?:(.*):)?(.*)$/);
+  return ($accession, $cvname);
+}
+
 sub get_term_for_accession {
   my ($self, $cvname, $accession) = @_;
   my $cv = $self->get_cv_by_name($cvname);
@@ -615,7 +652,7 @@ sub term_isa {
   my $cv = $self->get_cv_by_name($cvname);
   return 0 unless $cv->{'graph'};
   $cvname = $cv->{'names'}->[0];
-  my $child_acc = $self->get_accession_for_term($cvname, $term);
+  my ($child_acc, $cvname) = $self->get_cvname_and_accession_for_term($cvname, $term);
   my $parents = $cv->{'graph'}->get_recursive_parent_terms_by_type($cvname . ':' . $child_acc);
   my @matching_parents = grep { $_->name() eq $ancestor } @$parents;
   return (scalar(@matching_parents) ? 1 : 0);
