@@ -357,7 +357,6 @@ sub gff_feature_to_chado_features : PRIVATE {
     $this_seq_region_feature->get_type()->set_name($gff_obj->type()->name());
   }
 
-
   # Build this feature
   my ($feature_start, $feature_end) = ($gff_obj->location()->start(), $gff_obj->location()->end());
 
@@ -425,6 +424,7 @@ sub gff_feature_to_chado_features : PRIVATE {
         # Target features are just placeholders, so only have a name
         $target_feature = new ModENCODE::Chado::Feature({
             'name' => $target_name,
+            'uniquename' => $target_name . "_to_be_loaded",
           });
         my $analysisfeature = new ModENCODE::Chado::AnalysisFeature({
             'feature' => $target_feature,
