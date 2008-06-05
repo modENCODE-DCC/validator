@@ -293,7 +293,7 @@ sub merge {
       $protocol->set_version($protocol_version) if length($protocol_version);
       croak "How did this experiment manage to validate with a wiki-less protocol?!" unless $protocol_def;
       # Protocol description
-      my ($protocol_description) = grep { $_->get_name() =~ /^\s*short *descriptions?$/i } @{$protocol_def->get_values()};
+      my ($protocol_description) = grep { $_->get_name() =~ /^\s*short *descriptions?$/i } @{$protocol_def->get_string_values()};
       if ($protocol_description) {
         $protocol_description = $protocol_description->get_values()->[0];
         $protocol->set_description($protocol_description);
@@ -349,6 +349,10 @@ sub merge {
                     }),
                 })
             );
+            # Set the value to the whole string_value (can't split on commas if there's no types)
+            my ($str_value) = grep { $_->get_name() eq $wiki_protocol_attr->get_name() } @{$protocol_def->get_string_values()};
+            $value = $str_value->get_values()->[0];
+            $protocol_attr->set_value($value);
           }
           $protocol->add_attribute($protocol_attr);
           $rank++;

@@ -115,11 +115,15 @@ my %name             :ATTR( :name<name>, :default<undef> );
 
 # Relationships
 my %values           :ATTR( :get<values>, :default<[]> );
+my %string_values    :ATTR( :get<string_values>, :default<[]> );
 
 sub START {
   my ($self, $ident, $args) = @_;
   if ($args->{'values'}) {
     $self->set_values($args->{'values'});
+  }
+  if ($args->{'string_values'}) {
+    $self->set_string_values($args->{'string_values'});
   }
 }
 
@@ -179,6 +183,59 @@ sub add_value {
       $newFormValues->add_type($type);
     }
     push @{$values{ident $self}}, $newFormValues;
+  }
+}
+
+sub set_string_values {
+  my ($self, $set_values) = @_;
+  $string_values{ident $self} = [];
+  if (defined($set_values)) {
+    if (ref($set_values) eq 'ARRAY' || ref($set_values) eq 'ArrayOfFormValues') {
+      foreach my $value (@$set_values) {
+        if (ref($value) eq 'ModENCODE::Validator::Wiki::FormValues') {
+          foreach my $val (@{$value->get_string_values()}) {
+            $self->add_string_value($value->get_name(), $val);
+          }
+        } elsif (ref($value) eq 'FormValues') {
+          bless($value, 'HASH');
+          $value = new ModENCODE::Validator::Wiki::FormValues($value);
+          foreach my $val (@{$value->get_values()}) {
+            $self->add_string_value($value->get_name(), $val);
+          }
+        } else {
+          croak "Can't add a " . ref($value) . " as a FormValues object";
+        }
+      }
+    } elsif (ref($set_values) eq 'ModENCODE::Validator::Wiki::FormValues') {
+      push @{$string_values{ident $self}}, $set_values;
+    } elsif (ref($set_values) eq 'HASH') {
+      foreach my $valuekey (keys(%$set_values)) {
+        foreach my $value (@{$set_values->{$valuekey}}) {
+          $self->add_string_value($valuekey, $value);
+        }
+      }
+    } else {
+      croak "Can't figure out how to parse a " . ref($set_values) . " into FormValues object(s)"
+    }
+  }
+}
+
+sub add_string_value {
+  my ($self, $valuekey, $value) = @_;
+  my $found = 0;
+  foreach my $formvalues (@{$self->get_string_values()}) {
+    if ($formvalues->get_name eq $valuekey) {
+      $formvalues->add_value($value);
+      $found = 1;
+      last;
+    }
+  }
+  if (!$found) {
+    my $newFormValues = new ModENCODE::Validator::Wiki::FormValues({
+        'name' => $valuekey,
+        'values' => [ $value ],
+      });
+    push @{$string_values{ident $self}}, $newFormValues;
   }
 }
 
