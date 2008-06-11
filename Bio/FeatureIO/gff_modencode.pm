@@ -722,9 +722,8 @@ sub _handle_feature {
 
       print STDERR "Checking $t_id against " . join(", ", keys(%{$self->{'allIDs'}})) . "\n";
       if ($self->{'allIDs'}->{$t_id}) {
-        $self->throw("Validation Error: The ID $t_id occurs in both the the ID or Target attributes in the file, but should be unique");
+        $self->throw("Validation Error: The ID $t_id occurs in both the ID or Target attributes in the file, but should be unique");
       }
-      $self->{'allIDs'}->{$t_id} = 1;
       $self->{'targetIDs'}->{$t_id} = 1;
       $a->strand($strand) if $strand;
       $feat->add_Annotation('Target',$a); 
@@ -743,7 +742,7 @@ sub _handle_feature {
       $self->throw("Validation Error: The ID ${$attr{ID}}[0] occurs more than once in either the ID or Target attributes in the file, but should be unique");
     }
     if ($self->{'targetIDs'}->{${$attr{ID}}[0]}) {
-      $self->throw("Validation Error: The ID ${$attr{ID}}[0] occurs in both the the ID or Target attributes in the file, but should be unique");
+      $self->throw("Validation Error: The ID ${$attr{ID}}[0] occurs in both the ID or Target attributes in the file, but should be unique");
     }
     $self->{'allIDs'}->{${$attr{ID}}[0]} = 1;
 
