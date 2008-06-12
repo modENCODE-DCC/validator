@@ -439,13 +439,13 @@ sub gff_feature_to_chado_features : PRIVATE {
         $features_by_id->{$target_name} = $target_feature;
       }
 
-      $target_location = new ModENCODE::Chado::FeatureLoc({ # vs. target/est
-          'rank' => 0,
-          'srcfeature' => $target_feature,
-          'fmin' => $target_start,
-          'fmax' => $target_end,
-        });
     }
+    $target_location = new ModENCODE::Chado::FeatureLoc({ # vs. target/est
+        'rank' => 0,
+        'srcfeature' => $target_feature,
+        'fmin' => $target_start,
+        'fmax' => $target_end,
+      });
     ##########################################
 
     $feature = new ModENCODE::Chado::Feature({

@@ -689,6 +689,7 @@ sub _handle_feature {
   }
 
   #Handle Target attributes
+  my @target_ids;
   if($attr{Target}){
     my $target_collection = Bio::Annotation::Collection->new();
 
@@ -711,6 +712,7 @@ sub _handle_feature {
            -start     => $tstart,
            -end       => $tend,
       );
+      push @target_ids, $t_id;
 
       if ($strand && $strand eq '+') {
         $strand = 1;
@@ -720,11 +722,6 @@ sub _handle_feature {
         $strand = '';
       }
 
-      print STDERR "Checking $t_id against " . join(", ", keys(%{$self->{'allIDs'}})) . "\n";
-      if ($self->{'allIDs'}->{$t_id}) {
-        $self->throw("Validation Error: The ID $t_id occurs in both the ID or Target attributes in the file, but should be unique");
-      }
-      $self->{'targetIDs'}->{$t_id} = 1;
       $a->strand($strand) if $strand;
       $feat->add_Annotation('Target',$a); 
     }
@@ -741,8 +738,8 @@ sub _handle_feature {
     if ($self->{'allIDs'}->{${$attr{ID}}[0]} && $self->validate()) {
       $self->throw("Validation Error: The ID ${$attr{ID}}[0] occurs more than once in either the ID or Target attributes in the file, but should be unique");
     }
-    if ($self->{'targetIDs'}->{${$attr{ID}}[0]}) {
-      $self->throw("Validation Error: The ID ${$attr{ID}}[0] occurs in both the ID or Target attributes in the file, but should be unique");
+    if (grep { $_ eq ${$attr{ID}}[0] } @target_ids) {
+      $self->throw("Validation Error: The ID ${$attr{ID}}[0] occurs in both the ID or Target attributes in a single row, but should be unique");
     }
     $self->{'allIDs'}->{${$attr{ID}}[0]} = 1;
 
