@@ -365,7 +365,6 @@ sub merge {
   my ($experiment_description) = grep { $_->get_name() eq "Experiment Description" } @{$experiment->get_properties()};
   if ($protocol_defs_by_url{ident $self}->{$experiment_description->get_value()}) {
     my $wiki_experiment_description_def = $protocol_defs_by_url{ident $self}->{$experiment_description->get_value()};
-    use Data::Dumper;
     my ($description) = grep { $_->get_name() eq "short description" } @{$wiki_experiment_description_def->get_string_values()};
     $description = $description->get_values()->[0];
     $experiment_description->set_value($description);
