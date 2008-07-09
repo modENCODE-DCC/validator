@@ -348,7 +348,7 @@ sub BUILD {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = $item[3][0] || 'mage:biosample';
-                                            return $self->create_datum($item[1], $value, undef, $type, $item[3], $item[4], $values);
+                                            return $self->create_datum($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
 
