@@ -794,7 +794,11 @@ sub BUILD {
   # Basic parsing terms            #
   ##################################
   field_value:                          /([^\t"\n\r]*[ "]*)/
-                                        { $return = $1; }
+                                        { 
+                                          my $trimmed_val = $1;
+                                          $trimmed_val =~ s/^\s*|\s*$//g;
+                                          $return = $trimmed_val; 
+                                        }
 
   end_of_file:                          <skip:'[\r\n \t]*'> /([\s\r\n]*)$/
 
