@@ -604,6 +604,7 @@ sub _get_parser : RESTRICTED {
 sub create_datum {
   my ($self, $heading, $value, $name, $type, $termsource, $attributes, $values) = @_;
 
+  $value =~ s/^\s*|\s*$//g;
   my $datum = new ModENCODE::Chado::Data({
       'name' => $name,
       'heading' => $heading,
