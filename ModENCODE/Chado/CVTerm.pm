@@ -135,19 +135,47 @@ use Carp qw(croak);
 use ModENCODE::Chado::DB;
 use ModENCODE::Chado::DBXref;
 
+my %all_cvterms;
+
 # Attributes
-my %name             :ATTR( :name<name>,                :default<''> );
+my %name             :ATTR( :name<name> );
 my %definition       :ATTR( :name<definition>,          :default<''> );
 my %is_obsolete      :ATTR( :name<is_obsolete>,         :default<0> );
 
 # Relationships
-my %cv               :ATTR( :get<cv>,                   :default<undef> );
+my %cv               :ATTR( :get<cv>, :init_arg<cv> );
 my %dbxref           :ATTR( :get<dbxref>,               :default<undef> );
 
-sub BUILD {
+
+sub new {
+  my $self = Class::Std::new(@_);
+  # Caching CVTerms
+  $all_cvterms{$self->get_cv()->get_name()} = {} if (!defined($all_cvterms{$self->get_cv()->get_name()}));
+  $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()} = {} if (!defined($all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}));
+  $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()} = {} if (!defined($all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}));
+
+  my $cached_cvterm = $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}->{$self->get_is_obsolete()};
+
+  if ($cached_cvterm) {
+    # Add any additional info
+    $cached_cvterm->set_definition($self->get_definition()) if ($self->get_definition() && !($cached_cvterm->get_definition()));
+    $cached_cvterm->set_dbxref($self->get_dbxref()) if ($self->get_dbxref() && !($cached_cvterm->get_dbxref()));
+    return $cached_cvterm;
+  } else {
+    $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}->{$self->get_is_obsolete()} = $self;
+  }
+  return $self;
+}
+
+sub get_all_cvterms {
+  return \%all_cvterms;
+}
+
+sub START {
   my ($self, $ident, $args) = @_;
   my $cv = $args->{'cv'};
   if (defined($cv)) {
+    # Redo using the setter to make sure it's a valid CV
     $self->set_cv($cv);
   }
   my $dbxref = $args->{'dbxref'};
@@ -205,10 +233,10 @@ sub clone {
   my ($self) = @_;
   my $clone = new ModENCODE::Chado::CVTerm({
       'name' => $self->get_name(),
+      'cv' => $self->get_cv(),
       'definition' => $self->get_definition(),
       'is_obsolete' => $self->get_is_obsolete(),
     });
-  $clone->set_cv($self->get_cv()->clone()) if $self->get_cv();
   $clone->set_dbxref($self->get_dbxref()->clone()) if $self->get_dbxref();
   return $clone;
 }

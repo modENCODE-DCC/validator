@@ -118,23 +118,61 @@ use strict;
 use Class::Std;
 use Carp qw(croak);
 
+my %all_dbxrefs;
+
 # Attributes
-my %accession        :ATTR( :name<accession>,           :default<''> );
-my %version          :ATTR( :name<version>,             :default<undef> );
+my %accession        :ATTR( :name<accession> );
+my %version          :ATTR( :name<version>,             :default<''> );
 
 # Relationships
-my %db               :ATTR( :get<db>,                   :default<undef> );
+my %db               :ATTR( :get<db>, :init_arg<db> );
 
-sub BUILD {
+use Carp qw(confess);
+
+sub new {
+  confess "What, no accession?" unless $_[1]->{'accession'};
+  my $self = Class::Std::new(@_);
+  # Caching DBXrefs
+  $all_dbxrefs{$self->get_db()->get_name()} = {} if (!defined($all_dbxrefs{$self->get_db()->get_name()}));
+  $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()} = {} if (!defined($all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}));
+  $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()} = {} if (!defined($all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}));
+
+  my $cached_dbxref = $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}->{$self->get_version()};
+  if ($cached_dbxref) {
+    return $cached_dbxref;
+  } else {
+    $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}->{$self->get_version()} = $self;
+  }
+
+  return $self;
+}
+
+#sub set_accession {
+#  my ($self, $accession) = @_;
+#  if (!$self->get_accession()) {
+#    # TODO: Might be able to update position in cache!
+#  }
+#  $accession{ident $self} = $accession;
+#}
+
+sub get_all_dbxrefs {
+  return \%all_dbxrefs;
+}
+
+
+sub START {
   my ($self, $ident, $args) = @_;
   my $db = $args->{'db'};
   if (defined($db)) {
+    # Redo using the setter to make sure it's a valid DB
     $self->set_db($db);
   }
 }
 
 sub set_db {
   my ($self, $db) = @_;
+  use Carp qw(confess);
+  confess "what happen" unless ($db);
   ($db->isa('ModENCODE::Chado::DB')) or croak("Can't add a " . ref($db) . " as a DB.");
   $db{ident $self} = $db;
 }
@@ -170,8 +208,8 @@ sub clone {
   my $clone = new ModENCODE::Chado::DBXref({
       'accession' => $self->get_accession(),
       'version' => $self->get_version(),
+      'db' => $self->get_db()->clone(),
     });
-  $clone->set_db($self->get_db()->clone());
   return $clone;
 }
 

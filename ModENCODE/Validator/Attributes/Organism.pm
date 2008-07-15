@@ -100,6 +100,7 @@ sub validate {
               'cv' => new ModENCODE::Chado::CV({ 'name' => 'CARO' }),
               'dbxref' => new ModENCODE::Chado::DBXref({
                   'db' => new ModENCODE::Chado::DB({'name' => 'CARO'}),
+                  'accession' => 'multi-cellular organism',
                 }),
             }));
       } elsif (length($attribute->get_value())) {

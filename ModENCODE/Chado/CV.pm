@@ -98,9 +98,24 @@ use strict;
 use Class::Std;
 use Carp qw(croak);
 
+my %all_cvs;
+
 # Attributes
-my %name             :ATTR( :name<name>,                :default<''> );
+my %name             :ATTR( :name<name> );
 my %definition       :ATTR( :name<definition>,          :default<''> );
+
+sub new {
+  my $self = Class::Std::new(@_);
+  # Caching CVs
+  my $cached_cv = $all_cvs{$self->get_name()};
+  if ($cached_cv) {
+    $cached_cv->set_definition($self->get_definition()) if ($self->get_definition() && !($cached_cv->get_definition));
+    return $cached_cv;
+  }
+  $all_cvs{$self->get_name()} = $self;
+  return $self;
+}
+
 
 sub to_string {
   my ($self) = @_;

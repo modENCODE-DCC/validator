@@ -105,10 +105,25 @@ use strict;
 use Class::Std;
 use Carp qw(croak);
 
+my %all_dbs;
+
 # Attributes
 my %name             :ATTR( :name<name>,                :default<''> );
 my %url              :ATTR( :name<url>,                 :default<undef> );
 my %description      :ATTR( :name<description>,         :default<undef> );
+
+sub new {
+  my $self = Class::Std::new(@_);
+  # Caching CVs
+  my $cached_db = $all_dbs{$self->get_name()};
+  if ($cached_db) {
+    $cached_db->set_url($self->get_url()) if ($self->get_url() && !($cached_db->get_url));
+    $cached_db->set_description($self->get_description()) if ($self->get_description() && !($cached_db->get_description));
+    return $cached_db;
+  }
+  $all_dbs{$self->get_name()} = $self;
+  return $self;
+}
 
 sub to_string {
   my ($self) = @_;

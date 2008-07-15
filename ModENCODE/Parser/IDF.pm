@@ -188,10 +188,13 @@ sub BUILD {
                                                 my $design_name_dbxref;
                                                 if (length($design_termsource)) {
                                                   $design_name_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
-                                                  $design_name_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $design_termsource })});
+                                                  $design_name_dbxref = new ModENCODE::Chado::DBXref({
+                                                    'db' => new ModENCODE::Chado::DB({'name' => $design_termsource }),
+                                                    'accession' => $design_name,
+                                                  });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                    'value' => $experiment->{'Experimental Design'}->[0],
+                                                    'value' => $design_name,
                                                     'name' => 'Experimental Design',
                                                     'termsource' => $design_name_dbxref,
                                                     'type' => $design_name_type,
@@ -217,7 +220,10 @@ sub BUILD {
                                                 my $factor_type_dbxref;
                                                 if (length($factor_type_termsource)) {
                                                   $factor_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
-                                                  $factor_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $factor_type_termsource})});
+                                                  $factor_type_dbxref = new ModENCODE::Chado::DBXref({
+                                                    'db' => new ModENCODE::Chado::DB({'name' => $factor_type_termsource}),
+                                                    'accession' => $factor_type,
+                                                  });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $factor_type,
@@ -310,7 +316,10 @@ sub BUILD {
                                                 my $person_roles_dbxref;
                                                 if (length($person_roles_termsource)) {
                                                   $person_roles_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
-                                                  $person_roles_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $person_roles_termsource})});
+                                                  $person_roles_dbxref = new ModENCODE::Chado::DBXref({
+                                                      'db' => new ModENCODE::Chado::DB({'name' => $person_roles_termsource}),
+                                                      'accession' => $person_roles,
+                                                    });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $person_roles,
@@ -411,7 +420,10 @@ sub BUILD {
                                                 my $qc_type_dbxref;
                                                 if (length($qc_type_termsource)) {
                                                   $qc_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
-                                                  $qc_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $qc_type_termsource})});
+                                                  $qc_type_dbxref = new ModENCODE::Chado::DBXref({
+                                                      'db' => new ModENCODE::Chado::DB({'name' => $qc_type_termsource}),
+                                                      'accession' => $qc_type,
+                                                    });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $qc_type,
@@ -432,7 +444,10 @@ sub BUILD {
                                                 my $replicate_type_dbxref;
                                                 if (length($replicate_type_termsource)) {
                                                   $replicate_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
-                                                  $replicate_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $replicate_type_termsource})});
+                                                  $replicate_type_dbxref = new ModENCODE::Chado::DBXref({
+                                                      'db' => new ModENCODE::Chado::DB({'name' => $replicate_type_termsource}),
+                                                      'accession' => $replicate_type,
+                                                    });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
                                                     'value' => $replicate_type,
@@ -632,7 +647,10 @@ sub BUILD {
                                                     return;
                                                   } else {
                                                     my $protocol_type_type = new ModENCODE::Chado::CVTerm({'name' => 'OntologyEntry', 'cv' => new ModENCODE::Chado::CV({'name' => 'MO'})});
-                                                    my $protocol_type_dbxref = new ModENCODE::Chado::DBXref({'db' => new ModENCODE::Chado::DB({'name' => $cv})});
+                                                    my $protocol_type_dbxref = new ModENCODE::Chado::DBXref({
+                                                        'db' => new ModENCODE::Chado::DB({'name' => $cv}),
+                                                        'accession' => $name,
+                                                      });
                                                     my $protocol_type_obj = new ModENCODE::Chado::Attribute({
                                                         'heading' => 'Protocol Type',
                                                         'value' => $name,
@@ -739,7 +757,6 @@ sub BUILD {
                                               my $term_source_name = $term_sources->{'Term Source Name'}->[$i];
                                               next unless length($term_source_name);
                                               my $term_source_obj = new ModENCODE::Chado::DB({'name' => $term_source_name});
-                                              my $term_obj = new ModENCODE::Chado::DBXref();
 
                                               my $term_source_file = $term_sources->{'Term Source File'}->[$i];
                                               if (length($term_source_file)) {
@@ -751,11 +768,15 @@ sub BUILD {
                                               }
 
                                               my $term_source_version = $term_sources->{'Term Source Version'}->[$i];
+                                              my $term_source_db = 
+                                              my $term_obj = new ModENCODE::Chado::DBXref({
+                                                'db' => $term_source_obj,
+                                                'accession' => 'N/A',
+                                              });
                                               if (length($term_source_version)) {
                                                 $term_obj->set_version($term_source_version);
                                               }
 
-                                              $term_obj->set_db($term_source_obj);
                                               push @dbxrefs, $term_obj;
                                             }
                                           }
