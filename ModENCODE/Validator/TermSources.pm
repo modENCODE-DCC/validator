@@ -167,75 +167,6 @@ sub merge {
   }
   log_error "Done", "notice", "<";
 
-  if (0) {
-    log_error "Updating Term Source REFs with accessions.", "notice", ">";
-    # experiment_prop (dbxref, type)
-    foreach my $experiment_prop (@{$experiment->get_properties()}) {
-      if ($experiment_prop->get_termsource() && $experiment_prop->get_termsource()->get_db()) {
-        # If the experiment_prop has a dbxref and DB itself
-        # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
-        $experiment_prop->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($experiment_prop->get_termsource()->get_db()->get_name()));
-        if (!$experiment_prop->get_termsource()->get_accession() && $experiment_prop->get_termsource()->get_db()) {
-          # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
-          $experiment_prop->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($experiment_prop->get_termsource()->get_db()->get_name(), $experiment_prop->get_value()));
-        }
-      }
-    }
-    foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-      foreach my $applied_protocol (@$applied_protocol_slots) {
-        my $protocol = $applied_protocol->get_protocol();
-        # protocol (dbxref)
-        if ($protocol->get_termsource()) {
-          $protocol->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($protocol->get_termsource()->get_db()->get_name()));
-        }
-        # protocol attributes (dbxref, type)
-        foreach my $attribute (@{$protocol->get_attributes()}) {
-          if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
-            # If the attribute has a dbxref and DB itself
-            # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
-            $attribute->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
-            if (!$attribute->get_termsource()->get_accession() && $attribute->get_termsource()->get_db()) {
-              # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
-              $attribute->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_termsource()->get_db()->get_name(), $attribute->get_value()));
-            }
-          }
-        }
-        # data (dbxref, type)
-        foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
-          if ($datum->get_termsource() && $datum->get_termsource()->get_db()) {
-            # If the datum has a dbxref and DB itself
-            # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
-            $datum->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($datum->get_termsource()->get_db()->get_name()));
-            if (!$datum->get_termsource()->get_accession() && $datum->get_termsource()->get_db()) {
-              # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
-              $datum->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($datum->get_termsource()->get_db()->get_name(), $datum->get_value()));
-            }
-          }
-          # data features
-  #        if (scalar(@{$datum->get_features()})) {
-  #          foreach my $feature (@{$datum->get_features()}) {
-  #            $self->merge_chado_feature($feature);
-  #          }
-  #        }
-
-          # data attributes (dbxref, type)
-          foreach my $attribute (@{$datum->get_attributes()}) {
-            if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
-              # If the attribute has a dbxref and DB itself
-              # Look up the DB name in CVHandler so the name is consistent with other uses of this DB
-              $attribute->get_termsource()->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($attribute->get_termsource()->get_db()->get_name()));
-              if (!$attribute->get_termsource()->get_accession() && $attribute->get_termsource()->get_db()) {
-                # If the dbxref isn't populated with an accession, and we did manage to pull out a valid DB object, fetch the accession
-                $attribute->get_termsource()->set_accession(ModENCODE::Config::get_cvhandler()->get_accession_for_term($attribute->get_termsource()->get_db()->get_name(), $attribute->get_value()));
-              }
-            }
-          }
-        }
-      }
-    }
-    log_error "Done.", "notice", "<";
-  }
-
   log_error "Making sure that all CV and DB names are consistent.", "notice", ">";
   # First, run through all the CVTerms to catch cases where we have a CVTerm with no DBXref
   my $all_cvterms = ModENCODE::Chado::CVTerm::get_all_cvterms();
@@ -273,6 +204,7 @@ sub merge {
     foreach my $accession (keys(%{$all_dbxrefs->{$db}})) {
       foreach my $version (keys(%{$all_dbxrefs->{$db}->{$accession}})) {
         my $dbxref = $all_dbxrefs->{$db}->{$accession}->{$version};
+        next if $dbxref->get_accession() eq "__ignore";
         my $db_name = $dbxref->get_db()->get_name();
         my $new_db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name);
         $dbxref->set_db($new_db) if $new_db;
@@ -399,129 +331,164 @@ sub validate_chado_feature : PRIVATE {
 sub validate {
   my ($self, $experiment) = @_;
   my $success = 1;
-  $experiment = $experiment->clone(); # Don't do anything to change the experiment passed in
-  log_error "Verifying term sources referenced in the SDRF against the terms they constrain.", "notice", ">";
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      my $protocol = $applied_protocol->get_protocol();
-      # TERM SOURCES
-      # Term sources can apply to protocols, data, and attributes (which is to say pretty much everything)
-      # Protocol
-      if ($protocol->get_termsource() && !($self->is_valid($protocol->get_termsource(), $protocol->get_name()))) {
-        log_error "Term source '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") does not contain a definition for protocol '" . $protocol->get_name() . "'.";
-        $success = 0;
-      }
-      # Protocol attributes
-      foreach my $attribute (@{$protocol->get_attributes()}) {
-        if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-          log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
+  log_error "Validating types and controlled vocabularies.", "notice", ">";
+  # First, run through all the CVTerms to catch cases where we have a CVTerm with no DBXref
+  my $all_cvterms = ModENCODE::Chado::CVTerm::get_all_cvterms();
+  foreach my $cv (keys(%$all_cvterms)) {
+    foreach my $term (keys(%{$all_cvterms->{$cv}})) {
+      foreach my $is_obsolete (keys(%{$all_cvterms->{$cv}->{$term}})) {
+        my $cvterm = $all_cvterms->{$cv}->{$term}->{$is_obsolete};
+        if (!ModENCODE::Config::get_cvhandler()->is_valid_term($cvterm->get_cv()->get_name(), $cvterm->get_name())) {
+          log_error "Type '" . $cvterm->get_cv()->get_name() . ":" . $cvterm->get_name() . "' is not a valid CVTerm.";
           $success = 0;
         }
       }
-      # Data
-      my @data = (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()});
-      foreach my $datum (@data) {
-        if ($datum->get_termsource() && !($self->is_valid($datum->get_termsource(), $datum->get_value()))) {
-          log_error "Term source '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") does not contain a definition for datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
+    }
+  }
+  # Now run through all of the DBXrefs and make sure their DB names are consistent
+  log_error "Validating term sources and term source references.", "notice", ">";
+  my $all_dbxrefs = ModENCODE::Chado::DBXref::get_all_dbxrefs();
+  foreach my $db (keys(%$all_dbxrefs)) {
+    foreach my $accession (keys(%{$all_dbxrefs->{$db}})) {
+      foreach my $version (keys(%{$all_dbxrefs->{$db}->{$accession}})) {
+        my $dbxref = $all_dbxrefs->{$db}->{$accession}->{$version};
+        next if $dbxref->get_accession() eq "__ignore";
+        if (!$self->is_valid($dbxref, $dbxref->get_accession())) {
+          log_error "Termsource '" . $dbxref->get_db()->get_name() . "' (" . $dbxref->get_db()->get_url() . ") is not a valid DBXref.";
           $success = 0;
-        }
-        # Data attributes
-        foreach my $attribute (@{$datum->get_attributes()}) {
-          if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-            log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
-            $success = 0;
-          }
-        }
-        # Features
-        if (scalar(@{$datum->get_features()})) {
-          foreach my $feature (@{$datum->get_features()}) {
-            $success = 0 unless $self->validate_chado_feature($feature);
-          }
         }
       }
     }
   }
   log_error "Done.", "notice", "<";
-  log_error "Make sure all types and term sources are valid.", "notice", ">";
-  # One last run through all CVTerms and DBXrefs to make we know all of them
-  # There is some redundancy here, but it should be plenty fast
-  # experiment_prop (dbxref, type)
-  foreach my $experiment_prop (@{$experiment->get_properties()}) {
-    if ($experiment_prop->get_type()) {
-      if (!ModENCODE::Config::get_cvhandler()->is_valid_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name())) {
-        log_error "Type '" . $experiment_prop->get_type()->get_cv()->get_name() . ":" . $experiment_prop->get_type()->get_name() . "' is not a valid CVTerm for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
-        $success = 0;
-      }
-    }
-    if ($experiment_prop->get_termsource()) {
-      if (!$self->is_valid($experiment_prop->get_termsource(), $experiment_prop->get_value())) {
-        log_error "Termsource '" . $experiment_prop->get_termsource()->get_db()->get_name() . "' (" . $experiment_prop->get_termsource()->get_db()->get_url() . ") is not a valid term source/DBXref for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
-        $success = 0;
-      }
-    }
-  }
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      my $protocol = $applied_protocol->get_protocol();
-      # protocol (dbxref)
-      if ($protocol->get_termsource()) {
-        if (!$self->is_valid($protocol->get_termsource(), $protocol->get_name())) {
-          log_error "Termsource '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for protocol '" . $protocol->get_name() . "'.";
-          $success = 0;
-        }
-      }
-      # protocol attributes (dbxref, type)
-      foreach my $attribute (@{$protocol->get_attributes()}) {
-        if ($attribute->get_type()) {
-          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
-            log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-            $success = 0;
-          }
-        }
-        if ($attribute->get_termsource()) {
-          if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
-            log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-            $success = 0;
-          }
-        }
-      }
-      # data (dbxref, type)
-      foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
-        if ($datum->get_type()) {
-          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name())) {
-            log_error "Type '" . $datum->get_type()->get_cv()->get_name() . ":" . $datum->get_type()->get_name() . "' is not a valid CVTerm for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'.";
-            $success = 0;
-          }
-        }
-        if ($datum->get_termsource()) {
-          if (!$self->is_valid($datum->get_termsource(), $datum->get_value())) {
-            log_error "Termsource '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'";
-            $success = 0;
-          }
-        }
-        # data attributes (dbxref, type)
-        foreach my $attribute (@{$datum->get_attributes()}) {
-          if ($attribute->get_type()) {
-            if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
-              log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-              $success = 0;
-            }
-          }
-          if ($attribute->get_termsource()) {
-            if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
-              log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-              $success = 0;
-            }
-          }
-        }
-      }
-    }
-  }
 
-  log_error "Done.", "notice", "<";
   return $success;
-
 }
+#sub validate {
+#  my ($self, $experiment) = @_;
+#  my $success = 1;
+#  $experiment = $experiment->clone(); # Don't do anything to change the experiment passed in
+#  log_error "Verifying term sources referenced in the SDRF against the terms they constrain.", "notice", ">";
+#  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
+#    foreach my $applied_protocol (@$applied_protocol_slots) {
+#      my $protocol = $applied_protocol->get_protocol();
+#      # TERM SOURCES
+#      # Term sources can apply to protocols, data, and attributes (which is to say pretty much everything)
+#      # Protocol
+#      if ($protocol->get_termsource() && !($self->is_valid($protocol->get_termsource(), $protocol->get_name()))) {
+#        log_error "Term source '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") does not contain a definition for protocol '" . $protocol->get_name() . "'.";
+#        $success = 0;
+#      }
+#      # Protocol attributes
+#      foreach my $attribute (@{$protocol->get_attributes()}) {
+#        if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
+#          log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
+#          $success = 0;
+#        }
+#      }
+#      # Data
+#      my @data = (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()});
+#      foreach my $datum (@data) {
+#        if ($datum->get_termsource() && !($self->is_valid($datum->get_termsource(), $datum->get_value()))) {
+#          log_error "Term source '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") does not contain a definition for datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
+#          $success = 0;
+#        }
+#        # Data attributes
+#        foreach my $attribute (@{$datum->get_attributes()}) {
+#          if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
+#            log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
+#            $success = 0;
+#          }
+#        }
+#        # Features
+#        if (scalar(@{$datum->get_features()})) {
+#          foreach my $feature (@{$datum->get_features()}) {
+#            $success = 0 unless $self->validate_chado_feature($feature);
+#          }
+#        }
+#      }
+#    }
+#  }
+#  log_error "Done.", "notice", "<";
+#  log_error "Make sure all types and term sources are valid.", "notice", ">";
+#  # One last run through all CVTerms and DBXrefs to make we know all of them
+#  # There is some redundancy here, but it should be plenty fast
+#  # experiment_prop (dbxref, type)
+#  foreach my $experiment_prop (@{$experiment->get_properties()}) {
+#    if ($experiment_prop->get_type()) {
+#      if (!ModENCODE::Config::get_cvhandler()->is_valid_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name())) {
+#        log_error "Type '" . $experiment_prop->get_type()->get_cv()->get_name() . ":" . $experiment_prop->get_type()->get_name() . "' is not a valid CVTerm for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
+#        $success = 0;
+#      }
+#    }
+#    if ($experiment_prop->get_termsource()) {
+#      if (!$self->is_valid($experiment_prop->get_termsource(), $experiment_prop->get_value())) {
+#        log_error "Termsource '" . $experiment_prop->get_termsource()->get_db()->get_name() . "' (" . $experiment_prop->get_termsource()->get_db()->get_url() . ") is not a valid term source/DBXref for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
+#        $success = 0;
+#      }
+#    }
+#  }
+#  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
+#    foreach my $applied_protocol (@$applied_protocol_slots) {
+#      my $protocol = $applied_protocol->get_protocol();
+#      # protocol (dbxref)
+#      if ($protocol->get_termsource()) {
+#        if (!$self->is_valid($protocol->get_termsource(), $protocol->get_name())) {
+#          log_error "Termsource '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for protocol '" . $protocol->get_name() . "'.";
+#          $success = 0;
+#        }
+#      }
+#      # protocol attributes (dbxref, type)
+#      foreach my $attribute (@{$protocol->get_attributes()}) {
+#        if ($attribute->get_type()) {
+#          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
+#            log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
+#            $success = 0;
+#          }
+#        }
+#        if ($attribute->get_termsource()) {
+#          if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
+#            log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
+#            $success = 0;
+#          }
+#        }
+#      }
+#      # data (dbxref, type)
+#      foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
+#        if ($datum->get_type()) {
+#          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name())) {
+#            log_error "Type '" . $datum->get_type()->get_cv()->get_name() . ":" . $datum->get_type()->get_name() . "' is not a valid CVTerm for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'.";
+#            $success = 0;
+#          }
+#        }
+#        if ($datum->get_termsource()) {
+#          if (!$self->is_valid($datum->get_termsource(), $datum->get_value())) {
+#            log_error "Termsource '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'";
+#            $success = 0;
+#          }
+#        }
+#        # data attributes (dbxref, type)
+#        foreach my $attribute (@{$datum->get_attributes()}) {
+#          if ($attribute->get_type()) {
+#            if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
+#              log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
+#              $success = 0;
+#            }
+#          }
+#          if ($attribute->get_termsource()) {
+#            if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
+#              log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
+#              $success = 0;
+#            }
+#          }
+#        }
+#      }
+#    }
+#  }
+#
+#  log_error "Done.", "notice", "<";
+#  return $success;
+#}
 
 sub get_term_and_accession : PRIVATE {
   my ($self, $termsource, $term, $accession) = @_;

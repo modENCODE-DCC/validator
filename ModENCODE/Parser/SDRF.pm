@@ -285,7 +285,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[5][0] || 'modtab:file';
+                                            my $type = $item[5][0] || 'xsd:file';
                                             return $self->create_datum($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }
@@ -336,7 +336,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[3][0] || 'mage:biosource';
+                                            my $type = $item[3][0] || 'mged:BioSource';
                                             return $self->create_datum($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
@@ -347,7 +347,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[3][0] || 'mage:biosample';
+                                            my $type = $item[3][0] || 'mged:BioSample';
                                             return $self->create_datum($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
@@ -358,7 +358,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[3][0] || 'mage:biosample';
+                                            my $type = $item[3][0] || 'mged:BioSample';
                                             return $self->create_datum($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
@@ -369,7 +369,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[3][0] || 'mage:labeledextract';
+                                            my $type = $item[3][0] || 'mged:LabeledExtract';
                                             return $self->create_datum($item[1], $value, undef, $type, $item[5], $item[6], $values);
                                           };
                                         }
@@ -381,7 +381,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[5][0] || 'modtab:generic_file';
+                                            my $type = $item[5][0] || 'xsd:file';
                                             return $self->create_datum($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }
@@ -392,7 +392,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[5][0] || 'mage:datafile';
+                                            my $type = $item[5][0] || 'xsd:file';
                                             return $self->create_datum($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }
@@ -403,7 +403,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
-                                            my $type = $item[5][0] || 'mage:datafile';
+                                            my $type = $item[5][0] || 'xsd:file';
                                             return $self->create_datum($item[1], $value, $item[3], $type, undef, $item[7], $values);
                                           };
                                         }

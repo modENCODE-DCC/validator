@@ -771,7 +771,7 @@ sub BUILD {
                                               my $term_source_db = 
                                               my $term_obj = new ModENCODE::Chado::DBXref({
                                                 'db' => $term_source_obj,
-                                                'accession' => 'N/A',
+                                                'accession' => '__ignore',
                                               });
                                               if (length($term_source_version)) {
                                                 $term_obj->set_version($term_source_version);

@@ -113,37 +113,20 @@ log_error "Done.", "notice", "<";
   $data_validator = undef;
 
   # Validate and merge term source (make sure terms exist in CVs, fetch missing accessions, etc.)
-  #log_error "Validating term sources (DBXrefs) against known ontologies.", "notice", ">";
   my $termsource_validator = new ModENCODE::Validator::TermSources();
-  #$termsource_validator->validate($experiment);
-  #log_error "Done.", "notice", "<";
-  log_error "Merging missing accessions and/or term names from known ontologies.", "notice", ">";
-  $termsource_validator->merge($experiment);
+
+  log_error "Validating term sources (DBXrefs) against known ontologies.", "notice", ">";
+  my $success = $termsource_validator->validate($experiment);
   log_error "Done.", "notice", "<";
 
-  my $cvterms = ModENCODE::Chado::CVTerm::get_all_cvterms();
-  foreach my $cv (keys(%$cvterms)) {
-    print "$cv\n";
-    foreach my $term (keys(%{$cvterms->{$cv}})) {
-      print "  $term:";
-      print join(", ", keys(%{$cvterms->{$cv}->{$term}})) . "\n";
-    }
+  if ($success) {
+    log_error "Merging missing accessions and/or term names from known ontologies.", "notice", ">";
+    $termsource_validator->merge($experiment);
+    log_error "Done.", "notice", "<";
+  } else {
+    log_error "Couldn't validate term sources and types!", "error";
+    exit;
   }
-  my $dbxrefs = ModENCODE::Chado::DBXref::get_all_dbxrefs();
-  foreach my $db (keys(%$dbxrefs)) {
-    print "$db\n";
-    if (ref($dbxrefs->{$db}) eq "HASH") {
-      foreach my $accession (keys(%{$dbxrefs->{$db}})) {
-        print "  $accession:";
-        print join(", ", keys(%{$dbxrefs->{$db}->{$accession}})) . "\n";
-      }
-    } else {
-      foreach my $dbxref (@{$dbxrefs->{$db}}) {
-        print "  " . $dbxref->get_db()->get_name() . ":" . $dbxref->get_accession() . "\n";
-      }
-    }
-  }
-
 
   my $writer = new ModENCODE::Chado::XMLWriter();
   my $fh;
