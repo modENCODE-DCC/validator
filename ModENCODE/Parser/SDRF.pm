@@ -449,8 +449,8 @@ sub BUILD {
     term_source:                        term_source_header term_accession_number(?)
                                         {
                                           $return = sub {
-                                            my ($self, $values) = @_;
-                                            return $self->create_termsource($item[1], $item[2], $values);
+                                            my ($self, $values, $default_accession) = @_;
+                                            return $self->create_termsource($item[1], $item[2], $values, $default_accession);
                                           };
                                         }
 
@@ -612,7 +612,7 @@ sub create_datum {
     });
 
   # Map functions to values; order matters (should match datums)
-  my ($termsource) = map { &$_($self, $values) } @$termsource;
+  my ($termsource) = map { &$_($self, $values, $value) } @$termsource;
   my @attributes = map { &$_($self, $values) } @$attributes;
 
   # Term source
@@ -647,7 +647,7 @@ sub create_protocol {
     });
 
   # Map functions to values; order matters (should match inputs)
-  my ($termsource) = map { &$_($self, $values) } @$termsource;
+  my ($termsource) = map { &$_($self, $values, $name) } @$termsource;
   my @attributes = map { &$_($self, $values) } @$attributes;
   my @data = map { &$_($self, $values) } @$data;
 
@@ -680,19 +680,24 @@ sub create_protocol {
 }
 
 sub create_termsource {
-  my ($self, $termsource_ref, $accession, $values) = @_;
+  my ($self, $termsource_ref, $accession, $values, $default_accession) = @_;
   $termsource_ref = &$termsource_ref($self, $values);
   return undef unless length($termsource_ref);
   ($accession) = map { &$_($self, $values) } @$accession;
+  $accession ||= $default_accession;
+
+  unless ($accession) {
+    use Carp qw(confess);
+    confess("No accession provided") unless $accession;
+  }
+
   my $db = new ModENCODE::Chado::DB({
       'name' => $termsource_ref,
     });
   my $dbxref = new ModENCODE::Chado::DBXref({
       'db' => $db,
+      'accession' => $accession,
     });
-  if (length($accession)) {
-    $dbxref->set_accession($accession);
-  }
   return $dbxref;
 }
 
@@ -705,7 +710,7 @@ sub create_attribute {
     });
 
   # Map functions to values; order matters (should match inputs)
-  my ($termsource) = map { &$_($self, $values) } @$termsource;
+  my ($termsource) = map { &$_($self, $values, $value) } @$termsource;
 
   # Type
   if ($type) {
