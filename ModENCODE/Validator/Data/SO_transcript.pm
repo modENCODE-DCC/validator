@@ -121,6 +121,7 @@ sub validate {
     $i++;
     if (length($datum_hash->{'datum'}->get_value())) {
       my $feature = $cached_features{ident $self}->{$datum_hash->{'datum'}->get_value()};
+      next if (!$feature && defined($feature));
       if (!$feature && !defined($feature)) {
         log_error "Fetching feature " . $datum_hash->{'datum'}->get_value() . ", $i of " . scalar(@{$self->get_data()}) . ".", "notice";
         my $feature_id = $self->get_parser_modencode()->get_feature_id_by_name_and_type(
