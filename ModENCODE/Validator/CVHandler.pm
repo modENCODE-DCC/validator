@@ -327,9 +327,15 @@ sub add_cv {
     if (!$res->is_success) { log_error "Couldn't connect to canonical URL source: " . $res->status_line; return 0; }
     ($cvurl) = ($res->content =~ m/<canonical_url>\s*(.*)\s*<\/canonical_url>/) unless $cvurl;
     ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/) unless $cvurltype;
-    if ($cvurl xor $cvurltype) {
-      log_error "Found a URL ($cvurl) OR a URL type ($cvurltype), but not both for ccontrolled vocabulary $cv. Please check DBFieldsConf.php", "error";
+    if ($cvurl && !$cvurltype) {
+      log_error "Found a URL ($cvurl) but not a URL type ($cvurltype), for controlled vocabulary $cv. Please check DBFieldsConf.php", "error";
       return 0;
+    } elsif ($cvurltype && !$cvurl) {
+      log_error "Found a putative URL type ($cvurltype) but not a URL ($cvurl) for controlled vocabulary $cv. Assuming this is a CV we're not meant to check.", "warning";
+      my $newcv = {};
+      $newcv->{'names'} = [ $cv ];
+      $cvs{ident $self}->{$cvurl} = $newcv;
+      return 1;
     }
   }
 
@@ -432,6 +438,9 @@ sub is_valid_term {
     }
     $cv = $self->get_cv_by_name($cvname);
   }
+
+  if ($cv->{'urltype'} eq '') { return 1; } # Nothing doing if there's no associated CV (skip)
+
   if (!$cv->{'terms'}->{$term}) {
     # Haven't validated this term one way or the other
     if ($cv->{'urltype'} =~ m/^URL/) {
@@ -521,6 +530,9 @@ sub get_accession_for_term {
   my ($self, $cvname, $term) = @_;
   my $cv = $self->get_cv_by_name($cvname);
   croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
+
+  if ($cv->{'urltype'} eq '') { return ($term, $cvname); } # Nothing doing if there's no associated CV (skip)
+
   if ($cv->{'urltype'} =~ m/^URL_DBFields$/) {
     my $res = $self->get_url($cv->{'url'} . $term);
     if ($res->is_success) {
@@ -558,6 +570,9 @@ sub get_cvname_and_accession_for_term : PRIVATE {
   my ($self, $cvname, $term) = @_;
   my $cv = $self->get_cv_by_name($cvname);
   croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
+
+  if ($cv->{'urltype'} eq '') { return ($term, $cvname); } # Nothing doing if there's no associated CV (skip)
+
   if ($cv->{'urltype'} =~ m/^URL_DBFields$/) {
     my $res = $self->get_url($cv->{'url'} . $term);
     if ($res->is_success) {
@@ -567,7 +582,7 @@ sub get_cvname_and_accession_for_term : PRIVATE {
           log_error "Unable to find accession for $term in $cvname", "warning";
           $accession = $term;
         }
-        return $accession;
+        return ($accession, $cvname);
       } else {
         log_error "Unable to find accession for $term in $cvname";
       }
@@ -595,6 +610,9 @@ sub get_term_for_accession {
   my ($self, $cvname, $accession) = @_;
   my $cv = $self->get_cv_by_name($cvname);
   croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
+
+  if ($cv->{'urltype'} eq '') { return $accession; } # Nothing doing if there's no associated CV (skip)
+
   if ($cv->{'urltype'} =~ m/^URL_DBFields$/) {
     log_error "Can't get an accession for a CV of type URL_DBFields. Assuming term and accession are the same.", "warning";
   }
