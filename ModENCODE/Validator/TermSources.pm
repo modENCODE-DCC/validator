@@ -345,6 +345,7 @@ sub validate {
       }
     }
   }
+  log_error "Done.", "notice", "<";
   # Now run through all of the DBXrefs and make sure their DB names are consistent
   log_error "Validating term sources and term source references.", "notice", ">";
   my $all_dbxrefs = ModENCODE::Chado::DBXref::get_all_dbxrefs();

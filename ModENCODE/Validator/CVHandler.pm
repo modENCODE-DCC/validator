@@ -322,9 +322,14 @@ sub add_cv {
   croak "Cannot add a new controlled vocabulary without naming it" unless $cv;
 
   if (!$cvurl || !$cvurltype) {
+
+    my $existing_cv = $self->get_cv_by_name($cv);
+    return 1 if ($existing_cv && !$cvurl);
+
     # Fetch canonical URL
-    my $res = $useragent{ident $self}->request(new HTTP::Request('GET' => ModENCODE::Config::get_cfg()->val('wiki', 'cvterm_validator_url') . URI::Escape::uri_escape($cv)));
-    if (!$res->is_success) { log_error "Couldn't connect to canonical URL source: " . $res->status_line; return 0; }
+    my $url = ModENCODE::Config::get_cfg()->val('wiki', 'cvterm_validator_url') . URI::Escape::uri_escape($cv);
+    my $res = $useragent{ident $self}->request(new HTTP::Request('GET' => $url));
+    if (!$res->is_success) { log_error "Couldn't connect to canonical URL source ($url): " . $res->status_line; return 0; }
     ($cvurl) = ($res->content =~ m/<canonical_url>\s*(.*)\s*<\/canonical_url>/) unless $cvurl;
     ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/) unless $cvurltype;
     if ($cvurl && !$cvurltype) {
@@ -336,7 +341,7 @@ sub add_cv {
       $newcv->{'names'} = [ $cv ];
       $cvs{ident $self}->{$cvurl} = $newcv;
       return 1;
-    }
+    }   
   }
 
   if ($cvurl && $cv) {
