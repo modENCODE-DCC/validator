@@ -342,6 +342,20 @@ sub validate {
           log_error "Type '" . $cvterm->get_cv()->get_name() . ":" . $cvterm->get_name() . "' is not a valid CVTerm.";
           $success = 0;
         }
+        my $dbxref = $cvterm->get_dbxref();
+        if (!$dbxref) {
+          # If there's not a dbxref for the cvterm, try to find one
+          # First, get a DB based on the CV name
+          my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($cvterm->get_cv()->get_name());
+          my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cvterm->get_cv()->get_name(), $cvterm->get_name()) if $db;
+          if ($db && $accession) {
+            # If there's a DB and accession, create a new DBXref and add it to the cvterm
+            $cvterm->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+          } else {
+            log_error "Can't find accession for " . $cvterm->get_cv()->get_name . ":" . $cvterm->get_name(), "error";
+            $success = 0;
+          }
+        }
       }
     }
   }
