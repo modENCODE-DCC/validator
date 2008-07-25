@@ -439,9 +439,9 @@ sub validate {
 
       if (!$fetch_results) {
         # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
-        log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-        unshift @data_to_validate, @term_set;
-        sleep 30;
+        log_error "Couldn't retrieve EST by ID; got a blank response from NCBI.", "error";
+        push @data_left, @term_set;
+        sleep 10;
         next;
       }
 
