@@ -33,7 +33,7 @@ relationship type, e.g.:
 The above will be converted into L<ModENCODE::Chado|index> features akin to:
 
   my $gene = new ModENCODE::Chado::Feature({
-    'uniquename' => 'AGene',
+    'uniquename' => 'Analysis_AGene',
     'name' => 'AGene',
     'type' => new ModENCODE::Chado::CVTerm({ 
       'name' => 'gene',
@@ -373,7 +373,7 @@ sub gff_feature_to_chado_features : PRIVATE {
 
   my $gff_id = ($gff_obj->get_Annotations('ID'))[0] || ident($gff_obj);
 
-  my $uniquename = $gff_id . ":gff_obj_" . $gff_obj->type()->name() . "/$feature_start,$feature_end";
+  my $uniquename = $gff_obj->source() . "_" . $gff_id . ":gff_obj_" . $gff_obj->type()->name() . "/$feature_start,$feature_end";
   $uniquename .= ";strand=" . $gff_obj->strand() if defined($gff_obj->strand());
   $uniquename .= ";score=" . $gff_obj->score() if defined($gff_obj->score());
   $uniquename .= ";phase=" . $gff_obj->phase() if defined($gff_obj->phase());
