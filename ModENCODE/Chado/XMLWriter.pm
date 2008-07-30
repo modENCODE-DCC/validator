@@ -289,12 +289,14 @@ sub write_applied_protocol : PRIVATE {
   
   $self->println("<applied_protocol id=\"" . $applied_protocol->get_chadoxml_id() . "\">");
   $self->println("<protocol_id>" . $applied_protocol->get_protocol()->get_chadoxml_id() . "</protocol_id>");
-  foreach my $datum (@{$applied_protocol->get_input_data()}) {
+  for (my $i = 0; $i < scalar(@{$applied_protocol->get_input_data()}); $i++) {
+    my $datum = $applied_protocol->get_input_data()->[$i];
     my $seen_datum = $self->seen_datum($datum, 'input');
     $self->println("<applied_protocol_data>");
     $self->println("<direction>input</direction>");
     if ($seen_datum) {
-      $datum->set_chadoxml_id($seen_datum->get_chadoxml_id);
+      # Replace existing data with this one that is equal
+      $applied_protocol->get_input_data()->[$i] = $seen_datum;
       $self->println("<data_id>" . $seen_datum->get_chadoxml_id() . "</data_id>");
     } else {
       $datum->set_chadoxml_id($self->generate_uniqid("Datum"));
@@ -305,12 +307,14 @@ sub write_applied_protocol : PRIVATE {
     }
     $self->println("</applied_protocol_data>");
   }
-  foreach my $datum (@{$applied_protocol->get_output_data()}) {
+  for (my $i = 0; $i < scalar(@{$applied_protocol->get_output_data()}); $i++) {
+    my $datum = $applied_protocol->get_input_data()->[$i];
     my $seen_datum = $self->seen_datum($datum, 'output');
     $self->println("<applied_protocol_data>");
     $self->println("<direction>output</direction>");
     if ($seen_datum) {
-      $datum->set_chadoxml_id($seen_datum->get_chadoxml_id);
+      # Replace existing data with this one that is equal
+      $applied_protocol->get_input_data()->[$i] = $seen_datum;
       $self->println("<data_id>" . $seen_datum->get_chadoxml_id() . "</data_id>");
     } else {
       $datum->set_chadoxml_id($self->generate_uniqid("Datum"));
