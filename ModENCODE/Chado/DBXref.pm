@@ -188,19 +188,21 @@ sub to_string {
 
 sub equals {
   my ($self, $other) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless ($self->get_accession() eq $other->get_accession() && $self->get_version() eq $other->get_version());
-
-  if ($self->get_db()) {
-    return 0 unless $other->get_db();
-    return 0 unless $self->get_db()->equals($other->get_db());
-  } else {
-    return 0 if $other->get_db();
-  }
-
-
+  return 0 unless $self == $other;
   return 1;
+#  return 0 unless ref($self) eq ref($other);
+#
+#  return 0 unless ($self->get_accession() eq $other->get_accession() && $self->get_version() eq $other->get_version());
+#
+#  if ($self->get_db()) {
+#    return 0 unless $other->get_db();
+#    return 0 unless $self->get_db()->equals($other->get_db());
+#  } else {
+#    return 0 if $other->get_db();
+#  }
+#
+#
+#  return 1;
 }
 
 sub clone {

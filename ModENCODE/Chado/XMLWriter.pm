@@ -749,6 +749,11 @@ sub write_db : PRIVATE {
 
 sub println {
   my ($self, $text) = @_;
+  print {$output_handle{ident $self}} $text . "\n";
+}
+
+sub println_2 {
+  my ($self, $text) = @_;
   my @numincs = ($text =~ m/(<[a-zA-Z])/g);
   my @numdecs = ($text =~ m/(<\/)/g);
   my $diffincs = scalar(@numincs) - scalar(@numdecs);

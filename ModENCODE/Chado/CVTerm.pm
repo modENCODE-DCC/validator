@@ -207,26 +207,29 @@ sub to_string {
 
 sub equals {
   my ($self, $other) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_definition() eq $other->get_definition() && $self->get_is_obsolete() eq $other->get_is_obsolete());
-
-  if ($self->get_cv()) {
-    return 0 unless $other->get_cv();
-    return 0 unless $self->get_cv()->equals($other->get_cv());
-  } else {
-    return 0 if $other->get_cv();
-  }
-
-  if ($self->get_dbxref()) {
-    return 0 unless $other->get_dbxref();
-    return 0 unless $self->get_dbxref()->equals($other->get_dbxref());
-  } else {
-    return 0 if $other->get_dbxref();
-  }
-
-
+  return 0 unless $self == $other;
   return 1;
+
+#  return 0 unless ref($self) eq ref($other);
+#
+#  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_definition() eq $other->get_definition() && $self->get_is_obsolete() eq $other->get_is_obsolete());
+#
+#  if ($self->get_cv()) {
+#    return 0 unless $other->get_cv();
+#    return 0 unless $self->get_cv()->equals($other->get_cv());
+#  } else {
+#    return 0 if $other->get_cv();
+#  }
+#
+#  if ($self->get_dbxref()) {
+#    return 0 unless $other->get_dbxref();
+#    return 0 unless $self->get_dbxref()->equals($other->get_dbxref());
+#  } else {
+#    return 0 if $other->get_dbxref();
+#  }
+#
+#
+#  return 1;
 }
 
 sub clone {

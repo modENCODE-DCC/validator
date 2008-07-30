@@ -421,20 +421,22 @@ sub equals {
     return 0 unless scalar(grep { $_->equals($attribute) } @{$other->get_attributes()});
   }
 
-  if ($self->get_termsource()) {
-    return 0 unless $other->get_termsource();
-    return 0 unless $self->get_termsource()->equals($other->get_termsource());
-  } else {
-    return 0 if $other->get_termsource();
-  }
+  return 0 unless $self->get_termsource() == $other->get_termsource(); # Can do this by ref since we cache CVTerms and DBXrefs for uniqueness
+#  if ($self->get_termsource()) {
+#    return 0 unless $other->get_termsource();
+#    return 0 unless $self->get_termsource()->equals($other->get_termsource());
+#  } else {
+#    return 0 if $other->get_termsource();
+#  }
 
-  if ($self->get_type()) {
-    return 0 unless $other->get_type();
-    return 0 unless $self->get_type()->equals($other->get_type());
-  } else {
-    return 0 if $other->get_type();
-  }
-
+  return 0 unless $self->get_type() == $other->get_type(); # Can do this by ref since we cache CVTerms and DBXrefs for uniqueness
+#  if ($self->get_type()) {
+#    return 0 unless $other->get_type();
+#    return 0 unless $self->get_type()->equals($other->get_type());
+#  } else {
+#    return 0 if $other->get_type();
+#  }
+#
 #  my @features = @{$self->get_features()};
 #  return 0 unless scalar(@features) == scalar(@{$other->get_features()});
 #  foreach my $feature (@features) {
