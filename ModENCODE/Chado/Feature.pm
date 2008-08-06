@@ -238,6 +238,8 @@ use Class::Std;
 use Carp qw(carp croak);
 use ModENCODE::ErrorHandler qw(log_error);
 
+my @all_features;
+
 # Attributes
 my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
 my %name             :ATTR( :name<name>,                :default<undef> );
@@ -256,6 +258,17 @@ my %locations        :ATTR( :get<locations>,            :default<[]> );
 my %relationships    :ATTR( :get<relationships>,        :default<[]> );
 my %dbxrefs          :ATTR( :get<dbxrefs>,              :default<[]> );
 my %primary_dbxref   :ATTR( :get<primary_dbxref>,       :default<undef> );
+
+sub new {
+  my $self = Class::Std::new(@_);
+  # Cache features
+  push @all_features, $self;
+  return $self;
+}
+
+sub get_all_features {
+  return \@all_features;
+}
 
 sub START {
   my ($self, $ident, $args) = @_;
