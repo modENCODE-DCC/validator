@@ -128,6 +128,7 @@ log_error "Done.", "notice", "<";
     exit;
   }
 
+  log_error "Writing ChadoXML for experiment.", "notice", ">";
   my $writer = new ModENCODE::Chado::XMLWriter();
   my $fh;
   if ($ARGV[1]) {
@@ -141,6 +142,7 @@ log_error "Done.", "notice", "<";
   }
   $writer->write_chadoxml($experiment);
   close $fh if $fh;
+  log_error "Done.", "notice", "<";
 #print $experiment->to_string();
 
 
