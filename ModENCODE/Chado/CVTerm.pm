@@ -138,6 +138,7 @@ use ModENCODE::Chado::DBXref;
 my %all_cvterms;
 
 # Attributes
+my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
 my %name             :ATTR( :name<name> );
 my %definition       :ATTR( :name<definition>,          :default<''> );
 my %is_obsolete      :ATTR( :name<is_obsolete>,         :default<0> );

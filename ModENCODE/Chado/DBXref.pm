@@ -121,6 +121,7 @@ use Carp qw(croak);
 my %all_dbxrefs;
 
 # Attributes
+my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
 my %accession        :ATTR( :name<accession> );
 my %version          :ATTR( :name<version>,             :default<''> );
 
