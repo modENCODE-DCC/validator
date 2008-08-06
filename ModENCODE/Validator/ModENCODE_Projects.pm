@@ -4,14 +4,14 @@ package ModENCODE::Validator::ModENCODE_Projects;
 =head1 NAME
 
 ModENCODE::Validator::ModENCODE_Projects - modENCODE-specific validator to
-ensure that a C<Project Group> and C<Project Subgroup> field exist in the IDF
+ensure that a C<Project> and C<Lab> field exist in the IDF
 and that they are populated with valid project names.
 
 =head1 SYNOPSIS
 
 This class can be used to validate a BIR-TAB
 L<Experiment|ModENCODE::Chado::Experiment> object to make sure that experiment
-properties (from the IDF) exist for C<Project Group> and C<Project Subgroup>.
+properties (from the IDF) exist for C<Project> and C<Lab>.
 The values of these fields are then checked against the projects configured in
 the ini-file loaded by L<ModENCODE::Config>. The capitalization of the group
 names is also normalized to match that in the ini-file.
@@ -25,10 +25,10 @@ create a section like so:
   url=http://www.modencode.org/AProject.html
   subgroups=AProject, SubProject1, SubProject2
 
-A C<Project Group> of "AProject" and a C<Project Subgroup> of "Subproject1" is
+A C<Project> of "AProject" and a C<Lab> of "Subproject1" is
 then valid. In most cases, you'll want to repeat the project group in the list
 of subgroups, since the main group will be making at least some submissions. The
-other reason to do this is that if no C<Project Subgroup> is specified in the
+other reason to do this is that if no C<Lab> is specified in the
 IDF, the subgroup will default to be the same as the main group. If you don't
 have the main group in the list of subgroups, then not specifying a subgroup
 will cause validation to fail.
@@ -55,8 +55,8 @@ To call the validator on an L<Experiment|ModENCODE::Chado::Experiment> object:
 
 Ensures that the L<Experiment|ModENCODE::Chado::Experiment> specified in
 C<$experiment> contains L<experiment
-properties|ModENCODE::Chado::ExperimentProp> named C<Project Group> and
-optionally C<Project Subgroup>. The values of these properties are then
+properties|ModENCODE::Chado::ExperimentProp> named C<Project> and
+optionally C<Lab>. The values of these properties are then
 checked against the projects configured in the ini-file loaded by
 L<ModENCODE::Config> to make sure that a valid group and subgroup have been
 specified.
@@ -64,7 +64,7 @@ specified.
 =item merge($experiment)
 
 Updates the L<experiment properties|ModENCODE::Chado::ExperimentProp> named
-C<Project Group> and C<Project Subgroup> for the the
+C<Project> and C<Lab> for the the
 L<Experiment|ModENCODE::Chado::Experiment> specified in C<$experiment> to match
 the project groups and subgroups specified in the ini-file loaded by
 L<ModENCODE::Config> so that the capitalization is consistent.
@@ -112,8 +112,8 @@ sub BUILD {
 
 sub validate {
   my ($self, $experiment) = @_;
-  my ($group) = grep { $_->get_name() eq "Project Group" } @{$experiment->get_properties()};
-  my ($subgroup) = grep { $_->get_name() eq "Project Subgroup" } @{$experiment->get_properties()};
+  my ($group) = grep { $_->get_name() eq "Project" } @{$experiment->get_properties()};
+  my ($subgroup) = grep { $_->get_name() eq "Lab" } @{$experiment->get_properties()};
 
   $group = $group->clone() if $group;
   $subgroup = $subgroup->clone() if $subgroup;
@@ -134,7 +134,7 @@ sub validate {
   if (!$subgroup || !length($subgroup->get_value())) {
     log_error "No modENCODE project sub-group defined - defaulting to main group '$matching_group_name'.", "warning";
     $subgroup = $group->clone();
-    $subgroup->set_name('Project Subgroup');
+    $subgroup->set_name('Lab');
   }
   my $subgroup_name = $subgroup->get_value();
   my ($matching_subgroup_name) = grep { $_ =~ m/^\s*\Q$subgroup_name\E\s*$/i } @{$project_names{ident $self}->{$matching_group_name}->{'subgroups'}};
@@ -148,8 +148,8 @@ sub validate {
 sub merge {
   my ($self, $experiment) = @_;
   $experiment = $experiment->clone();
-  my ($group) = grep { $_->get_name() eq "Project Group" } @{$experiment->get_properties()};
-  my ($subgroup) = grep { $_->get_name() eq "Project Subgroup" } @{$experiment->get_properties()};
+  my ($group) = grep { $_->get_name() eq "Project" } @{$experiment->get_properties()};
+  my ($subgroup) = grep { $_->get_name() eq "Lab" } @{$experiment->get_properties()};
   my $group_name = $group->get_value() if $group;
   if (!length($group_name)) {
     log_error "Can't find any modENCODE project group - should be defined in the IDF.";
@@ -165,7 +165,7 @@ sub merge {
   if (!$subgroup || !length($subgroup->get_value())) {
     log_error "No modENCODE project sub-group defined - defaulting to main group '$matching_group_name'.", "warning";
     $subgroup = $group->clone();
-    $subgroup->set_name('Project Subgroup');
+    $subgroup->set_name('Lab');
     $experiment->add_property($subgroup);
   }
   my $subgroup_name = $subgroup->get_value();
@@ -178,7 +178,7 @@ sub merge {
   my $group_url = new ModENCODE::Chado::ExperimentProp({
       'value' => $project_names{ident $self}->{$matching_group_name}->{'url'},
       'type' => new ModENCODE::Chado::CVTerm({'name' => 'anyURI', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
-      'name' => 'Project Group URL',
+      'name' => 'Project URL',
     });
   $experiment->add_property($group_url);
   return $experiment;

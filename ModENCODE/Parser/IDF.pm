@@ -522,18 +522,18 @@ sub BUILD {
                                                 'name' => 'PubMed ID',
                                               });
                                           }
-                                          if (defined($optional_metadata->{'Project Group'}) && length($optional_metadata->{'Project Group'}->[0])) {
+                                          if (defined($optional_metadata->{'Project'}) && length($optional_metadata->{'Project'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                'value' => $optional_metadata->{'Project Group'}->[0],
+                                                'value' => $optional_metadata->{'Project'}->[0],
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
-                                                'name' => 'Project Group',
+                                                'name' => 'Project',
                                               });
                                           }
-                                          if (defined($optional_metadata->{'Project Subgroup'}) && length($optional_metadata->{'Project Subgroup'}->[0])) {
+                                          if (defined($optional_metadata->{'Lab'}) && length($optional_metadata->{'Lab'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                'value' => $optional_metadata->{'Project Subgroup'}->[0],
+                                                'value' => $optional_metadata->{'Lab'}->[0],
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
-                                                'name' => 'Project Subgroup',
+                                                'name' => 'Lab',
                                               });
                                           }
                                           if (defined($optional_metadata->{'Experiment Description'}) && length($optional_metadata->{'Experiment Description'}->[0])) {
@@ -561,17 +561,17 @@ sub BUILD {
                                           push @{$optional_metadata->{'Experiment Description'}}, @{$item[4]};
                                         }
   submitting_project:                   submitting_project_group(?) submitting_project_subgroup(?)
-  submitting_project_group_heading:     /Project *Group/i
+  submitting_project_group_heading:     /Project *Group|Project(?!\s*Subgroup)/i
   submitting_project_group:             <skip:'[\r\n \t]*'> submitting_project_group_heading <skip:'[ "]*\t[ "]*'> field_value(?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
-                                          $optional_metadata->{'Project Group'} = [] if (!defined($optional_metadata->{'Project Group'}));
-                                          push @{$optional_metadata->{'Project Group'}}, @{$item[4]};
+                                          $optional_metadata->{'Project'} = [] if (!defined($optional_metadata->{'Project'}));
+                                          push @{$optional_metadata->{'Project'}}, @{$item[4]};
                                         }
-  submitting_project_subgroup_heading:  /Project *Subgroup/i
+  submitting_project_subgroup_heading:  /Project *Subgroup|Lab/i
   submitting_project_subgroup:          <skip:'[\r\n \t]*'> submitting_project_subgroup_heading <skip:'[ "]*\t[ "]*'> field_value(?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
-                                          $optional_metadata->{'Project Subgroup'} = [] if (!defined($optional_metadata->{'Project Subgroup'}));
-                                          push @{$optional_metadata->{'Project Subgroup'}}, @{$item[4]};
+                                          $optional_metadata->{'Lab'} = [] if (!defined($optional_metadata->{'Lab'}));
+                                          push @{$optional_metadata->{'Lab'}}, @{$item[4]};
                                         }
 
   date_of_experiment_heading:           /Date *of *Experiment/i
