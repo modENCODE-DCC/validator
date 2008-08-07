@@ -547,7 +547,9 @@ sub _handle_feature {
   my($seq,$source,$type,$start,$end,$score,$strand,$phase,$attribute_string) = split /\t/, $feature_string;
 
   $feat->seq_id($seq);
-  $feat->source($source);
+  my $src = Bio::Annotation::SimpleValue->new();
+  $src->value($source);
+  $feat->source($src);
   $feat->start($start) unless $start eq '.';
   $feat->end($end) unless $end eq '.';
   $feat->strand($strand eq '+' ? 1 : $strand eq '-' ? -1 : 0);
