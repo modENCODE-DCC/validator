@@ -497,6 +497,11 @@ sub validate {
 
       # PROTOCOL TYPE
       my ($wiki_protocol_type_def) = grep { $_->get_name() =~ /^\s*protocol *types?$/i } @{$wiki_protocol_def->get_values()};
+      if (!$wiki_protocol_type_def) {
+	  log_error "No protocol type defined in the wiki for '" . $protocol->get_name() . "'", "error";
+	  $success = 0;
+	  next;
+      }
       my @wiki_protocol_types = @{$wiki_protocol_type_def->get_values()};
       for (my $i = 0; $i < scalar(@wiki_protocol_types); $i++) { $wiki_protocol_types[$i] =~ s/^\s*|\s*$//; }
       my @idf_protocol_types = grep { $_->get_heading() =~ /^\s*Protocol *Types?$/i } @{$protocol->get_attributes()};
