@@ -296,6 +296,10 @@ sub validate {
       $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
       close GFF;
       log_error "Done.", "notice", "<";
+    } else {
+      foreach my $feature (values(%{$cached_gff_features{ident $self}->{$gff_file}})) {
+        $datum->add_feature($feature);
+      }
     }
 
     $datum_hash->{'merged_datum'} = $datum;
