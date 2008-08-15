@@ -20,6 +20,7 @@ to store continuous data for the BIR-TAB Chado extension, and are used for
 Wiggle format, BED format, and others.
 
 NOT YET FINISHED
+This needs to be modified to handle the BED subtype
 
 =cut
 use strict;
@@ -130,7 +131,7 @@ sub validate {
       close FH;
       $wiggle->set_data($wiggle_data);
       $datum->add_wiggle_data($wiggle) if ($datum_success);
-      $cached_wig_files{ident $self}->{$datum->get_value()} = $wiggle_data;
+      $cached_wig_files{ident $self}->{$datum->get_value()} = $wiggle;
       log_error "Done: $filename", 'notice' , '<';
     }
     $datum_hash->{'is_valid'} = $datum_success;

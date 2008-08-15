@@ -129,8 +129,10 @@ my %validators                  :ATTR( :get<validators>,                :default
 sub BUILD {
   my ($self, $ident, $args) = @_;
   # TODO: Figure out how to be more canonical about CV names w/ respect to validation function identifiers
+  $validators{$ident}->{'modencode:transcriptional_fragment_map'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
+  $validators{$ident}->{'modencode:Signal_Graph_File'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:accession_number_list_data_file'} = new ModENCODE::Validator::Data::dbEST_acc_list({ 'data_validator' => $self });

@@ -90,8 +90,12 @@ use Carp qw(croak carp);
 use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
+my %cached_wig_files            :ATTR( :default<{}> );
+
+
 sub validate {
   my ($self) = @_;
+  log_error "Validating attached BED file(s).", "notice", ">";
   my $success = 1;
   foreach my $datum_hash (@{$self->get_data()}) {
     my $datum_success = 1;
@@ -103,6 +107,8 @@ sub validate {
       log_error "Cannot find BED file " . $datum->get_value() . " for column " . $datum->get_heading();
       $datum_success = 0;
       $success = 0;
+    } elsif ($cached_wig_files{ident $self}->{$datum->get_value()}) {
+      $datum->add_wiggle_data($cached_wig_files{ident $self}->{$datum->get_value()}); 
     } else {
       open FH, '<', $datum->get_value();
       my $linenum = 0;
@@ -111,6 +117,7 @@ sub validate {
       my $wiggle = new ModENCODE::Chado::Wiggle_Data({
           'name' => $filename,
         });
+      log_error "validating: $filename", 'notice' ;
       my $wiggle_data = "";
       while (defined(my $line = <FH>)) {
         $linenum++;
@@ -129,10 +136,12 @@ sub validate {
       close FH;
       $wiggle->set_data($wiggle_data);
       $datum->add_wiggle_data($wiggle) if ($datum_success);
+      $cached_wig_files{ident $self}->{$datum->get_value()} = $wiggle;
     }
     $datum_hash->{'is_valid'} = $datum_success;
     $datum_hash->{'merged_datum'} = $datum;
   }
+  log_error "Done.", "notice", "<";
   return $success;
 }
 
