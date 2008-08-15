@@ -29,10 +29,7 @@ use base qw(ModENCODE::Validator::Data::Data);
 use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
-#sub validate {
-#  my ($self) = @_;
-#  return 0;
-#}
+my %cached_wig_files            :ATTR( :default<{}> );
 
 sub validate {
   my ($self) = @_;
@@ -51,6 +48,8 @@ sub validate {
       log_error "Cannot find WIG file " . $datum->get_value() . " for column " . $datum->get_heading();
       $datum_success = 0;
       $success = 0;
+    } elsif ($cached_wig_files{ident $self}->{$datum->get_value()}) {
+      $datum->add_wiggle_data($cached_wig_files{ident $self}->{$datum->get_value()});
     } else {
       open FH, '<', $datum->get_value();
       my $linenum = 0;
@@ -131,6 +130,7 @@ sub validate {
       close FH;
       $wiggle->set_data($wiggle_data);
       $datum->add_wiggle_data($wiggle) if ($datum_success);
+      $cached_wig_files{ident $self}->{$datum->get_value()} = $wiggle_data;
       log_error "Done: $filename", 'notice' , '<';
     }
     $datum_hash->{'is_valid'} = $datum_success;
