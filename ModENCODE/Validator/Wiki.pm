@@ -185,13 +185,18 @@ sub BUILD {
 
 sub merge {
   my ($self, $experiment) = @_;
-  $experiment = $experiment->clone();
+  #$experiment = $experiment->clone();
+  my $anonymous_data_num = 0;
   log_error "(Re)validating experiment vs. wiki:", "notice", ">";
   $self->validate($experiment) or croak "Can't merge wiki data if it doesn't validate!"; # Cache all the protocol definitions and stuff if they aren't already
   log_error "Done.", "notice", "<";
 
   log_error "Adding types from the wiki to input and output parameters.", "notice", ">";
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
+  #foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
+  my $all_applied_protocol_slots = $experiment->get_applied_protocol_slots();
+  for (my $i = 0; $i < scalar(@$all_applied_protocol_slots); $i++) {
+    my $applied_protocol_slots = $all_applied_protocol_slots->[$i];
+    my $potential_next_applied_protocol_slots = $all_applied_protocol_slots->[$i+1] if ($i+1 < scalar(@$all_applied_protocol_slots));
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
       my $wiki_protocol_def = $protocol_defs_by_url{ident $self}->{$protocol->get_description()};
@@ -221,7 +226,7 @@ sub merge {
             # it will be used to tie together applied protocols
             next;
           } else {
-            log_error "input term '" . $input_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.", "warning" if ($input_datum->get_name());
+            log_error "input term of " . $applied_protocol->get_protocol()->get_name() . "'" . $input_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.", "warning" if ($input_datum->get_name());
           }
         }
         if (!$wiki_input_def) {
@@ -251,6 +256,46 @@ sub merge {
         $term =~ s/^\s*|\s*$//g;
         push(@$output_type_defs_terms, { 'term' => $term, 'cv' => $cv, 'name' => $name });
       }
+      if (scalar(@{$applied_protocol->get_output_data()}) == (scalar(@$output_type_defs_terms)-1)) {
+        # Really special case where there's a single _extra_ anonymous datum implied by the wiki (type but no name)
+        # AND no unnamed (anonymous_data) column in the SDRF AND named columns in the SDRF so an anonymous datum
+        # was not automatically created
+        my $type = new ModENCODE::Chado::CVTerm({
+            'name' => 'anonymous_datum',
+            'cv' => new ModENCODE::Chado::CV({
+                'name' => 'modencode'
+              }),
+          });
+        my $anonymous_datum = new ModENCODE::Chado::Data({
+            'heading' => "Anonymous Extra Datum #" . $anonymous_data_num++,
+            'type' => $type,
+            'anonymous' => 1,
+          });
+        $applied_protocol->add_output_datum($anonymous_datum);
+        log_error "Creating extra anonymous datum " . $anonymous_datum->get_heading() . " as output for " . $applied_protocol->get_protocol()->get_name() . ".", "warning";
+        my @next_applied_protocols;
+        if ($potential_next_applied_protocol_slots) {
+          foreach my $potential_next_applied_protocol (@$potential_next_applied_protocol_slots) {
+            foreach my $current_output_datum (@{$applied_protocol->get_output_data()}) {
+              # TODO: Make data be the same in-memory REF here so we don't have to check the contents of the datums
+              if (
+                !scalar(@{$potential_next_applied_protocol->get_input_data()}) ||
+                scalar(grep { 
+                  $_->get_name() eq $current_output_datum->get_name() &&
+                  $_->get_heading() eq $current_output_datum->get_heading() &&
+                  $_->get_value() eq $current_output_datum->get_value()
+                  } @{$potential_next_applied_protocol->get_input_data()})
+              ) {
+                $potential_next_applied_protocol->add_input_datum($anonymous_datum);
+                log_error "Creating extra anonymous datum " . $anonymous_datum->get_heading() . " as input for " . $potential_next_applied_protocol->get_protocol()->get_name() . ".", "warning";
+                last;
+              }
+            }
+          }
+        }
+      }
+
+
       # Since we've validated, there can be at most one anonymous datum
       foreach my $output_datum (@{$applied_protocol->get_output_data()}) {
         my ($wiki_output_def) = grep { $_->{'name'} eq $output_datum->get_name() } @$output_type_defs_terms;
@@ -261,7 +306,7 @@ sub merge {
             # it will be used to tie together applied protocols
             next;
           } else {
-            log_error "output term '" . $output_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.", "warning" if ($output_datum->get_name());
+            log_error "output term " . $applied_protocol->get_protocol()->get_name() . "'" . $output_datum->get_name() . "' is named in the IDF/SDRF, but not in the wiki.", "warning" if ($output_datum->get_name());
           }
         }
         if (!$wiki_output_def) {
@@ -270,6 +315,7 @@ sub merge {
         my $cv = $wiki_output_def->{'cv'};
         my $term = $wiki_output_def->{'term'};
         my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+        log_error "Setting type of anonymous datum " . $output_datum->get_heading() . " to $canonical_cvname:$term", "notice" if ($output_datum->is_anonymous());
         $output_datum->set_type(new ModENCODE::Chado::CVTerm({
               'name' => $term,
               'cv' => new ModENCODE::Chado::CV({
@@ -570,6 +616,23 @@ sub validate {
         $success = 0;
         next;
       }
+      # Really special case where there's a single _extra_ anonymous datum implied by the wiki (type but no name)
+      # AND no unnamed (anonymous_data) column in the SDRF AND named columns in the SDRF so an anonymous datum
+      # was not automatically created
+      if (
+        # No unnamed columns in SDRF
+        scalar(@anonymous_data) == 0
+        && 
+        # Only one extra type in wiki
+        (scalar(@$input_type_defs_terms)-1) == scalar(@{$applied_protocol->get_input_data()})
+        &&
+        # Only one unnamed type in wiki
+        scalar(grep { $_->{'name'} eq '' } @$input_type_defs_terms) == 1
+      ) {
+        my ($missing_type) = grep { $_->{'name'} eq '' } @$input_type_defs_terms;
+        log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra input column that is not shown in the SDRF.", "warning";
+        next;
+      }
       # Fail if the number of inputs in the SDRF is not equal to the number in the wiki
       if (
         scalar(@$input_type_defs_terms) != scalar(@{$applied_protocol->get_input_data()}) - scalar(@anonymous_data) # Everything but an un-needed anonymous one
@@ -622,6 +685,24 @@ sub validate {
         $success = 0;
         next;
       }
+      # Really special case where there's a single _extra_ anonymous datum implied by the wiki (type but no name)
+      # AND no unnamed (anonymous_data) column in the SDRF AND named columns in the SDRF so an anonymous datum
+      # was not automatically created
+      if (
+        # No unnamed columns in SDRF
+        scalar(@anonymous_data) == 0
+        && 
+        # Only one extra type in wiki
+        (scalar(@$output_type_defs_terms)-1) == scalar(@{$applied_protocol->get_output_data()})
+        &&
+        # Only one unnamed type in wiki
+        scalar(grep { $_->{'name'} eq '' } @$output_type_defs_terms) == 1
+      ) {
+        my ($missing_type) = grep { $_->{'name'} eq '' } @$output_type_defs_terms;
+        log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra output column that is not shown in the SDRF.", "warning";
+        next;
+      }
+
       # Fail if the number of outputs in the SDRF is not equal to the number in the wiki
       if (
         scalar(@$output_type_defs_terms) != scalar(@{$applied_protocol->get_output_data()}) - scalar(@anonymous_data) # Everything but an un-needed anonymous one
