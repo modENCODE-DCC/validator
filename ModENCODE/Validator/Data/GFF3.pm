@@ -439,7 +439,7 @@ sub gff_feature_to_chado_features : PRIVATE {
             'analysis' => $analysis,
           });
         if ($gff_obj->score()) {
-          my $rawscore = $gff_obj->score()->value();
+          my $rawscore = ref($gff_obj->score) ? $gff_obj->score()->value() : $gff_obj->score();
           $rawscore = undef if ($rawscore eq '.' || $rawscore eq '');
           $analysisfeature->set_rawscore($rawscore);
         }
@@ -489,7 +489,7 @@ sub gff_feature_to_chado_features : PRIVATE {
           'analysis' => $analysis,
         });
       if ($gff_obj->score()) {
-        my $rawscore = $gff_obj->score()->value();
+	my $rawscore = ref($gff_obj->score) ? $gff_obj->score()->value() : $gff_obj->score();
         $rawscore = undef if ($rawscore eq '.' || $rawscore eq '');
         $analysisfeature->set_rawscore($rawscore);
       }
