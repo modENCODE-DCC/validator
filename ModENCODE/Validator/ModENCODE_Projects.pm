@@ -147,7 +147,7 @@ sub validate {
 
 sub merge {
   my ($self, $experiment) = @_;
-  $experiment = $experiment->clone();
+  #$experiment = $experiment->clone();
   my ($group) = grep { $_->get_name() eq "Project" } @{$experiment->get_properties()};
   my ($subgroup) = grep { $_->get_name() eq "Lab" } @{$experiment->get_properties()};
   my $group_name = $group->get_value() if $group;

@@ -159,7 +159,7 @@ sub validate {
 
 sub merge {
   my ($self, $experiment) = @_;
-  $experiment = $experiment->clone();
+  #$experiment = $experiment->clone();
   my ($public_release_date) = grep { $_->get_name() eq "Public Release Date" } @{$experiment->get_properties()};
   my ($date_of_experiment) = grep { $_->get_name() eq "Date of Experiment" } @{$experiment->get_properties()};
 

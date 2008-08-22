@@ -145,7 +145,7 @@ sub BUILD {
 
 sub merge {
   my ($self, $experiment) = @_;
-  $experiment = $experiment->clone();
+  #$experiment = $experiment->clone();
 
   log_error "Merging data elements into experiment object.", "notice", ">";
   
