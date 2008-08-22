@@ -197,7 +197,7 @@ my %termsources      :ATTR( :name<termsources> );
 
 sub merge {
   my ($self, $sdrf_experiment) = @_;
-  $sdrf_experiment = $sdrf_experiment->clone(); # Don't actually change the SDRF that was passed in
+  #$sdrf_experiment = $sdrf_experiment->clone(); # Don't actually change the SDRF that was passed in
   croak "Can't merge IDF & SDRF unless they validated" unless $self->validate($sdrf_experiment);
 
   # Update IDF experiment properties with full term sources instead of just term source names
@@ -241,15 +241,18 @@ sub merge {
     for (my $i = 0; $i < scalar(@idf_params); $i++) {
       $idf_params[$i] =~ s/^\s*|\s*$//g;
     }
-    my @remove_these_data;
+    my @data_to_remove;
     foreach my $datum (@{$sdrf_applied_protocol->get_input_data()}) {
       if (defined($datum->get_name()) && length($datum->get_name())) {
         my @matching_params = grep { $_ eq $datum->get_name() } @idf_params;;
         if (!scalar(@matching_params)) {
           log_error "Removing datum '" . $datum->get_name . "' as input from '" . $sdrf_protocol->get_name() . "'; not found in IDF's Protocol Parameters.", "warning";
-          $sdrf_applied_protocol->remove_input_datum($datum);
+          push @data_to_remove, $datum;
         }
       }
+    }
+    foreach my $datum (@data_to_remove) {
+      $sdrf_applied_protocol->remove_input_datum($datum);
     }
   }
 
