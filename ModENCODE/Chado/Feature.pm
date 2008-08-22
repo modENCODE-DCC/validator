@@ -326,7 +326,7 @@ sub add_dbxref {
 
 sub set_primary_dbxref {
   my ($self, $dbxref) = @_;
-  ($dbxref->isa('ModENCODE::Chado::DBXref')) or Carp::confess("Can't add a " . ref($dbxref) . " as a primary_dbxref.");
+  ($dbxref->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($dbxref) . " as a primary_dbxref.");
   my ($matching_dbxref) = grep { $dbxref->equals($_) } @{$self->get_dbxrefs()};
   my $matching_dbxref;
   if (!$matching_dbxref) {
