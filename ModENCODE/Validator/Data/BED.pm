@@ -123,14 +123,14 @@ sub validate {
         $linenum++;
         next if $line =~ m/^\s*#/; # Skip comments
         next if $line =~ m/^\s*$/; # Skip blank lines
-        my ($chr, $start, $end, $value) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)\s+([-+]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*$/);
-        if (!(length($chr) && length($start) && length($end) && length($value))) {
+        my ($chr, $start, $end) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)\s*$/);
+        if (!(length($chr) && length($start) && length($end))) {
           log_error "BED file " . $datum->get_value() . " does not seem valid beginning at line $linenum:\n      $line";
           $success = 0;
           $datum_success = 0;
           last;
         } else {
-          $wiggle_data .= "$chr $start $end $value\n";
+          $wiggle_data .= "$chr $start $end\n";
         }
       }
       close FH;
