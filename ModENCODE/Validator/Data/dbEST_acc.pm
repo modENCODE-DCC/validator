@@ -309,6 +309,11 @@ sub validate {
           my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
           my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
 
+          if (!$dbest_id) {
+            log_error "Cannot create an EST with no accession.", "error";
+            next;
+          }
+
           # Create the feature object
           my $feature = new ModENCODE::Chado::Feature({
               'name' => $est_name,
@@ -341,6 +346,7 @@ sub validate {
                 }),
               ],
             });
+
 
           # Add the feature object to a copy of the datum for later merging
           $datum->add_feature($feature);
