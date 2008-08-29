@@ -111,6 +111,12 @@ sub validate {
 		$success = 0;
 		$datum_success = 0;
 		last;
+	    } elsif ($chrom_start == 0) {
+		log_error "WIG file " . $datum->get_value() . " does not seem valid beginning at line $linenum:\n\>      $line.  You have a start coordinate of zero, which may indicate your data are zero-based.  WIG files must be 1-based.\nOnly the first instance is reported.";
+		$success = 0;
+		$datum_success = 0;
+		last;
+		
 	    } else { 
 		$wiggle_data .= "$chrom_start $value\n";
 	    }
