@@ -112,13 +112,13 @@ akin to:
     }),
     'locations' => [
       new ModENCODE::Chado::FeatureLoc({
-        'rank' => 0,
+        'rank' => 1,
         'srcfeature' => $target,
         'fmin' => 1,
         'fmax' => 20
       }),
       new ModENCODE::Chado::FeatureLoc({
-        'rank' => 1,
+        'rank' => 0,
         'srcfeature' => new ModENCODE::Chado::Feature({ 'name' => 'ChrX' }),
         'fmin' => 50,
         'fmax' => 70
@@ -399,7 +399,7 @@ sub gff_feature_to_chado_features : PRIVATE {
    
     if (defined($feature_start) || defined($feature_end)) {
       $primary_location = new ModENCODE::Chado::FeatureLoc({ # vs. chromosome
-          'rank' => 1,
+          'rank' => 0,
           'srcfeature' => $this_seq_region_feature,
           'fmin' => $feature_start,
           'fmax' => $feature_end,
@@ -447,7 +447,7 @@ sub gff_feature_to_chado_features : PRIVATE {
         $features_by_id->{$target_name} = $target_feature;
       }
       $target_location = new ModENCODE::Chado::FeatureLoc({ # vs. target/est
-          'rank' => 0,
+          'rank' => 1,
           'srcfeature' => $target_feature,
           'fmin' => $target_start,
           'fmax' => $target_end,
