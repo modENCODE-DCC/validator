@@ -688,7 +688,8 @@ sub create_termsource {
 
   unless ($accession) {
     use Carp qw(confess);
-    confess("No accession provided") unless $accession;
+    log_error("No accession provided for the Term Source REF column $termsource_ref") unless $accession;
+    exit;
   }
 
   my $db = new ModENCODE::Chado::DB({
