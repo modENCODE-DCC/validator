@@ -351,7 +351,11 @@ sub gff_feature_to_chado_features : PRIVATE {
         'species' => ($this_seq_region->get_Annotations('Organism_Species'))[0],
       });
     if (!length($organism->get_genus()) || !length($organism->get_species())) {
-      log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
+      if ($this_seq_region_feature) {
+        log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
+      } else {
+        log_error "There is a sequence region of unknown name without an organism.", "warning";
+      }
     } else {
       $this_seq_region_feature->set_organism($organism);
     }
