@@ -81,10 +81,10 @@ sub validate {
 	# handle the chrom header
 	if ($line =~ m/chrom/) { #another header
 #	    my ($stepType, $chr, $start, $step, $span) = ($line =~ m/^(variableStep|fixedStep)\s+chrom\=([2-4|M|U|X|Y][L|R]?(?:extra)?(?:Het)?)(?:\s+start\=(\d+))?(?:\s+step\=(\d+))?(?:\s+span\=(\d+))?\s*/);
-	    my ($stepType, $chr, $span) = ($line =~ m/^(variableStep|fixedStep)\s+chrom\=([2-4|M|U|X|Y][L|R]?(?:extra)?(?:Het)?)(?:\s+span\=(\d+))?\s*/);
+	    my ($stepType, $chr, $span) = ($line =~ m/^(variableStep|fixedStep)\s+chrom\=((?:I|II|III|IV|X)|(?:[2-4|M|U|X|Y][L|R]?(?:extra)?(?:Het)?))(?:\s+span\=(\d+))?\s*/);
 
 	    if (!(length($chr) && length($stepType))) {
-		log_error "WIG file " . $datum->get_value() . " does not seem valid beginning at line $linenum:\n      $line";
+		log_error "WIG file " . $datum->get_value() . " does not seem valid beginning at line $linenum. Perhaps the chromosome or stepType is invalid:\n      $line";
 		$success = 0;
 		$datum_success = 0;
 		last;
