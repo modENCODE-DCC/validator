@@ -96,7 +96,7 @@ sub validate {
 #		last;
 #	    }
 	    if (!(length($span))) {  #span is optional
-		log_error "WIG file " . $datum->get_value() . " does not seem to have a windowsize indicated at line $linenum: \n      $line", 'warning';	    
+		log_error "WIG file " . $datum->get_value() . " does not seem to have a windowsize indicated at line $linenum: \n      $line", 'notice';
 	    }
 	    $wig_type = $stepType;  #set the current wig type
 	    log_error "Data section for chr $chr found at line $linenum", 'notice';	    
