@@ -350,7 +350,7 @@ sub gff_feature_to_chado_features : PRIVATE {
   # Get the sequence region feature, or create one if it doesn't yet exist
   my $this_seq_region = $gff_io->sequence_region($gff_obj->seq_id());
   if (!$this_seq_region) {
-    log_error "Cannot find a sequence region defined by ##sequence-region header for " . $gff_obj->seq_id() . ".", "error";
+    log_error "Cannot find a sequence region defined by ##sequence-region or ##genome-build header for " . $gff_obj->seq_id() . ".", "error";
     return -1;
   }
   my $this_seq_region_feature = $features_by_id->{$this_seq_region->seq_id()};
