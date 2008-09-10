@@ -237,6 +237,7 @@ use Data::Dumper;
 use Carp qw(croak carp);
 use SOAP::Lite;
 use Bio::FeatureIO::gff_modencode;
+use ModENCODE::Config;
 use ModENCODE::Chado::Feature;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
@@ -279,7 +280,25 @@ sub validate {
           'program' => $applied_protocol->get_protocol()->get_name(),
           'programversion' => $applied_protocol->get_protocol()->get_version(),
         });
-      my $gffio = new Bio::FeatureIO(-fh => \*GFF, -format => 'gff_modencode', -version => 3);
+
+      my @build_config_strings = ModENCODE::Config::get_cfg()->GroupMembers('genome_build');
+      my $build_config = {};
+      foreach my $build_config_string (@build_config_strings) {
+        my (undef, $source, $build) = split / +/, $build_config_string, 3;
+        $build_config->{$source} = {} unless $build_config->{$source};
+        $build_config->{$source}->{$build} = [] unless $build_config->{$source}->{$build};
+        my @chromosomes = split /, */, ModENCODE::Config::get_cfg()->val($build_config_string, 'chromosomes');
+        foreach my $chr (@chromosomes) {
+          push @{$build_config->{$source}->{$build}}, { 
+            'seq_id' => $chr, 
+            'start' => ModENCODE::Config::get_cfg()->val($build_config_string, $chr . '_start'),
+            'end' => ModENCODE::Config::get_cfg()->val($build_config_string, $chr . '_end'),
+            'organism' => ModENCODE::Config::get_cfg()->val($build_config_string, 'organism'),
+          };
+        }
+      }
+
+      my $gffio = new Bio::FeatureIO(-fh => \*GFF, -format => 'gff_modencode', -version => 3, -build_config => $build_config);
       while (my @group_features = $gffio->next_feature_group()) {
         foreach my $top_level_feature (@group_features) {
           # These all get cached in features_by_id and features_by_uniquename
@@ -351,11 +370,7 @@ sub gff_feature_to_chado_features : PRIVATE {
         'species' => ($this_seq_region->get_Annotations('Organism_Species'))[0],
       });
     if (!length($organism->get_genus()) || !length($organism->get_species())) {
-      if ($this_seq_region_feature) {
-        log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
-      } else {
-        log_error "There is a sequence region of unknown name without an organism.", "warning";
-      }
+      log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
     } else {
       $this_seq_region_feature->set_organism($organism);
     }

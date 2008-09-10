@@ -113,6 +113,7 @@ sub _initialize {
 
   $self->version( $arg{-version}        || DEFAULT_VERSION);
   $self->validate($arg{-validate_terms} || 0);
+  $self->build_config($arg{-build_config} || {});
 
   if ($arg{-file} =~ /^>.*/ ) {
     $self->_print("##gff-version " . $self->version() . "\n");
@@ -395,6 +396,12 @@ sub validate {
   return $self->{'validate'};
 }
 
+sub build_config {
+  my($self,$config) = @_;
+  $self->{'build_configuration'} = $config if defined($config);
+  return $self->{'build_configuration'};
+}
+
 =head2 version()
 
  Usage   : $obj->version($newval)
@@ -488,6 +495,31 @@ sub _handle_directive {
     #NOTE: is this the right thing to do -- treat this as a feature? -allenday
     #buffer it to be returned by next_feature()
     $self->_buffer_feature($f);
+  } elsif($directive eq 'genome-build') {
+    my $fta = Bio::Annotation::OntologyTerm->new();
+    $fta->name( 'region');
+
+    my $regions_for_build = $self->build_config->{$arg[0]}->{$arg[1]};
+    foreach my $region_for_build (@$regions_for_build) {
+	    my $f = Bio::SeqFeature::Annotated_UnrestrictedChildren->new();
+	    $f->seq_id( $region_for_build->{'seq_id'} );
+	    $f->start( $region_for_build->{'start'} );
+	    $f->end( $region_for_build->{'end'} );
+
+	    $f->type(   $fta    );
+
+	    #cache this in sequence_region(), we may need it for validation later.
+            my ($genus, $species) = split / +/, $region_for_build->{'organism'}, 2;
+            my $genus_anno = new Bio::Annotation::SimpleValue(-value => $genus);
+            my $species_anno = new Bio::Annotation::SimpleValue(-value => $species);
+            $f->add_Annotation("Organism_Genus", $genus_anno);
+            $f->add_Annotation("Organism_Species", $species_anno);
+	    $self->sequence_region($f->seq_id => $f);
+
+	    #NOTE: is this the right thing to do -- treat this as a feature? -allenday
+	    #buffer it to be returned by next_feature()
+	    $self->_buffer_feature($f);
+    }
   }
 
   elsif($directive eq 'feature-ontology'){
