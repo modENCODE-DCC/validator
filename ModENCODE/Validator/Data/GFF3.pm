@@ -366,8 +366,8 @@ sub gff_feature_to_chado_features : PRIVATE {
           }),
       });
     my $organism = new ModENCODE::Chado::Organism({
-        'genus' => ($this_seq_region->get_Annotations('Organism_Genus'))[0],
-        'species' => ($this_seq_region->get_Annotations('Organism_Species'))[0],
+        'genus' => (($this_seq_region->get_Annotations('Organism_Genus'))[0] || "Unknown"),
+        'species' => (($this_seq_region->get_Annotations('Organism_Species'))[0] || "organism"),
       });
     if (!length($organism->get_genus()) || !length($organism->get_species())) {
       log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
