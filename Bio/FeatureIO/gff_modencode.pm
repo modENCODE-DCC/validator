@@ -791,10 +791,11 @@ sub _handle_feature {
     # If the ID is the same as this feature's seq_id, then it means we should create or update a sequence region for it
     if ($a->value() eq $feat->seq_id()) {
       my $seq_f = Bio::SeqFeature::Annotated_UnrestrictedChildren->new();
-      $seq_f->seq_id($feat->seq_id() . "_" . $feat->type()->name() . "/" . $feat->start() . "," . $feat->end() . "_region");
+      $seq_f->seq_id($feat->seq_id());
       $seq_f->start($feat->start());
       $seq_f->end($feat->end());
       $seq_f->type($feat->type());
+      $seq_f->add_Annotation('ID', $a);
       $self->sequence_region($feat->seq_id() => $seq_f);
       $self->_buffer_feature($seq_f);
       return -1;

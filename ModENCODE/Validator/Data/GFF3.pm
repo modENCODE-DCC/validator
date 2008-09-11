@@ -365,6 +365,9 @@ sub gff_feature_to_chado_features : PRIVATE {
               }),
           }),
       });
+    if ($gff_obj_id eq $this_seq_region->seq_id()) {
+      $this_seq_region_feature->set_uniquename($this_seq_region_feature->get_uniquename . "_" . $this_seq_region->type()->name() . "/" . $this_seq_region->start() . "," . $this_seq_region->end() . "_region")
+    }
     my $organism = new ModENCODE::Chado::Organism({
         'genus' => (($this_seq_region->get_Annotations('Organism_Genus'))[0] || "Unknown"),
         'species' => (($this_seq_region->get_Annotations('Organism_Species'))[0] || "organism"),
