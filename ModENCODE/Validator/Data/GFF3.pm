@@ -372,11 +372,11 @@ sub gff_feature_to_chado_features : PRIVATE {
         'genus' => (($this_seq_region->get_Annotations('Organism_Genus'))[0] || "Unknown"),
         'species' => (($this_seq_region->get_Annotations('Organism_Species'))[0] || "organism"),
       });
-    if (!length($organism->get_genus()) || !length($organism->get_species())) {
-      log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
-    } else {
+#    if (!length($organism->get_genus()) || !length($organism->get_species())) {
+#      log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
+#    } else {
       $this_seq_region_feature->set_organism($organism);
-    }
+#    }
     $features_by_id->{$this_seq_region->seq_id()} = $this_seq_region_feature;
   }
 
@@ -385,6 +385,8 @@ sub gff_feature_to_chado_features : PRIVATE {
     # If we have a feature with the same ID as the seqregion, then assign its type to
     # the seqregion, instead of relying on the default "region"
     $this_seq_region_feature->get_type()->set_name($gff_obj->type()->name());
+    # Return this as the feature
+    return $this_seq_region_feature;
   }
 
   # Build this feature
@@ -408,8 +410,8 @@ sub gff_feature_to_chado_features : PRIVATE {
   my $feature = $features_by_uniquename{ident $self}->{$uniquename};
   if (!$feature) {
     my $organism = new ModENCODE::Chado::Organism({
-        'genus' => ($this_seq_region->get_Annotations('Organism_Genus'))[0],
-        'species' => ($this_seq_region->get_Annotations('Organism_Species'))[0],
+        'genus' => (($this_seq_region->get_Annotations('Organism_Genus'))[0] || ''),
+        'species' => (($this_seq_region->get_Annotations('Organism_Species'))[0] || ''),
       });
 
     my $type = new ModENCODE::Chado::CVTerm({

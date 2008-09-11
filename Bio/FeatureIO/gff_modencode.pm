@@ -185,11 +185,6 @@ sub next_feature {
   # got a feature
   else {
     # Watch out for blank features when we made a seqfeature and don't want to return it
-    my $feat = $self->_handle_feature($gff_string);
-    if ($feat == -1) {
-      # Recurse
-      return $self->next_feature();
-    }
     return $self->_handle_feature($gff_string);
   }
 }
@@ -788,18 +783,6 @@ sub _handle_feature {
     $a->value( @{ $attr{ID} }[0] );
     $feat->add_Annotation('ID',$a);
 
-    # If the ID is the same as this feature's seq_id, then it means we should create or update a sequence region for it
-    if ($a->value() eq $feat->seq_id()) {
-      my $seq_f = Bio::SeqFeature::Annotated_UnrestrictedChildren->new();
-      $seq_f->seq_id($feat->seq_id());
-      $seq_f->start($feat->start());
-      $seq_f->end($feat->end());
-      $seq_f->type($feat->type());
-      $seq_f->add_Annotation('ID', $a);
-      $self->sequence_region($feat->seq_id() => $seq_f);
-      $self->_buffer_feature($seq_f);
-      return -1;
-    }
   }
 
   #Handle Name attribute.  May only have one Name, throw error otherwise
@@ -837,6 +820,20 @@ sub _handle_feature {
   if (@illegal_tags > 0) {
       my $tags = join(", ", @illegal_tags);
       $self->throw("The following tag(s) are illegal and are causing this parser to die: $tags");
+  }
+
+  if($attr{ID}){
+    # If the ID is the same as this feature's seq_id, then it means we should create or update a sequence region for it
+    if (($feat->get_Annotations('ID'))[0]->value() eq $feat->seq_id()) {
+      my $seq_f = Bio::SeqFeature::Annotated_UnrestrictedChildren->new();
+      $seq_f->seq_id($feat->seq_id());
+      $seq_f->start($feat->start());
+      $seq_f->end($feat->end());
+      $seq_f->type($feat->type());
+      $seq_f->add_Annotation(($feat->get_Annotations('ID'))[0]);
+      $self->sequence_region($feat->seq_id() => $seq_f);
+      $feat = $seq_f;
+    }
   }
 
   return $feat;
