@@ -109,7 +109,7 @@ sub validate {
     $date_of_experiment = new ModENCODE::Chado::ExperimentProp({
         'value' => '',
         'type' => new ModENCODE::Chado::CVTerm({'name' => 'date', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
-        'name' => 'Public Release Date',
+        'name' => 'Date of Experiment',
       });
   }
 
