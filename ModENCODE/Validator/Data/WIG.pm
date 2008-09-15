@@ -80,10 +80,21 @@ sub validate {
 
 	# handle the chrom header
 	if ($line =~ m/chrom/) { #another header
-#	    my ($stepType, $chr, $start, $step, $span) = ($line =~ m/^(variableStep|fixedStep)\s+chrom\=([2-4|M|U|X|Y][L|R]?(?:extra)?(?:Het)?)(?:\s+start\=(\d+))?(?:\s+step\=(\d+))?(?:\s+span\=(\d+))?\s*/);
-	    my ($stepType, $chr, $span) = ($line =~ m/^(variableStep|fixedStep)\s+chrom\=((?:I|II|III|IV|V|X|MtDNA)|(?:[2-4|M|U|X|Y][L|R]?(?:extra)?(?:Het)?))(?:\s+span\=(\d+))?\s*/);
-
-	    if (!(length($chr) && length($stepType))) {
+	    my ($stepType) = $line =~ /^(variableStep|fixedStep)/;
+	    my ($chr)      = $line =~ /chrom=(\S+)/;
+	    my ($start)    = $line =~ /start=(\d+)/;
+	    my ($step)     = $line =~ /step=(\d+)/;
+	    my ($span)     = $line =~ /span=(\d+)/;
+	    unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
+		    || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
+		) {
+		log_error "WIG file " . $datum->get_value() . " does not seem valid beginning at line $linenum. The chromosome $chr is invalid:\n      $line";
+#		die "I do not recognize chromosome $chr!\n";
+		$success = 0;
+		$datum_success = 0;
+		last;
+	    }    
+     	    if (!(length($chr) && length($stepType))) {
 		log_error "WIG file " . $datum->get_value() . " does not seem valid beginning at line $linenum. Perhaps the chromosome or stepType is invalid:\n      $line";
 		$success = 0;
 		$datum_success = 0;
@@ -95,6 +106,7 @@ sub validate {
 #		$datum_success = 0;
 #		last;
 #	    }
+#	    print STDERR "chr $chr span is $span and length is " . length($span);
 	    if (!(length($span))) {  #span is optional
 		log_error "WIG file " . $datum->get_value() . " does not seem to have a windowsize indicated at line $linenum: \n      $line", 'notice';
 	    }
