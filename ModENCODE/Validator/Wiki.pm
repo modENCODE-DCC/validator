@@ -586,7 +586,7 @@ sub validate {
           }
         }
         if (!$valid) {
-          log_error "Could not find the protocol type $idf_type_cv:$idf_type_term defined in the wiki for '" . $protocol->get_name() . "'.";
+          log_error "The protocol type $idf_type_cv:$idf_type_term defined in the IDF does not match the protocol type defined in the wiki for '" . $protocol->get_name() . "'.";
           $success = 0;
         }
       }
