@@ -580,7 +580,8 @@ sub validate {
           my ($cv, $term, $name) = ModENCODE::Config::get_cvhandler()->parse_term($wiki_protocol_type);
           if (!defined($cv)) { $cv = $wiki_protocol_type_def->get_types()->[0]; }
           my $cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
-          if ($cv eq $idf_type_cv && $term eq $idf_type_term) {
+#          if ($cv eq $idf_type_cv && $term eq $idf_type_term) {
+          if (lc($cv) eq lc($idf_type_cv) && $term eq $idf_type_term) {
             $valid = 1;
             last;
           }

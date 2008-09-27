@@ -652,7 +652,8 @@ sub get_cv_by_name {
   my ($self, $cvname) = @_;
   foreach my $cvurl (keys(%{$cvs{ident $self}})) {
     my @names = @{$cvs{ident $self}->{$cvurl}->{'names'}};
-    if (scalar(grep { $_ eq $cvname } @names)) {
+    if (scalar(grep{ lc($_) eq lc($cvname) } @names)) {
+#    if (scalar(grep { $_ eq $cvname } @names)) {
       return $cvs{ident $self}->{$cvurl};
     }
   }

@@ -19,9 +19,16 @@ path to a result file. This is implemented in practice by a special case in
 L<ModENCODE::Validator::Data> that checks any data column with a heading of
 "Result File"  using this validtor.
 
-The file at that given path is not parsed or opened, and currently the datum
-itself is not even modified in any way. This should not be the final state of
-affairs, see L</TODO>.
+If the given path is a http/ftp URL, then the file is fetched from the 
+remote site into the local directory.  If an error occurs during data transfer,
+then the error is reported to the user and the file check will not pass.
+The datum object is modified so that the "name" of the file, which previously
+was the URL, is now replaced with the local filename (simply the filename 
+given at the end of the URL).
+
+Once downloaded, or with files that were not specified with a url, there is
+a basic check to see if the file specified exists at the indicated relative
+path.  
 
   my $datum = new ModENCODE::Chado::Data({
     'value' => 'relative/path/to/file'
@@ -68,6 +75,7 @@ saved somewhere outside of the submission path.
 L<ModENCODE::Chado::Data>, L<ModENCODE::Validator::Data>,
 L<ModENCODE::Validator::Data::Data>, L<ModENCODE::Chado::CVTerm>,
 L<ModENCODE::Validator::Data::GFF3>, L<ModENCODE::Validator::Data::BED>,
+L<ModENCODE::Validator::Data::CEL>,
 L<ModENCODE::Validator::Data::SO_transcript>,
 L<ModENCODE::Validator::Data::WIG>, L<ModENCODE::Validator::Data::dbEST_acc>,
 L<ModENCODE::Validator::Data::dbEST_acc_list>,
@@ -82,30 +90,104 @@ use strict;
 use base qw( ModENCODE::Validator::Data::Data );
 use Class::Std;
 use Carp qw(croak carp);
-use ModENCODE::Chado::Wiggle_Data;
+use HTTP::Request::Common 'GET';
+use LWP::UserAgent;
+#use ModENCODE::Chado::Attribute;
+#use ModENCODE::Chado::Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
+my %cached_files            :ATTR( :default<{}> );
 
 sub validate {
   my ($self) = @_;
   my $success = 1;
+  my $path = "";
+  log_error ("Validating specified file(s) existence", "notice", ">");
   foreach my $datum_hash (@{$self->get_data()}) {
-    my $datum = $datum_hash->{'datum'}->clone();
-    if (length($datum->get_value())) {
-      next if ($datum->get_value() =~ m/(http|ftp):\/\//);
-      if (!-r $datum->get_value()) {
-        log_error "Can't find Result File [" . $datum->get_name() . "]=" . $datum->get_value() . ".";
-        $success = 0;
+      my $datum_success = 1;
+      my $datum = $datum_hash->{'datum'}->clone();
+      if (length($datum->get_value())) {
+	  my $filename = $datum->get_value();
+	  if (!($cached_files{ident $self}->{$filename})) {
+	      if ($datum->get_value() =~ m'(http|ftp)s?://') {
+		  #if there's a URL specified, try to fetch it.
+		  my $url = $datum->get_value();
+		  my @filename = split(/\//, $url);
+		  my $f_length = @filename;
+		  $filename = @filename[$f_length-1];
+		  
+		  log_error ("URL found for Result File [" . $datum->get_name() . "] = " . $filename , "notice", ">");
+		  
+		  #open a connection, grab the file, and stick it in a local file.  we are already in the local directory,
+		  #so it should put it in the right place.      
+		  my $fetch_success = 0;
+		  my $error_msg = "Stick in the GET reply here.";
+		  my $req = HTTP::Request->new('GET', $datum->get_value());
+		  my $ua = LWP::UserAgent->new();
+		  log_error ("Fetching remote file from $url...", "notice");
+		  if (-r $filename) {
+		      log_error("$filename found locally...overwriting...", "notice");
+		  }
+		  my $res = $ua->request($req,$filename);
+		  if ($res->is_success) {
+		      my $filesize = -s $filename;
+		      #set the datum to have the local filename
+		      $datum->set_value($filename);
+		      log_error ("Retrieved " . $filesize . " bytes from remote site.","notice");
+		  } elsif ($res->is_error) {	
+		      #not okay.  report the error
+		      $error_msg = $res->status_line;
+		      log_error ("Error retrieving Result File [" . $datum->get_name() . "] from " . $datum->get_value(), "error");
+		      log_error ("HTTP Response for $filename was:  " . $error_msg , "error");
+		      $datum_success = 0;
+		      $success = 0;
+		  }
+		  $cached_files{ident $self}->{$url} = $filename;
+		  log_error ("","notice","<");
+	      } else {
+		  $cached_files{ident $self}->{$filename} = $filename;
+	      }
+	      if (!-r $filename) {
+		  log_error "Can't find Result File [" . $datum->get_name() . "]=" . $datum->get_value() . ".", "error";
+		  $datum_success = 0;
+		  $success = 0;
+	      } else {
+		  log_error "File found: " . $filename , "notice";
+	      }
+	  } else { #its cached
+	      if ($filename =~ m'(http|ftp)s?://') {
+		  #if we're here, there's a URL specified, and the file should have already been processed.
+		  #we want to replace the url with the local filename.
+		  my $url = $datum->get_value();
+		  my @filename = split(/\//, $url);
+		  my $f_length = @filename;
+		  $filename = @filename[$f_length-1];
+		  if (-r $filename) {
+		      $datum->set_value($filename);
+		  } else {
+		  log_error "Can't find Result File [" . $datum->get_name() . "]=" . $datum->get_value() . ".", "error";
+		  $datum_success = 0;
+		  $success = 0;
+		  }
+	      }
+	      #log_error ("Already come across this file. Will only process $filename once.", "notice");
+	  }   
+      } else {
+	  log_error "No File for " . $datum->get_heading(), 'warning';
+	  $datum_success = 1;
+	  next;
       }
-    }
+      
+      $datum_hash->{'is_valid'} = $datum_success;
+      $datum_hash->{'merged_datum'} = $datum;
   }
-
+  log_error ("Done.","notice","<");
   return $success;
 }
 
 sub merge {
-  my ($self, $datum, $applied_protocol) = @_;
-  return $datum;
+    my ($self, $datum, $applied_protocol) = @_;
+    return $datum;
 }
 
 1;

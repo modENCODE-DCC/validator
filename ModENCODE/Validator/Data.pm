@@ -110,6 +110,7 @@ L<http://www.modencode.org>.
 
 =cut
 use strict;
+use ModENCODE::Validator::Data::CEL;
 use ModENCODE::Validator::Data::BED;
 use ModENCODE::Validator::Data::WIG;
 use ModENCODE::Validator::Data::dbEST_acc;
@@ -129,6 +130,7 @@ my %validators                  :ATTR( :get<validators>,                :default
 sub BUILD {
   my ($self, $ident, $args) = @_;
   # TODO: Figure out how to be more canonical about CV names w/ respect to validation function identifiers
+  $validators{$ident}->{'modencode:CEL'} = new ModENCODE::Validator::Data::CEL({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:transcriptional_fragment_map'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
@@ -140,7 +142,6 @@ sub BUILD {
   $validators{$ident}->{'Result File'} = new ModENCODE::Validator::Data::Result_File({ 'data_validator' => $self });
   $validators{$ident}->{'modencode:TraceArchive_record'} = new ModENCODE::Validator::Data::TA_acc({ 'data_validator' => $self });
   $validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'data_validator' => $self });
-  #$validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
 }
 
 sub merge {
@@ -221,6 +222,16 @@ sub validate {
     $datum = $datum->{'datum'};
     my $datum_type = $datum->get_type();
     my $parser_module = $datum_type->get_cv()->get_name() . ":" . $datum_type->get_name();
+
+    # Special case: Any field with a heading of "Result File" should be checked as a generic data file
+    if ($datum->get_heading() =~ m/Result *Files?/i) {
+      my $file_validator = $validators{ident $self}->{'Result File'};
+      $file_validator->add_datum($datum, $applied_protocol);
+#      if (!$file_validator->validate()) {
+#        $success = 0;
+#      }
+    }
+
     my $validator = $self->get_validator_for_type($datum_type);
 
     if (!$validator && $datum->get_termsource() && $datum->get_termsource()->get_db()) {
@@ -228,23 +239,19 @@ sub validate {
       $validator =  $validators{ident $self}->{$datum_termsource_type};
     }
 
-    # Special case: Any field with a heading of "Result File" should be checked as a generic data file
-    if ($datum->get_heading() =~ m/Result *Files?/i) {
-      my $file_validator = $validators{ident $self}->{'Result File'};
-      $file_validator->add_datum($datum, $applied_protocol);
-      if (!$file_validator->validate()) {
-        $success = 0;
-      }
-    }
     # If there wasn't a specified validator for this data type, continue
     if (!$validator) {
       log_error "No validator for data type $parser_module.", "warning";
       next;
+    } else {
+#	log_error "Validator for $parser_module to be used.","notice";
     }
+#    print STDERR "adding validator datum: " . $datum->get_value() . " \n";
     $validator->add_datum($datum, $applied_protocol);
   }
   foreach my $validator (values(%{$validators{ident $self}})) {
     if (scalar(@{$validator->get_data()})) {
+#	print STDERR "----Validator " . ref($validator) . " running...\n";
       if (!$validator->validate()) {
         $success = 0;
       }

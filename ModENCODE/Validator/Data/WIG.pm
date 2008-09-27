@@ -41,6 +41,7 @@ sub validate {
     my $datum_success = 1;
     my $wig_type = "none";
     my $datum = $datum_hash->{'datum'}->clone();
+
     if (!length($datum->get_value())) {
       log_error "No WIG file for " . $datum->get_heading(), 'warning';
       $datum_success = 1;
