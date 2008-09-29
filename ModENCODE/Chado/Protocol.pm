@@ -156,6 +156,7 @@ use strict;
 use Class::Std;
 use Carp qw(croak);
 
+my %all_protocols;
 
 # Attributes
 my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
@@ -166,6 +167,23 @@ my %description      :ATTR( :name<description>,         :default<''> );
 # Relationships
 my %termsource       :ATTR( :get<termsource>,           :default<undef> );
 my %attributes       :ATTR( :get<attributes>,           :default<[]> );
+
+sub new {
+  my $self = Class::Std::new(@_);
+  # Caching protocols
+#  $all_protocols{$self->get_name()} = {} if (!defined($all_protocols{$self->get_name()}));
+#
+#  my $cached_protocol = $all_protocols{$self->get_name()}->{$self->get_version()};
+#
+#  if ($cached_protocol) {
+#    # Add any additional info
+#    $cached_protocol->set_description($self->get_description()) if ($self->get_description() && !($cached_protocol->get_description()));
+#    return $cached_protocol;
+#  } else {
+#    $all_protocols{$self->get_name()}->{$self->get_version()} = $self;
+#  }
+  return $self;
+}
 
 sub BUILD {
   my ($self, $ident, $args) = @_;

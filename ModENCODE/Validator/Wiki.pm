@@ -329,80 +329,102 @@ sub merge {
   log_error "Done.", "notice", "<";
   log_error "Adding wiki protocol metadata to the protocol objects.", "notice", ">";
   # Add protocol attributes based on wiki forms
+  my @unique_protocols;
+  my $col = 0;
   foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my $protocol = $applied_protocol->get_protocol();
-      my $protocol_name = $protocol->get_name();
-      my $protocol_url = $protocol->get_description();
-      my $protocol_def = (defined($protocol_defs_by_url{ident $self}->{$protocol_url}) ? $protocol_defs_by_url{ident $self}->{$protocol_url} : $protocol_defs_by_name{ident $self}->{$protocol_name});
-      my $protocol_version = $protocol_def->get_version();
-      $protocol->set_version($protocol_version) if length($protocol_version);
-      croak "How did this experiment manage to validate with a wiki-less protocol?!" unless $protocol_def;
-      # Protocol description
-      my ($protocol_description) = grep { $_->get_name() =~ /^\s*short *descriptions?$/i } @{$protocol_def->get_string_values()};
-      if ($protocol_description) {
-        $protocol_description = $protocol_description->get_values()->[0];
-        $protocol->set_description($protocol_description);
-      } else {
-        log_error "No description for protocol $protocol_name found at $protocol_url. Using URL as description.", "warning";
-        $protocol->set_description("Please see: " . $protocol_url);
+      unless (grep { $_ == $protocol } @unique_protocols) {
+        push @unique_protocols, $protocol
       }
-      # Protocol type
-      my ($protocol_type) = grep { $_->get_name() =~ /^\s*protocol *types?$/i } @{$protocol_def->get_values()};
-      # Other protocol attributes
-      foreach my $wiki_protocol_attr (@{$protocol_def->get_values()}) {
-        # Skip special fields (description and I/O parameters)
-        next if $wiki_protocol_attr->get_name() =~ /^\s*short *descriptions?$/i;
-        next if $wiki_protocol_attr->get_name() =~ /^\s*input *types?$/i;
-        next if $wiki_protocol_attr->get_name() =~ /^\s*output *types?$/i;
-        next if $wiki_protocol_attr->get_name() =~ /^\s*protocol *types?$/i;
+    }
+  }
 
-        my $rank = 0;
-        foreach my $value (@{$wiki_protocol_attr->get_values()}) {
-          my $protocol_attr = new ModENCODE::Chado::Attribute({
-              'heading' => $wiki_protocol_attr->get_name(),
-              'value' => $value,
-              'rank' => $rank,
-              'type' => new ModENCODE::Chado::CVTerm({
-                  'name' => 'string',
-                  'cv' => new ModENCODE::Chado::CV({
-                      'name' => 'xsd',
-                    }),
-                }),
-            });
-          # If this field has controlled vocab(s), create a CVTerm for each value
-          if (scalar(@{$wiki_protocol_attr->get_types()})) {
-            my ($name, $cv, $term) = (undef, split(/:/, $value));
-            if (!defined($term)) {
-              $term = $cv;
-              $cv = $wiki_protocol_attr->get_types()->[0];
-            }
-            # Set the type_id of the attribute to this term
-            my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
-            $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
-                  'name' => $term,
-                  'cv' => new ModENCODE::Chado::CV({
-                      'name' => $canonical_cvname,
-                    }),
-                })
-            );
-          } else {
-            # Set the type_id of the attribute to "string"
-            $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
-                  'name' => 'string',
-                  'cv' => new ModENCODE::Chado::CV({
-                      'name' => 'xsd' 
-                    }),
-                })
-            );
-            # Set the value to the whole string_value (can't split on commas if there's no types)
-            my ($str_value) = grep { $_->get_name() eq $wiki_protocol_attr->get_name() } @{$protocol_def->get_string_values()};
-            $value = $str_value->get_values()->[0];
-            $protocol_attr->set_value($value);
+  foreach my $protocol (@unique_protocols) {
+    my $protocol_name = $protocol->get_name();
+    my $protocol_url = $protocol->get_description();
+    my $protocol_def = (defined($protocol_defs_by_url{ident $self}->{$protocol_url}) ? $protocol_defs_by_url{ident $self}->{$protocol_url} : $protocol_defs_by_name{ident $self}->{$protocol_name});
+    my $protocol_version = $protocol_def->get_version();
+
+    next unless $protocol_url =~ m/^\s*http:\/\//;
+
+    $protocol->set_version($protocol_version) if length($protocol_version);
+    croak "How did this experiment manage to validate with a wiki-less protocol?!" unless $protocol_def;
+    # Protocol description
+    my $protocol_url_attr = new ModENCODE::Chado::Attribute({
+        'heading' => 'Protocol URL',
+        'value' => $protocol_url,
+        'type' => new ModENCODE::Chado::CVTerm({
+            'name' => 'anyURI',
+            'cv' => new ModENCODE::Chado::CV({
+                'name' => 'xsd',
+              }),
+          }),
+      });
+    $protocol->add_attribute($protocol_url_attr);
+    my ($protocol_description) = grep { $_->get_name() =~ /^\s*short *descriptions?$/i } @{$protocol_def->get_string_values()};
+    if ($protocol_description) {
+      $protocol_description = $protocol_description->get_values()->[0];
+      $protocol->set_description($protocol_description);
+    } else {
+      log_error "No description for protocol $protocol_name found at $protocol_url. Using URL as description.", "warning";
+      $protocol->set_description("Please see: " . $protocol_url);
+    }
+    # Protocol type
+    my ($protocol_type) = grep { $_->get_name() =~ /^\s*protocol *types?$/i } @{$protocol_def->get_values()};
+    # Other protocol attributes
+    foreach my $wiki_protocol_attr (@{$protocol_def->get_values()}) {
+      # Skip special fields (description and I/O parameters)
+      next if $wiki_protocol_attr->get_name() =~ /^\s*short *descriptions?$/i;
+      next if $wiki_protocol_attr->get_name() =~ /^\s*input *types?$/i;
+      next if $wiki_protocol_attr->get_name() =~ /^\s*output *types?$/i;
+      next if $wiki_protocol_attr->get_name() =~ /^\s*protocol *types?$/i;
+
+      my $rank = 0;
+      foreach my $value (@{$wiki_protocol_attr->get_values()}) {
+        my $protocol_attr = new ModENCODE::Chado::Attribute({
+            'heading' => $wiki_protocol_attr->get_name(),
+            'value' => $value,
+            'rank' => $rank,
+            'type' => new ModENCODE::Chado::CVTerm({
+                'name' => 'string',
+                'cv' => new ModENCODE::Chado::CV({
+                    'name' => 'xsd',
+                  }),
+              }),
+          });
+        # If this field has controlled vocab(s), create a CVTerm for each value
+        if (scalar(@{$wiki_protocol_attr->get_types()})) {
+          my ($name, $cv, $term) = (undef, split(/:/, $value));
+          if (!defined($term)) {
+            $term = $cv;
+            $cv = $wiki_protocol_attr->get_types()->[0];
           }
-          $protocol->add_attribute($protocol_attr);
-          $rank++;
+          # Set the type_id of the attribute to this term
+          my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+          $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
+                'name' => $term,
+                'cv' => new ModENCODE::Chado::CV({
+                    'name' => $canonical_cvname,
+                  }),
+              })
+          );
+        } else {
+          # Set the type_id of the attribute to "string"
+          $protocol_attr->set_type(new ModENCODE::Chado::CVTerm({
+                'name' => 'string',
+                'cv' => new ModENCODE::Chado::CV({
+                    'name' => 'xsd' 
+                  }),
+              })
+          );
+          # Set the value to the whole string_value (can't split on commas if there's no types)
+          my ($str_value) = grep { $_->get_name() eq $wiki_protocol_attr->get_name() } @{$protocol_def->get_string_values()};
+          $value = $str_value->get_values()->[0];
+          $protocol_attr->set_value($value);
         }
+        $protocol->add_attribute($protocol_attr);
+        $rank++;
       }
     }
   }
