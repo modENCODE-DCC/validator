@@ -288,9 +288,11 @@ sub validate {
         $build_config->{$source} = {} unless $build_config->{$source};
         $build_config->{$source}->{$build} = [] unless $build_config->{$source}->{$build};
         my @chromosomes = split /, */, ModENCODE::Config::get_cfg()->val($build_config_string, 'chromosomes');
+        my $region_type = ModENCODE::Config::get_cfg()->val($build_config_string, 'region_type');
         foreach my $chr (@chromosomes) {
           push @{$build_config->{$source}->{$build}}, { 
             'seq_id' => $chr, 
+            'region_type' => $region_type,
             'start' => ModENCODE::Config::get_cfg()->val($build_config_string, $chr . '_start'),
             'end' => ModENCODE::Config::get_cfg()->val($build_config_string, $chr . '_end'),
             'organism' => ModENCODE::Config::get_cfg()->val($build_config_string, 'organism'),
@@ -368,15 +370,16 @@ sub gff_feature_to_chado_features : PRIVATE {
     if ($gff_obj_id eq $this_seq_region->seq_id()) {
       $this_seq_region_feature->set_uniquename($this_seq_region_feature->get_uniquename . "_" . $this_seq_region->type()->name() . "/" . $this_seq_region->start() . "," . $this_seq_region->end() . "_region")
     }
+    my $genus = ($this_seq_region->get_Annotations('Organism_Genus'))[0];
+    my $species = ($this_seq_region->get_Annotations('Organism_Species'))[0];
+    $genus = $genus->value() if ref($genus);
+    $species = $species->value() if ref($species);
+
     my $organism = new ModENCODE::Chado::Organism({
-        'genus' => (($this_seq_region->get_Annotations('Organism_Genus'))[0] || "Unknown"),
-        'species' => (($this_seq_region->get_Annotations('Organism_Species'))[0] || "organism"),
+        'genus' => ($genus || "Unknown"),
+        'species' => ($species || "organism"),
       });
-#    if (!length($organism->get_genus()) || !length($organism->get_species())) {
-#      log_error "The sequence region feature " . $this_seq_region_feature->uniquename() . " does not have an associated organism. This may be okay, as long as the feature already exists in the database.", "warning";
-#    } else {
-      $this_seq_region_feature->set_organism($organism);
-#    }
+    $this_seq_region_feature->set_organism($organism);
     $features_by_id->{$this_seq_region->seq_id()} = $this_seq_region_feature;
   }
 
@@ -409,9 +412,15 @@ sub gff_feature_to_chado_features : PRIVATE {
 
   my $feature = $features_by_uniquename{ident $self}->{$uniquename};
   if (!$feature) {
+
+    my $genus = ($this_seq_region->get_Annotations('Organism_Genus'))[0];
+    my $species = ($this_seq_region->get_Annotations('Organism_Species'))[0];
+    $genus = $genus->value() if ref($genus);
+    $species = $species->value() if ref($species);
+
     my $organism = new ModENCODE::Chado::Organism({
-        'genus' => (($this_seq_region->get_Annotations('Organism_Genus'))[0] || ''),
-        'species' => (($this_seq_region->get_Annotations('Organism_Species'))[0] || ''),
+        'genus' => ($genus || 'Unknown'),
+        'species' => ($species || 'organism'),
       });
 
     my $type = new ModENCODE::Chado::CVTerm({

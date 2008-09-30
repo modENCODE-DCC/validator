@@ -497,8 +497,6 @@ sub _handle_directive {
     #buffer it to be returned by next_feature()
     $self->_buffer_feature($f);
   } elsif($directive eq 'genome-build') {
-    my $fta = Bio::Annotation::OntologyTerm->new();
-    $fta->name( 'region');
 
     my $regions_for_build = $self->build_config->{$arg[0]}->{$arg[1]};
     foreach my $region_for_build (@$regions_for_build) {
@@ -507,6 +505,12 @@ sub _handle_directive {
 	    $f->start( $region_for_build->{'start'} );
 	    $f->end( $region_for_build->{'end'} );
 
+            my $fta = Bio::Annotation::OntologyTerm->new();
+            if ($region_for_build->{'region_type'}) {
+              $fta->name( $region_for_build->{'region_type'} );
+            } else {
+              $fta->name( 'region');
+            }
 	    $f->type(   $fta    );
 
 	    #cache this in sequence_region(), we may need it for validation later.
@@ -519,7 +523,7 @@ sub _handle_directive {
 
 	    #NOTE: is this the right thing to do -- treat this as a feature? -allenday
 	    #buffer it to be returned by next_feature()
-	    $self->_buffer_feature($f);
+#	    $self->_buffer_feature($f);
     }
   }
 
@@ -825,6 +829,7 @@ sub _handle_feature {
   if($attr{ID}){
     # If the ID is the same as this feature's seq_id, then it means we should create or update a sequence region for it
     if (($feat->get_Annotations('ID'))[0]->value() eq $feat->seq_id()) {
+      # If we've already gotten this region, then don't do anything with it
       my $seq_f = Bio::SeqFeature::Annotated_UnrestrictedChildren->new();
       $seq_f->seq_id($feat->seq_id());
       $seq_f->start($feat->start());
