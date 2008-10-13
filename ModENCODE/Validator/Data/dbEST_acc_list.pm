@@ -129,7 +129,12 @@ sub validate {
         my $temp_datum = new ModENCODE::Chado::Data({
             'value' => $est
           });
+	if (!($est =~ m/^\s*$/)) {  #skip blanks
         $est_validator->add_datum($temp_datum, $applied_protocol, 1); # Skip equality check
+	} else {
+	    log_error ("skipping blank line", "notice");
+	}
+	    
       }
       $success = 0 unless $est_validator->validate();
       log_error "Done.", "notice", "<";

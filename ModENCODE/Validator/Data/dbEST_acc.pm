@@ -147,6 +147,14 @@ sub validate {
 
   # Get out the EST IDs we need to validate
   my @data_to_validate = @{$self->get_data()};
+  my $index = 0;
+  foreach my $datum_hash (@data_to_validate) {
+      if ($datum_hash->{'datum'}->get_value() =~ m/^\s*$/) {
+	  log_error "Found a blank at " . $index, "error";
+      } 
+      $index++;
+  }
+
   my @data_left;
 
   log_error "Validating " . scalar(@data_to_validate) . " ESTs...", "notice", ">";
@@ -290,73 +298,11 @@ sub validate {
       }
 
       ######################################################################################
-
-
       # Got back an array of useful results. Figure out which of our current @term_set actually
       # got returned. Record ones that we didn't get back in @data_left.
-      foreach my $datum_hash (@term_set) {
-        my $datum = $datum_hash->{'datum'}->clone();
-        my ($genbank_feature) = grep { $datum->get_value() eq $_->{'GBSeq_primary-accession'} } $fetch_results->valueof();
-        if ($genbank_feature) {
-          # Pull out enough information from the GenBank record to create a Chado feature
-          my ($dbest_id) = grep { $_ =~ m/^gnl\|dbEST\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $dbest_id =~ s/^gnl\|dbEST\|//;
-          my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
-          my $genbank_acc = $genbank_feature->{'GBSeq_primary-accession'};
-          my ($est_name) = ($genbank_feature->{'GBSeq_definition'} =~ m/^(\S+)/);
-          my $sequence = $genbank_feature->{'GBSeq_sequence'};
-          my $seqlen = length($sequence);
-          my $timeaccessioned = $genbank_feature->{'GBSeq_create-date'};
-          my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
-          my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
+      my @a = cross_check_gb_records($fetch_results, @term_set);
 
-          if (!$dbest_id) {
-            log_error "Cannot create an EST with no accession.", "error";
-            next;
-          }
-
-          # Create the feature object
-          my $feature = new ModENCODE::Chado::Feature({
-              'name' => $est_name,
-              'uniquename' => $genbank_acc,
-              'residues' => $sequence,
-              'seqlen' => $seqlen,
-              'timeaccessioned' => $timeaccessioned,
-              'timelastmodified' => $timelastmodified,
-              'type' => new ModENCODE::Chado::CVTerm({
-                  'name' => 'EST',
-                  'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' })
-                }),
-              'organism' => new ModENCODE::Chado::Organism({
-                  'genus' => $genus,
-                  'species' => $species,
-                }),
-              'primary_dbxref' => new ModENCODE::Chado::DBXref({
-                  'accession' => $genbank_acc,
-                  'db' => new ModENCODE::Chado::DB({
-                      'name' => 'GB',
-                      'description' => 'GenBank',
-                    }),
-                }),
-              'dbxrefs' => [ new ModENCODE::Chado::DBXref({
-                  'accession' => $dbest_id,
-                  'db' => new ModENCODE::Chado::DB({
-                      'name' => 'dbEST',
-                      'description' => 'dbEST gi IDs',
-                    }),
-                }),
-              ],
-            });
-
-
-          # Add the feature object to a copy of the datum for later merging
-          $datum->add_feature($feature);
-          $datum_hash->{'merged_datum'} = $datum;
-          $datum_hash->{'is_valid'} = 1;
-        } else {
-          log_error "Couldn't find the EST identified by '" . $datum->get_value() . "' in search results from NCBI.", "warning";
-          push @data_left, $datum_hash;
-        }
-      }
+      push @data_left, @a;
 
       sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
     }
@@ -386,7 +332,8 @@ sub validate {
       eval {
         $search_results = $soap_client{ident $self}->run_eSearch({
             'eSearchRequest' => {
-              'db' => 'nucest',
+              'db' => 'nucleotide',
+	   #   'rettype' => 'native',
               'term' => $search_term,
               'tool' => 'modENCODE pipeline',
               'email' => 'yostinso@berkeleybop.org',
@@ -429,11 +376,13 @@ sub validate {
       ######################################################################################
 
       # Okay, got a valid query key and cookie, go ahead and fetch the actual results.
+
       my $fetch_results;
       eval {
         $fetch_results = $soap_client{ident $self}->run_eFetch({
             'eFetchRequest' => {
-              'db' => 'nucest',
+              'db' => 'nucleotide',
+	      #'rettype' => 'native',
               'WebEnv' => $webenv,
               'query_key' => $querykey,
               'tool' => 'modENCODE pipeline',
@@ -463,7 +412,7 @@ sub validate {
         sleep 5;
         next;
       }
-      $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
+
       if (!length($fetch_results->valueof())) {
         if (!$fetch_results->match('/Envelope/Body/eFetchResult')) {
           # No eFetchResult result at all, which means we got back junk. Wait 30 seconds and retry.
@@ -482,63 +431,8 @@ sub validate {
 
       # Got back an array of useful results. Figure out which of our current @term_set actually
       # got returned. Record ones that we didn't get back in @data_left.
-      foreach my $datum_hash (@term_set) {
-        my $datum = $datum_hash->{'datum'}->clone();
-        my ($genbank_feature) = grep { $datum->get_value() eq $_->{'GBSeq_primary-accession'} } $fetch_results->valueof();
-        if ($genbank_feature) {
-          # Pull out enough information from the GenBank record to create a Chado feature
-          my ($dbest_id) = grep { $_ =~ m/^gnl\|dbEST\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $dbest_id =~ s/^gnl\|dbEST\|//;
-          my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
-          my $genbank_acc = $genbank_feature->{'GBSeq_primary-accession'};
-          my ($est_name) = ($genbank_feature->{'GBSeq_definition'} =~ m/^(\S+)/);
-          my $sequence = $genbank_feature->{'GBSeq_sequence'};
-          my $seqlen = length($sequence);
-          my $timeaccessioned = $genbank_feature->{'GBSeq_create-date'};
-          my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
-          my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
 
-          # Create the feature object
-          my $feature = new ModENCODE::Chado::Feature({
-              'name' => $est_name,
-              'uniquename' => $genbank_acc,
-              'residues' => $sequence,
-              'seqlen' => $seqlen,
-              'timeaccessioned' => $timeaccessioned,
-              'timelastmodified' => $timelastmodified,
-              'type' => new ModENCODE::Chado::CVTerm({
-                  'name' => 'EST',
-                  'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' })
-                }),
-              'organism' => new ModENCODE::Chado::Organism({
-                  'genus' => $genus,
-                  'species' => $species,
-                }),
-              'primary_dbxref' => new ModENCODE::Chado::DBXref({
-                  'accession' => $genbank_acc,
-                  'db' => new ModENCODE::Chado::DB({
-                      'name' => 'GB',
-                      'description' => 'GenBank',
-                    }),
-                }),
-              'dbxrefs' => [ new ModENCODE::Chado::DBXref({
-                  'accession' => $dbest_id,
-                  'db' => new ModENCODE::Chado::DB({
-                      'name' => 'dbEST',
-                      'description' => 'dbEST gi IDs',
-                    }),
-                }),
-              ],
-            });
-
-          # Add the feature object to a copy of the datum for later merging
-          $datum->add_feature($feature);
-          $datum_hash->{'merged_datum'} = $datum;
-          $datum_hash->{'is_valid'} = 1;
-        } else {
-          log_error "Couldn't find the EST identified by '" . $datum->get_value() . "' in search results from NCBI.", "warning";
-          push @data_left, $datum_hash;
-        }
-      }
+      push @data_left, cross_check_gb_records($fetch_results, @term_set);
 
       sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
     }
@@ -618,6 +512,100 @@ sub merge {
   return $validated_datum;
 }
 
+sub cross_check_gb_records {
+    my ($fetch_results, @term_set) = @_;
+    my @data_left = ();
+    foreach my $datum_hash (@term_set) {
+        my $datum = $datum_hash->{'datum'}->clone();
+	
+        my ($genbank_feature) = grep { $datum->get_value() eq $_->{'GBSeq_primary-accession'} } $fetch_results->valueof();
+	
+        if ($genbank_feature) {
+	    # Pull out enough information from the GenBank record to create a Chado feature
+	    
+#          my ($dbest_id) = grep { $_ =~ m/^gnl\|dbEST\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $dbest_id =~ s/^gnl\|dbEST\|//;
+	    my ($seq_locus) = $genbank_feature->{'GBSeq_locus'};
+	    my ($genbank_gb) = grep { $_ =~ m/^gb\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gb =~ s/^gb\|//;
+	    my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
+	    my $genbank_acc = $genbank_feature->{'GBSeq_primary-accession'};
+	    my ($est_name) = ($genbank_feature->{'GBSeq_definition'} =~ m/^(\S+)/);
+	    my $sequence = $genbank_feature->{'GBSeq_sequence'};
+	    my $seqlen = length($sequence);
+	    my $timeaccessioned = $genbank_feature->{'GBSeq_create-date'};
+	    my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
+	    my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
+#	    use Data::Dumper;
+#	    print "gi: " . Dumper($genbank_gi) . "acc: " . Dumper($genbank_acc) . "locus: " . Dumper($seq_locus) . "\n";
+	    if (!($seq_locus)) {	      
+		log_error ("dbEST id for " . $datum->get_value() . " is not the primary identifier", "warning");
+		if ($genbank_gb) {
+		    log_error "but matches genbank gb: $genbank_gb", "warning";
+		} elsif ($genbank_gi) {
+		    log_error "but matches genbank gi: $genbank_gi", "warning";
+		} else {
+		    log_error "ID match not found", "error";		
+		    push @data_left, $datum_hash;
+		    next;
+		}
+		log_error "using GB primary accession: $genbank_acc", "notice";
+	    }
+	    
+	    # Create the feature object
+	    my $feature = new ModENCODE::Chado::Feature({
+		'name' => $est_name,
+		'uniquename' => $genbank_acc,
+		'residues' => $sequence,
+		'seqlen' => $seqlen,
+		'timeaccessioned' => $timeaccessioned,
+		'timelastmodified' => $timelastmodified,
+		'type' => new ModENCODE::Chado::CVTerm({
+		    'name' => 'EST',
+		    'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' })
+						       }),
+			'organism' => new ModENCODE::Chado::Organism({
+			    'genus' => $genus,
+			    'species' => $species,
+								     }),
+		'primary_dbxref' => new ModENCODE::Chado::DBXref({
+		    'accession' => $genbank_acc,
+		    'db' => new ModENCODE::Chado::DB({
+			'name' => 'GB',
+			'description' => 'GenBank',
+						     }),
+								 }),
+		'dbxrefs' => [ new ModENCODE::Chado::DBXref({
+		    'accession' => $genbank_gi,
+		    'db' => new ModENCODE::Chado::DB({
+			'name' => 'dbEST',
+			'description' => 'dbEST gi IDs',
+						     }),
+							    }),
+		    ],
+							});
+	    
+	    
+	    # Add the feature object to a copy of the datum for later merging
+	    $datum->add_feature($feature);
+	    $datum_hash->{'merged_datum'} = $datum;
+	    $datum_hash->{'is_valid'} = 1;
+        } elsif ($datum->get_value() eq "AH001028") {
+	    #special case - we hope to never see this id again
+	    log_error ("\'" . $datum->get_value() . "\' is a problematic ID.  Skipping...", "warning");
+	    $datum_hash->{'is_valid'} = 0;
+	    #$datum->add_feature($feature);
+	    $datum_hash->{'merged_datum'} = $datum;
+	    #next;
+	} else {
+	    log_error "Couldn't find the EST identified by '" . $datum->get_value() . "' in search results from NCBI.", "warning";
+	    log_error "Will retry finding matches in GenBank.", "warning";
+	    push @data_left, $datum_hash;
+        }
+    }
+
+    return @data_left;
+}
+
+
 sub get_parser_flybase : PRIVATE {
   my ($self) = @_;
   my $parser = new ModENCODE::Parser::Chado({
@@ -626,6 +614,20 @@ sub get_parser_flybase : PRIVATE {
       'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
       'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
       'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
+      'caching' => 0,
+    });
+  $parser->set_no_relationships(1);
+  return $parser;
+}
+
+sub get_parser_wormbase : PRIVATE {
+  my ($self) = @_;
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'password'),
       'caching' => 0,
     });
   $parser->set_no_relationships(1);
