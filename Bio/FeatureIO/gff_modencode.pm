@@ -350,14 +350,19 @@ sub seqio {
 
 sub sequence_region {
   my ($self,$k,$v) = @_;
+
   if(defined($k) && defined($v)){
-    $self->{'sequence_region'}{$k} = $v;
+    $self->{'sequence_region'}->{$k} = $v;
+    #print STDERR "defined k,v = $k,$v\n";
     return $v;
   }
   elsif(defined($k)){
-    return $self->{'sequence_region'}{$k};
+    #print STDERR "defined k = $k\n";
+    return $self->{'sequence_region'}->{$k};
+    
   }
   else {
+    #print STDERR "something else\n";
     return;
   }
 }
@@ -489,6 +494,7 @@ sub _handle_directive {
     $f->end(    $arg[2] );
 
     $f->type(   $fta    );
+    warn("What are you doing using ##sequence-region? Use ##genome-build!");
 
     #cache this in sequence_region(), we may need it for validation later.
     $self->sequence_region($f->seq_id => $f);
