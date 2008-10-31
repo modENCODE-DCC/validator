@@ -523,7 +523,11 @@ sub validate {
       bless($res, 'HASH');
       my $formdata = new ModENCODE::Validator::Wiki::FormData($res);
       $protocol_defs_by_url{ident $self}->{$protocol_description} = $formdata;
-
+      if (!$formdata->get_is_complete()) {
+	  log_error "\n", "notice", ".";
+	  log_error "Required fields are missing from the protocol wiki page at $protocol_description"; 
+	  $success = 0;
+      }
     }
     log_error "\n", "notice", ".";
   }
