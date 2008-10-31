@@ -365,7 +365,11 @@ sub merge {
     my ($protocol_description) = grep { $_->get_name() =~ /^\s*short *descriptions?$/i } @{$protocol_def->get_string_values()};
     if ($protocol_description) {
       $protocol_description = $protocol_description->get_values()->[0];
-      $protocol->set_description($protocol_description);
+      if ($protocol_description =~ /^\s*$/) {
+	  log_error "Short Description is empty for protocol '$protocol_name' found at $protocol_url", "error"; 
+      } else {
+	  $protocol->set_description($protocol_description);
+      }
     } else {
       log_error "No description for protocol $protocol_name found at $protocol_url. You must have a description for each protocol.", "error";
       $protocol->set_description("Please see: " . $protocol_url);

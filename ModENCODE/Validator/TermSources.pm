@@ -369,7 +369,7 @@ sub validate {
         my $dbxref = $all_dbxrefs->{$db}->{$accession}->{$version};
         next if $dbxref->get_accession() eq "__ignore";
         if (!$self->is_valid($dbxref, $dbxref->get_accession())) {
-          log_error "Termsource '" . $dbxref->get_db()->get_name() . "' (" . $dbxref->get_db()->get_url() . ") is not a valid DBXref.";
+          log_error "Termsource '" . $dbxref->get_db()->get_name() . "' (" . $dbxref->get_db()->get_url() . ") is not a valid DB.";
           $success = 0;
         }
       }
