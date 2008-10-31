@@ -367,7 +367,7 @@ sub merge {
       $protocol_description = $protocol_description->get_values()->[0];
       $protocol->set_description($protocol_description);
     } else {
-      log_error "No description for protocol $protocol_name found at $protocol_url. Using URL as description.", "warning";
+      log_error "No description for protocol $protocol_name found at $protocol_url. You must have a description for each protocol.", "error";
       $protocol->set_description("Please see: " . $protocol_url);
     }
     # Protocol type
@@ -519,6 +519,7 @@ sub validate {
       bless($res, 'HASH');
       my $formdata = new ModENCODE::Validator::Wiki::FormData($res);
       $protocol_defs_by_url{ident $self}->{$protocol_description} = $formdata;
+
     }
     log_error "\n", "notice", ".";
   }
@@ -534,7 +535,8 @@ sub validate {
       $wiki_protocol_def = $protocol_defs_by_name{ident $self}->{$protocol->get_name()} unless $wiki_protocol_def;
       if (!$wiki_protocol_def) {
         croak "Couldn't find definition for protocol '" . $protocol->get_name() . "' with wiki-link '" . $protocol->get_description() . "'";
-      }
+      } 
+
       # First, any wiki field with a CV needs to be validated
       foreach my $wiki_protocol_attr (@{$wiki_protocol_def->get_values()}) {
         if (scalar(@{$wiki_protocol_attr->get_types()}) && scalar(@{$wiki_protocol_attr->get_values()})) {

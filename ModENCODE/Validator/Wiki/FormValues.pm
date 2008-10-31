@@ -57,6 +57,7 @@ When setting, C<$values> can be either an arrayref or a C<ArrayOfStrings> which
 is a SOAP type that can be treated as an arrayref. It can also be a string, in
 which case it is set as the sole value of this object.
 
+
 =item new(\%args)
 
 Create a new C<FormValues> object with the given arguments. The default

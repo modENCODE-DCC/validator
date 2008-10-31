@@ -149,46 +149,59 @@ sub validate {
         ))
       ->type('FormDataQuery');
       my $res = $soap_client->getFormData($soap_data);
-
+      print STDERR "form_data: " . Dumper($res);
       if (!$res) {
         $pages{$attribute->get_value()} = 0;
       } else {
         bless($res, 'HASH');
         my $result_data = new ModENCODE::Validator::Wiki::FormData($res);
         if ($result_data) {
-          my @new_attributes = ( $attribute );
-          foreach my $formvalues (@{$result_data->get_values()}) {
-            my $rank = 0;
-            foreach my $formvalue (@{$formvalues->get_values()}) {
-              my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
-              my $type = new ModENCODE::Chado::CVTerm({
+          if ($result_data->get_is_complete()) {
+	    my @new_attributes = ( $attribute );
+	  
+	    if ($result_data->get_required()) {
+	      print STDERR $result_data->get_name() . " is required"; }
+	    else {
+	      print STDERR $result_data->get_name() . " is not required"; }
+	    foreach my $formvalues (@{$result_data->get_values()}) {
+	      my $rank = 0;
+	      foreach my $formvalue (@{$formvalues->get_values()}) {
+                my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
+		my $type = new ModENCODE::Chado::CVTerm({
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
-                });
-              if (!length($term) && length($cv)) {
-                $term = $cv;
-                $cv = $result_data->get_types()->[0];
-                if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
-                  my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
-                  $type = new ModENCODE::Chado::CVTerm({
-                      'name' => $term,
-                      'cv' => new ModENCODE::Chado::CV({ 'name' => $canonical_cvname }),
-                    });
-                }
-              } elsif (!length($term)) {
-                $term = $formvalue;
-              }
-              my $new_attribute = new ModENCODE::Chado::Attribute({
-                  'heading' => $formvalues->get_name(),
-                  'value' => $term,
-                  'rank' => $rank,
-                  'type' => $type,
-                });
-              $rank++;
-              push @new_attributes, $new_attribute;
-            }
-          }
-          $pages{$attribute->get_value()} = \@new_attributes; # Array of merged 
+                  });
+		if (!length($term) && length($cv)) {
+		  $term = $cv;
+		  $cv = $result_data->get_types()->[0];
+		  if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
+                    my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+		    $type = new ModENCODE::Chado::CVTerm({
+                        'name' => $term,
+                        'cv' => new ModENCODE::Chado::CV({ 'name' => $canonical_cvname }),
+                      });
+		  }
+		} elsif (!length($term)) {
+		    $term = $formvalue;
+		}
+		my $new_attribute = new ModENCODE::Chado::Attribute({
+                    'heading' => $formvalues->get_name(),
+                    'value' => $term,
+		    'rank' => $rank,
+		    'type' => $type,
+		    });
+		$rank++;
+		push @new_attributes, $new_attribute;
+	      }
+	    }
+	    $pages{$attribute->get_value()} = \@new_attributes; # Array of merged 
+	    log_error "Expanded wiki page " . $attribute->get_value(), "notice";
+	  } else {
+	      log_error "Required fields defined in wiki page " . 
+		  $attribute->get_value() . " in " . $attribute->get_heading() . 
+		  " [" . $attribute->get_name() . "] are missing.", "error";
+	      $success = 0;
+	  }
         }
       }
     }
