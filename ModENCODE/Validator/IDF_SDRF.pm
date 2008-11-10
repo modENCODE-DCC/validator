@@ -304,6 +304,17 @@ sub validate {
   # Protocols
   #   Get all the protocols from the sdrf_experiment and make sure they exist in the idf
   my @sdrf_protocols;
+
+  foreach my $experiment_prop (@{$self->get_idf_experiment()->get_properties()}) {
+    if ($experiment_prop->get_termsource()) {
+      my ($full_termsource) = grep { $_->get_db()->get_name() eq $experiment_prop->get_termsource()->get_db()->get_name() } @{$self->get_termsources()};
+      if (!$full_termsource ) {
+        log_error "Can't find the term source definition in the IDF for " . $experiment_prop->get_termsource()->get_db()->get_name() . " as it applies to " . $experiment_prop->get_name() . ".", "error";
+        return 0;
+        }
+    }
+  }
+
   foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
     foreach my $applied_protocol (@$applied_protocol_slots) {
       my @matching_protocols = grep { $_->equals($applied_protocol->get_protocol()) } @sdrf_protocols;
