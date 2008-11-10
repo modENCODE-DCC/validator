@@ -143,20 +143,25 @@ sub parse_traceXML : PRIVATE {
     my ($data) = @_;
     my $count = 0;
     $data = '<wrapper>' . $data . '</wrapper>';
+	use Data::Dumper;
+	print STDERR Dumper($data);
     my $parser = XML::XPath->new(xml => $data);
     my $nodeset = $parser->findnodes('/wrapper/trace'); #each record is wrapped in a trace-identifier 
 #    log_error "Parsed " . $nodeset->size . " trace records","notice";
     my @trace_data;
     foreach my $node ($nodeset->get_nodelist) {
         my $ti = $node->findvalue('./ti');
+
         my $trace_name = $node->findvalue('./trace_name');
         my $load_date = $node->findvalue('.//load_date');
 	my $organism = $node->findvalue('.//species_code');
+	my $sequence = $node->findvalue('.//sequence');
+	my $seqlen = $node->findvalue('.//basecall_length');
 	$organism = ucfirst(lc($organism));
 	my ($genus, $species) = ($organism =~ m/^(\S+)\s+(.*)$/);
 	
 #       print "processed $count: $ti | $trace_name | $load_date | $genus $species \n";                              
-        my $single_trace = { "trace_id" => $ti, "name" => $trace_name, "load_date" => $load_date, "genus" => $genus, "species" => $species };
+        my $single_trace = { "trace_id" => $ti, "name" => $trace_name, "load_date" => $load_date, "genus" => $genus, "species" => $species, "seqlen" => $seqlen, "sequence" => $sequence };
         push @trace_data, $single_trace;
         $count++;
     }
@@ -256,11 +261,15 @@ sub validate {
           my $load_date = $trace->{'load_date'};
 	  my $species   = $trace->{'species'};
 	  my $genus     = $trace->{'genus'};
+	  my $sequence  = $trace->{'sequence'};
+	  my $seqlen = $trace->{'seqlen'};
           #create the feature object
           my $feature = new ModENCODE::Chado::Feature({
               'name' => $trace_name,
               'uniquename' => $ti,
               'timeaccessioned' => $load_date,
+	      'seqlen' => $seqlen,
+	      'residues' => $sequence,
               'type' => new ModENCODE::Chado::CVTerm({
                 'name' => 'TraceArchive_record',  ##this should be changed to trace_archive_record        
                 'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
@@ -285,7 +294,7 @@ sub validate {
                 }),
               ],
           });
-
+	  print STDERR $feature;
           # Add the feature object to a copy of the datum for later merging
           $datum->add_feature($feature);
           $datum_hash->{'merged_datum'} = $datum;
