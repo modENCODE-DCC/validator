@@ -159,10 +159,10 @@ sub validate {
           if ($result_data->get_is_complete()) {
 	    my @new_attributes = ( $attribute );
 	  
-	    if ($result_data->get_required()) {
-	      print STDERR $result_data->get_name() . " is required"; }
-	    else {
-	      print STDERR $result_data->get_name() . " is not required"; }
+	    #if ($result_data->get_is_required()) {
+	    #  print STDERR $result_data->get_name() . " is required"; }
+	    #else {
+	    #  print STDERR $result_data->get_name() . " is not required"; }
 	    foreach my $formvalues (@{$result_data->get_values()}) {
 	      my $rank = 0;
 	      foreach my $formvalue (@{$formvalues->get_values()}) {
@@ -210,7 +210,7 @@ sub validate {
       # If %pages is false for this attribute, couldn't find the expansion page; nothing to expand
       if ($attribute->get_value()) {
         $success = 0;
-        log_error "Couldn't expand " . $attribute->get_value() . " in the " . $attribute->get_heading() . " [" . $attribute->get_name() . "] field into a new set of attribute columns in the " . ref($self) . " validator.", "error";
+        log_error "Couldn't expand " . $attribute->get_value() . " in the " . $attribute->get_heading() . " [" . $attribute->get_name() . "] field into a new set of attribute columns in the " . ref($self) . " validator.  This is either because the URL is incorrect or the wiki page is incomplete", "error";
       } else {
         log_error "Couldn't expand the empty value in the " . $attribute->get_heading() . " [" . $attribute->get_name() . "] field into a new set of attribute columns in the " . ref($self) . " validator.", "warning";
         $attribute_hash->{'merged_attributes'} = $attribute;
