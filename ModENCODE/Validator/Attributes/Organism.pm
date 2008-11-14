@@ -77,6 +77,7 @@ use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Organism;
 use ModENCODE::ErrorHandler qw(log_error);
+use Data::Dumper;
 
 sub validate {
   my ($self) = @_;
@@ -86,6 +87,7 @@ sub validate {
   my %organisms;
   foreach my $attribute_hash (@{$self->get_attributes()}) {
     my $attribute = $attribute_hash->{'attribute'}->clone();
+
     if (!$organisms{$attribute->get_value()}) {
       my ($genus, $species) = ($attribute->get_value() =~ m/^(\S+)\s+(.+)$/);
       if (length($genus) && length($species)) {
@@ -113,6 +115,7 @@ sub validate {
     }
   }
   log_error "Done.", "notice", "<";
+  return $success;
 }
 
 sub merge {
