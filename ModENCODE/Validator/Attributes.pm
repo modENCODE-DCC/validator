@@ -156,8 +156,11 @@ sub merge {
           my $validator = $validators{ident $self}->{$attribute_termsource_type};
           if ($validator) {
             my $merged_attributes = $validator->merge($attribute);
-            croak "Cannot merge attributes columns if they do not validate" unless $merged_attributes;
-            push @new_attributes, @$merged_attributes;
+	    if ($merged_attributes) {
+              push @new_attributes, @$merged_attributes;
+	    } else {
+	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
+	    }
           } else {
             # Just keep the original attribute
             push @new_attributes, $attribute;
@@ -167,8 +170,11 @@ sub merge {
           my $validator = $validators{ident $self}->{$attribute_type_source};
           if ($validator) {
             my $merged_attributes = $validator->merge($attribute);
-            croak "Cannot merge attributes columns if they do not validate" unless $merged_attributes;
-            push @new_attributes, @$merged_attributes;
+	    if ($merged_attributes) {
+              push @new_attributes, @$merged_attributes;
+	    } else {
+	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
+	    }
           } else {
             # Just keep the original attribute
             push @new_attributes, $attribute;
@@ -186,8 +192,11 @@ sub merge {
             my $validator = $validators{ident $self}->{$attribute_termsource_type};
             if ($validator) {
               my $merged_attributes = $validator->merge($attribute);
-              croak "Cannot merge attributes columns if they do not validate" unless $merged_attributes;
+	    if ($merged_attributes) {
               push @new_attributes, @$merged_attributes;
+	    } else {
+	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
+	    }
             } else {
               # Just keep the original attribute
               push @new_attributes, $attribute;
@@ -197,8 +206,11 @@ sub merge {
             my $validator = $validators{ident $self}->{$attribute_type_source};
             if ($validator) {
               my $merged_attributes = $validator->merge($attribute);
-              croak "Cannot merge attributes columns if they do not validate" unless $merged_attributes;
+	    if ($merged_attributes) {
               push @new_attributes, @$merged_attributes;
+	    } else {
+	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
+	    }
             } else {
               # Just keep the original attribute
               push @new_attributes, $attribute;
@@ -262,6 +274,7 @@ sub validate {
   }
   foreach my $validator (values(%{$validators{ident $self}})) {
     if (!$validator->validate()) {
+      log_error "Attributes columns do not validate", "error";
       return 0;
     }
   }
