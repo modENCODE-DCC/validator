@@ -149,7 +149,7 @@ sub validate {
         ))
       ->type('FormDataQuery');
       my $res = $soap_client->getFormData($soap_data);
-      print STDERR "form_data: " . Dumper($res);
+      #print STDERR "form_data: " . Dumper($res);
       if (!$res) {
         $pages{$attribute->get_value()} = 0;
       } else {
