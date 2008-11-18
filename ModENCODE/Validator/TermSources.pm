@@ -178,8 +178,11 @@ sub merge {
         if ($dbxref) {
           # If there's a dbxref for the cvterm, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
           # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
-          my $db_name = ($dbxref->get_db() ? $dbxref->get_db()->get_name() : $cvterm->get_cv()->get_name());
-          $dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
+
+          if (!$dbxref->get_db()) {
+            $dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($cvterm->get_cv()->get_name()));
+          }
+
           if ($dbxref->get_accession() eq $cvterm->get_name() && $dbxref->get_db()) {
             # If there's no accession or the accession is the same as the term, then try to fetch an accession
             my $new_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cvterm->get_cv()->get_name(), $cvterm->get_name());

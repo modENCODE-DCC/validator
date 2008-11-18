@@ -635,6 +635,7 @@ sub get_term_for_accession {
 
 sub get_db_object_by_cv_name {
   my ($self, $cvname) = @_;
+  #print STDERR "Get a DB by $cvname\n";
   foreach my $cvurl (keys(%{$cvs{ident $self}})) {
     my @names = @{$cvs{ident $self}->{$cvurl}->{'names'}};
     if (scalar(grep { $_ eq $cvname } @names)) {
