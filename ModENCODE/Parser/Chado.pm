@@ -922,7 +922,7 @@ sub get_feature_by_genbank_id {
     WHERE 
     db.name = 'GB' 
     AND o.genus = 'Drosophila' AND o.species = 'melanogaster'
-    AND (cv.name = 'SO' OR cv.name = 'sequence') AND (cvt.name != 'gene')
+    AND (cv.name = 'SO' OR cv.name = 'sequence') AND (cvt.name != 'gene' AND cvt.name != 'so')
     AND dbx.accession = ?
     ");
   $sth->execute($genbank_id);

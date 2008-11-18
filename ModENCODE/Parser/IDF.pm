@@ -802,7 +802,7 @@ sub BUILD {
   term_source_version:                  <skip:'[\r\n \t]*'> term_source_version_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $term_sources->{'Term Source Version'} = [] if (!defined($term_sources->{'Term Source Version'}));
-                                          push @{$term_sources->{'Term Source Version'}}, @{$item[4]};
+                                          #push @{$term_sources->{'Term Source Version'}}, @{$item[4]};
                                         }
   term_source_type_heading:             /Term *Source *Type/i
   term_source_type:                     <skip:'[\r\n \t]*'> term_source_type_heading <skip:'[ "]*\t[ "]*'> field_value(s)
