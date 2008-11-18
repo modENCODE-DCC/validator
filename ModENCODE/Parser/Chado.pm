@@ -304,7 +304,8 @@ my %username         :ATTR( :name<username>,         :default<''> );
 my %password         :ATTR( :name<password>,         :default<''> );
 my %cache            :ATTR(                          :default<{}> );
 my %cache_array      :ATTR(                          :default<{}> );
-my %protocol_slots   :ATTR(                          :default<[]> );
+#my %protocol_slots   :ATTR(                          :default<[]> );
+my %protocol_slots   :ATTR( :get<protocol_slots>,    :default<[]> );
 my %experiment       :ATTR(                          :default<undef> );
 my %prepared_queries :ATTR(                          :default<{}> );
 my %no_relationships :ATTR( :name<no_relationships>, :default<0> );
@@ -952,9 +953,13 @@ sub get_denormalized_protocol_slots {
   if (!scalar(@{$protocol_slots{ident $self}})) {
     log_error "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
-  my @new_protocol_slots = ($protocol_slots{ident $self}->[0]);
+  #my @new_protocol_slots = ($protocol_slots{ident $self}->[0]);
+  my @new_protocol_slots = ([]);
   foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
-    denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@new_protocol_slots);
+    my $num_duplicate_first_ap = scalar(denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@new_protocol_slots));
+    for (my $i=0; $i<$num_duplicate_first_ap; $i++) {
+	push @{$new_protocol_slots[0]}, $first_applied_protocol;
+    }		
   }
   my @return_protocol_slots;
   for (my $i = 0; $i < scalar(@new_protocol_slots); $i++) {
@@ -965,6 +970,18 @@ sub get_denormalized_protocol_slots {
     }
   }
   return \@return_protocol_slots;
+}
+
+sub get_full_denormalized_protocol_slots {
+  my ($self) = @_;  
+  my @new_protocol_slots = ([]);
+  foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
+    my $num_duplicate_first_ap = scalar(denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@new_protocol_slots));
+    for (my $i = 0; $i < $num_duplicate_first_ap; $i++) {
+      push @{$new_protocol_slots[0]}, $first_applied_protocol;
+    }
+  }
+  return \@new_protocol_slots; 
 }
 
 sub get_tsv {
