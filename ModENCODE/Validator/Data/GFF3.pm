@@ -387,7 +387,12 @@ sub gff_feature_to_chado_features : PRIVATE {
   if ($gff_obj_id eq $this_seq_region->seq_id()) {
     # If we have a feature with the same ID as the seqregion, then assign its type to
     # the seqregion, instead of relying on the default "region"
-    $this_seq_region_feature->get_type()->set_name($gff_obj->type()->name());
+      if (!($this_seq_region_feature->get_type())) {
+	  log_error "You have an error with your GFF file at the feature " . $this_seq_region_feature->to_string() . "\n  You might not have your features in the correct order.  Be sure your Parent features occur first, followed by Target features, followed by the rest.", "error";
+	  return -1;
+      } else {
+	  $this_seq_region_feature->get_type()->set_name($gff_obj->type()->name());
+      }
     # Return this as the feature
     return $this_seq_region_feature;
   }
