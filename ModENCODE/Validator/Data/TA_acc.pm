@@ -143,8 +143,8 @@ sub parse_traceXML : PRIVATE {
     my ($data) = @_;
     my $count = 0;
     $data = '<wrapper>' . $data . '</wrapper>';
-	use Data::Dumper;
-	print STDERR Dumper($data);
+	#use Data::Dumper;
+	#print STDERR Dumper($data);
     my $parser = XML::XPath->new(xml => $data);
     my $nodeset = $parser->findnodes('/wrapper/trace'); #each record is wrapped in a trace-identifier 
 #    log_error "Parsed " . $nodeset->size . " trace records","notice";
@@ -294,7 +294,7 @@ sub validate {
                 }),
               ],
           });
-	  print STDERR $feature;
+	  #print STDERR $feature;
           # Add the feature object to a copy of the datum for later merging
           $datum->add_feature($feature);
           $datum_hash->{'merged_datum'} = $datum;
