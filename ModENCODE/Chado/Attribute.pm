@@ -179,72 +179,79 @@ L<http://www.modencode.org>.
 
 use strict;
 use Class::Std;
-use Carp qw(croak);
+use Carp qw(croak confess);
 
 
 # Attributes
-my %name             :ATTR( :name<name>,                :default<''> );
-my %heading          :ATTR( :name<heading>,             :default<''> );
-my %value            :ATTR( :name<value>,               :default<''> );
-my %rank             :ATTR( :name<rank>,                :default<0> );
+my %attribute_id     :ATTR( :name<id>,                          :default<undef> );
+my %name             :ATTR( :get<name>,      :init_arg<name>,   :default<''> );
+my %heading          :ATTR( :get<heading>,   :init_arg<heading> );
+my %value            :ATTR( :name<value>,                       :default<''> );
+my %rank             :ATTR( :get<rank>,      :init_arg<rank>,   :default<0> );
 
 # Relationships
-my %termsource       :ATTR( :get<termsource>,           :default<undef> );
-my %type             :ATTR( :get<type>,                 :default<undef> );
-my %organisms        :ATTR( :get<organisms>,            :default<[]> );
+my %termsource       :ATTR( :set<termsource>,           :init_arg<termsource>, :default<undef> );
+my %type             :ATTR( :set<type>,                 :init_arg<type>, :default<undef> );
+my %organisms        :ATTR( :set<organisms>,            :init_arg<organisms>, :default<[]> );
 
-sub BUILD {
-  my ($self, $ident, $args) = @_;
-  my $termsource = $args->{'termsource'};
-  if (defined($termsource)) {
-    $self->set_termsource($termsource);
-  }
-  my $type = $args->{'type'};
-  if (defined($type)) {
-    $self->set_type($type);
-  }
-  my $organisms = $args->{'organisms'};
-  if (defined($organisms)) {
-    if (ref($organisms) ne 'ARRAY') {
-      $organisms = [ $organisms ];
-    }
-    foreach my $organism (@$organisms) {
-      $self->add_organism($organism);
-    }
-  }
+sub new_no_cache {
+  return Class::Std::new(@_);
 }
 
-sub set_type {
-  my ($self, $type) = @_;
-  ($type->isa('ModENCODE::Chado::CVTerm')) or croak("Can't add a " . ref($type) . " as a type.");
-  $type{ident $self} = $type;
-}
-
-sub set_termsource {
-  my ($self, $this_termsource) = @_;
-  ($this_termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($this_termsource) . " as a termsource.");
-  $termsource{ident $self} = $this_termsource;
+sub new {
+  confess "Shouldn't use Attribute.new directly";
 }
 
 sub add_organism {
   my ($self, $organism) = @_;
-  ($organism->isa('ModENCODE::Chado::Organism')) or croak("Can't add a " . ref($organism) . " as an organism.");
+  ($organism->isa('ModENCODE::Cache::Organism')) or croak("Can't add a " . ref($organism) . " as an organism.");
   push @{$organisms{ident $self}}, $organism;
+  $self->save;
 }
 
-sub set_organisms {
-  my ($self, $organisms) = @_;
-  $organisms{ident $self} = [];
-  foreach my $organism (@$organisms) {
-    $self->add_organism($organism);
-  }
+sub get_organism_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$organisms{ident $self}}
+}
+
+sub get_organisms {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $organisms = $organisms{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$organisms : @$organisms;
+}
+
+sub get_type_id {
+  my $self = shift;
+  return $type{ident $self} ? $type{ident $self}->get_id : undef;
+}
+
+sub get_type {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $type = $type{ident $self};
+  return undef unless defined $type;
+  return $get_cached_object ? $type{ident $self}->get_object : $type{ident $self};
+}
+
+sub get_termsource_id {
+  my $self = shift;
+  return $termsource{ident $self} ? $termsource{ident $self}->get_id : undef;
+}
+
+sub get_termsource {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $termsource = $termsource{ident $self};
+  return undef unless defined $termsource;
+  return $get_cached_object ? $termsource{ident $self}->get_object : $termsource{ident $self};
 }
 
 sub to_string {
   my ($self) = @_;
   my $string = $self->get_heading() . "[" . $self->get_name() . "]";
-  $string .= $self->get_type()->to_string() if $self->get_type();
-  $string .= $self->get_termsource->to_string() if $self->get_termsource();
+  $string .= $self->get_type()->get_object->to_string() if $self->get_type();
+  $string .= $self->get_termsource->get_object->to_string() if $self->get_termsource();
   $string .= "='" . $self->get_value() . "'";
 }
 
@@ -277,19 +284,9 @@ sub equals {
   return 1;
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::Attribute({
-      'name' => $self->get_name(),
-      'heading' => $self->get_heading(),
-      'value' => $self->get_value(),
-    });
-  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
-  $clone->set_type($self->get_type()->clone()) if $self->get_type();
-  foreach my $organism (@{$self->get_organisms()}) {
-    $clone->add_organism($organism->clone());
-  }
-  return $clone;
+sub save {
+  ModENCODE::Cache::save_attribute(shift);
 }
 
 1;
+

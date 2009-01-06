@@ -129,7 +129,8 @@ use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
 my %data                        :ATTR( :get<data>,                      :default<[]> );
-my %data_validator              :ATTR( :init_arg<data_validator> );
+my %cursor_position             :ATTR( :default<0> );
+my %experiment                  :ATTR( :init_arg<experiment>,           :get<experiment> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -138,55 +139,35 @@ sub BUILD {
   }
 }
 
-sub get_data_validator : RESTRICTED {
-  my ($self) = @_;
-  return $data_validator{ident $self};
+sub add_datum_pair {
+  my ($self, $datum_pair)  = @_;
+  push @{$data{ident $self}}, $datum_pair;
 }
 
-sub is_valid {
-  my ($self, $datum, $applied_protocol) = @_;
-  my $validated_entry = grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()};
-
-  if ($validated_entry->{'is_valid'} == -1) {
-    croak "The datum " . $datum->to_string() . " hasn't been validated yet";
-  } else {
-    return $validated_entry->{'is_valid'};
-  }
-}
-sub add_datum {
-  my ($self, $datum, $applied_protocol, $quick_check_equals)  = @_;
-#  $quick_check_equals ||= 0;
-  $datum->isa('ModENCODE::Chado::Data') or Carp::confess "Can't add a " .  ref($datum) . " to a data validator as a datum.";
-  $applied_protocol->isa('ModENCODE::Chado::AppliedProtocol') or Carp::confess "Can't add a " .  ref($applied_protocol) . " to a data validator as an applied_protocol.";
-#  if ($quick_check_equals) {
-#    my $datum_exists = scalar(grep { $_->{'datum'} == $datum } @{$self->get_data()});
-#    if (!$datum_exists) {
-
-      push @{$data{ident $self}}, { 'datum' => $datum, 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
-#    }
-#  } else {
-#    my $datum_exists = scalar(
-#      grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()}
-#    );
-#    my $datum_exists = scalar(grep { $_->{'datum'} == $datum } @{$self->get_data()});
-#    if (!$datum_exists) {
-#      push @{$self->get_data()}, { 'datum' => $datum->clone(), 'applied_protocol' => $applied_protocol, 'is_valid' => -1 };
-#    }
-#  }
+sub rewind {
+  my $self = shift;
+  $cursor_position{ident $self} = 0;
 }
 
-sub get_datum {
-  my ($self, $datum, $applied_protocol) = @_;
-  my ($entry) = grep { $_->{'datum'}->equals($datum) && $_->{'applied_protocol'}->equals($applied_protocol) } @{$self->get_data()};
-  return $entry;
+sub next_datum {
+  my $self = shift;
+  my $datum = $data{ident $self}->[$cursor_position{ident $self}++];
+  return $datum;
 }
+
+sub remove_current_datum {
+  my $self = shift;
+  splice @{$data{ident $self}}, --$cursor_position{ident $self}, 1;
+}
+
+sub num_data {
+  my $self = shift;
+  return scalar(@{$data{ident $self}});
+}
+
 sub validate {
   my ($self) = @_;
   croak "You must implement the 'validate' method in " . ref($self) . " before you use it as a data validator.";
-}
-sub merge {
-  my ($self) = @_;
-  croak "You must implement the 'merge' method in " . ref($self) . " before you use it as a data validator.";
 }
 
 1;

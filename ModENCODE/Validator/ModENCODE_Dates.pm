@@ -83,26 +83,28 @@ use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
+my %experiment                 :ATTR( :name<experiment> );
 my %merged_data                :ATTR(                                   :default<{}> );
 
 sub validate {
-  my ($self, $experiment) = @_;
+  my ($self) = @_;
+  
+  my $experiment = $self->get_experiment();
 
   my $current_time = time();
   my $current_date = Date::Format::time2str("%Y-%m-%d", $current_time, 'GMT');
 
-  my ($public_release_date) = grep { $_->get_name() eq "Public Release Date" } @{$experiment->get_properties()};
-  my ($date_of_experiment) = grep { $_->get_name() eq "Date of Experiment" } @{$experiment->get_properties()};
-
-  $public_release_date = $public_release_date->clone() if $public_release_date;
-  $date_of_experiment = $date_of_experiment->clone() if $date_of_experiment;
+  my ($public_release_date) = grep { $_->get_object->get_name() eq "Public Release Date" } $experiment->get_properties;
+  my ($date_of_experiment) = grep { $_->get_object->get_name() eq "Date of Experiment" } $experiment->get_properties;
 
   if (!$public_release_date) {
     $public_release_date = new ModENCODE::Chado::ExperimentProp({
         'value' => '',
         'type' => new ModENCODE::Chado::CVTerm({'name' => 'date', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
         'name' => 'Public Release Date',
+        'experiment' => $experiment,
       });
+    $experiment->add_property($public_release_date);
   }
 
   if (!$date_of_experiment) {
@@ -110,22 +112,24 @@ sub validate {
         'value' => '',
         'type' => new ModENCODE::Chado::CVTerm({'name' => 'date', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
         'name' => 'Date of Experiment',
+        'experiment' => $experiment,
       });
+    $experiment->add_property($date_of_experiment);
   }
 
-  my $release_date = $public_release_date->get_value();
+  my $release_date = $public_release_date->get_object->get_value();
   if (!length($release_date)) {
     log_error "No Public Release Date provided in the IDF, assuming current date: " . Date::Format::time2str("%b %e, %Y", $current_time, 'GMT') . " GMT.", "warning";
-    $public_release_date->set_value($current_date);
+    $public_release_date->get_object->set_value($current_date);
   }
 
-  my $experiment_date = $date_of_experiment->get_value();
+  my $experiment_date = $date_of_experiment->get_object->get_value();
   if (!length($experiment_date)) {
     log_error "No Date of Experiment provided in the IDF, assuming current date: " . Date::Format::time2str("%b %e, %Y", $current_time, 'GMT') . " GMT.", "warning";
-    $date_of_experiment->set_value($current_date);
+    $date_of_experiment->get_object->set_value($current_date);
   }
 
-  $release_date = $public_release_date->get_value();
+  $release_date = $public_release_date->get_object->get_value();
   if ($release_date !~ /^\d{4}-\d{2}-\d{2}/) {
     my $date = Date::Parse::str2time($release_date);
     if (!$date) {
@@ -135,10 +139,10 @@ sub validate {
     my $human_date = Date::Format::time2str("%b %e, %Y", $date);
     my $parsed_date = Date::Format::time2str("%Y-%m-%d", $date);
     log_error "The Public Release Date '$release_date' was not in the format YYYY-MM-DD. It has been parsed as $parsed_date, i.e. $human_date.", "warning";
-    $public_release_date->set_value($parsed_date);
+    $public_release_date->get_object->set_value($parsed_date);
   }
 
-  $experiment_date = $date_of_experiment->get_value();
+  $experiment_date = $date_of_experiment->get_object->get_value();
   if ($experiment_date !~ /^\d{4}-\d{2}-\d{2}/) {
     my $date = Date::Parse::str2time($experiment_date);
     if (!$date) {
@@ -148,32 +152,10 @@ sub validate {
     my $human_date = Date::Format::time2str("%b %e, %Y", $date);
     my $parsed_date = Date::Format::time2str("%Y-%m-%d", $date);
     log_error "The Date of Experiment '$experiment_date' was not in the format YYYY-MM-DD. It has been parsed as $parsed_date, i.e. $human_date.", "warning";
-    $date_of_experiment->set_value($parsed_date);
+    $date_of_experiment->get_object->set_value($parsed_date);
   }
-
-  $merged_data{ident $self}->{'Public Release Date'} = $public_release_date;
-  $merged_data{ident $self}->{'Date of Experiment'} = $date_of_experiment;
 
   return 1;
-}
-
-sub merge {
-  my ($self, $experiment) = @_;
-  #$experiment = $experiment->clone();
-  my ($public_release_date) = grep { $_->get_name() eq "Public Release Date" } @{$experiment->get_properties()};
-  my ($date_of_experiment) = grep { $_->get_name() eq "Date of Experiment" } @{$experiment->get_properties()};
-
-  if ($public_release_date) {
-    $public_release_date->set_value($merged_data{ident $self}->{'Public Release Date'}->get_value());
-  } else {
-    $experiment->add_property($merged_data{ident $self}->{'Public Release Date'});
-  }
-  if ($date_of_experiment) {
-    $date_of_experiment->set_value($merged_data{ident $self}->{'Date of Experiment'}->get_value());
-  } else {
-    $experiment->add_property($merged_data{ident $self}->{'Date of Experiment'});
-  }
-  return $experiment;
 }
 
 1;

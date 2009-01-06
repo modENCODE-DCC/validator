@@ -248,19 +248,59 @@ use Carp qw(croak);
 
 
 # Attributes
-my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
-my %name             :ATTR( :name<name>,                :default<''> );
-my %heading          :ATTR( :name<heading>,             :default<''> );
-my %value            :ATTR( :name<value>,               :default<''> );
-my %anonymous        :ATTR( :set<anonymous>,            :init_arg<anonymous>,           :default<0> );
+my %data_id          :ATTR( :name<id>,                  :default<undef> );
+my %heading          :ATTR( :get<heading>,              :init_arg<heading> );
+my %name             :ATTR( :get<name>,                 :init_arg<name>,        :default<''> );
+my %value            :ATTR( :get<value>,                :init_arg<value> );
+my %anonymous        :ATTR( :set<anonymous>,            :init_arg<anonymous>,   :default<0> );
 
 # Relationships
-my %termsource       :ATTR( :get<termsource>,           :default<undef> );
-my %type             :ATTR( :get<type>,                 :default<undef> );
-my %attributes       :ATTR( :get<attributes>,           :default<[]> );
-my %features         :ATTR( :get<features>,             :default<[]> );
-my %wiggle_datas     :ATTR( :get<wiggle_datas>,         :default<[]> );
-my %organisms        :ATTR( :get<organisms>,            :default<[]> );
+my %termsource       :ATTR( :set<termsource>,           :init_arg<termsource>,  :default<undef> );
+my %type             :ATTR( :set<type>,                 :init_arg<type>,        :default<undef> );
+my %attributes       :ATTR( :set<attributes>,           :init_arg<attributes>,  :default<[]> );
+my %features         :ATTR( :set<features>,             :init_arg<features>,    :default<[]> );
+my %wiggle_datas     :ATTR( :set<wiggle_datas>,         :init_arg<wiggle_datas>, :default<[]> );
+my %organisms        :ATTR( :set<organisms>,            :init_arg<organisms>,   :default<[]> );
+
+sub new_no_cache {
+  return Class::Std::new(@_);
+}
+
+sub new {
+  my $temp = Class::Std::new(@_);
+  my $cached_datum = ModENCODE::Cache::get_cached_datum($temp);
+
+  if ($cached_datum) {
+    # Update any cached datum
+    my $need_save = 0;
+    if ($temp->get_termsource() && !($cached_datum->get_object->get_termsource())) {
+      $cached_datum->get_object->set_termsource($temp->get_termsource);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_attributes) && !scalar($cached_datum->get_object->get_attributes)) {
+      $cached_datum->get_object->set_attributes($temp->get_attributes);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_features) && !scalar($cached_datum->get_object->get_features)) {
+      $cached_datum->get_object->set_features($temp->get_features);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_wiggle_datas) && !scalar($cached_datum->get_object->get_wiggle_datas)) {
+      $cached_datum->get_object->set_wiggle_datas($temp->get_wiggle_datas);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_organisms) && !scalar($cached_datum->get_object->get_organisms)) {
+      $cached_datum->get_object->set_organisms($temp->get_organisms);
+      $need_save = 1;
+    }
+    ModENCODE::Cache::save_datum($cached_datum->get_object) if $need_save;
+    return $cached_datum;
+  }
+
+  # This is a new datum
+  my $self = $temp;
+  return ModENCODE::Cache::add_datum_to_cache($self);
+}
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -315,71 +355,101 @@ sub is_anonymous {
   return $anonymous{ident $self};
 }
 
-sub set_attributes {
-  my ($self, $attributes) = @_;
-  $attributes{ident $self} = [];
-  foreach my $attribute (@$attributes) {
-    $self->add_attribute($attribute);
-  }
+sub get_attribute_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$attributes{ident $self}}
+}
+
+sub get_attributes {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $attributes = $attributes{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$attributes : @$attributes;
+}
+
+sub get_feature_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$features{ident $self}}
+}
+
+sub get_features {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $features = $features{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$features : @$features;
+}
+
+sub get_wiggle_data_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$wiggle_datas{ident $self}}
+}
+
+sub get_wiggle_datas {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $wiggle_datas = $wiggle_datas{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$wiggle_datas : @$wiggle_datas;
+}
+
+sub get_organism_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$organisms{ident $self}}
+}
+
+sub get_organisms {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $organisms = $organisms{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$organisms : @$organisms;
+}
+
+sub get_type_id {
+  my $self = shift;
+  return $type{ident $self} ? $type{ident $self}->get_id : undef;
+}
+
+sub get_type {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $type = $type{ident $self};
+  return undef unless defined $type;
+  return $get_cached_object ? $type{ident $self}->get_object : $type{ident $self};
+}
+
+sub get_termsource_id {
+  my $self = shift;
+  return $termsource{ident $self} ? $termsource{ident $self}->get_id : undef;
+}
+
+sub get_termsource {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $termsource = $termsource{ident $self};
+  return undef unless defined $termsource;
+  return $get_cached_object ? $termsource->get_object : $termsource;
 }
 
 sub add_feature {
   my ($self, $feature) = @_;
-  ($feature->isa('ModENCODE::Chado::Feature')) or croak("Can't add a " . ref($feature) . " as a feature.");
+  ($feature->get_object->isa('ModENCODE::Chado::Feature')) or croak("Can't add a " . ref($feature) . " as a feature.");
   push @{$features{ident $self}}, $feature;
-}
-
-sub set_features {
-  my ($self, $features) = @_;
-  $features{ident $self} = [];
-  foreach my $feature (@$features) {
-    $self->add_feature($feature);
-  }
 }
 
 sub add_wiggle_data {
   my ($self, $wiggle_data) = @_;
-  ($wiggle_data->isa('ModENCODE::Chado::Wiggle_Data')) or croak("Can't add a " . ref($wiggle_data) . " as a wiggle_data.");
+  ($wiggle_data->get_object->isa('ModENCODE::Chado::Wiggle_Data')) or croak("Can't add a " . ref($wiggle_data) . " as a wiggle_data.");
   push @{$wiggle_datas{ident $self}}, $wiggle_data;
-}
-
-sub set_wiggle_datas {
-  my ($self, $wiggle_datas) = @_;
-  $wiggle_datas{ident $self} = [];
-  foreach my $wiggle_data (@$wiggle_datas) {
-    $self->add_wiggle_data($wiggle_data);
-  }
 }
 
 sub add_organism {
   my ($self, $organism) = @_;
-  ($organism->isa('ModENCODE::Chado::Organism')) or croak("Can't add a " . ref($organism) . " as an organism.");
+  ($organism->get_object->isa('ModENCODE::Chado::Organism')) or croak("Can't add a " . ref($organism) . " as an organism.");
   push @{$organisms{ident $self}}, $organism;
-}
-
-sub set_organisms {
-  my ($self, $organisms) = @_;
-  $organisms{ident $self} = [];
-  foreach my $organism (@$organisms) {
-    $self->add_organism($organism);
-  }
-}
-
-sub set_type {
-  my ($self, $type) = @_;
-  ($type->isa('ModENCODE::Chado::CVTerm')) or croak("Can't add a " . ref($type) . " as a type.");
-  $type{ident $self} = $type;
-}
-
-sub set_termsource {
-  my ($self, $termsource) = @_;
-  ($termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($termsource) . " as a termsource.");
-  $termsource{ident $self} = $termsource;
 }
 
 sub add_attribute {
   my ($self, $attribute) = @_;
-  ($attribute->isa('ModENCODE::Chado::Attribute')) or croak("Can't add a " . ref($attribute) . " as a attribute.");
+  ($attribute->get_object->isa('ModENCODE::Chado::Attribute')) or croak("Can't add a " . ref($attribute) . " as a attribute.");
   push @{$attributes{ident $self}}, $attribute;
 }
 
@@ -387,21 +457,22 @@ sub to_string {
   my ($self) = @_;
   my $string = $self->get_heading();
   $string .= "['" . $self->get_name() . "']" if $self->get_name();
-  $string .= $self->get_termsource()->to_string() if $self->get_termsource();
-  if (scalar(@{$self->get_attributes()})) {
+  $string .= $self->get_termsource()->get_object->to_string() if $self->get_termsource();
+  if (scalar($self->get_attributes())) {
     $string .= "<";
-    foreach my $attribute (@{$self->get_attributes()}) {
+    foreach my $attribute ($self->get_attributes(1)) {
       $string .= $attribute->to_string();
     }
     $string .= ">";
   }
-  $string .= $self->get_type()->to_string() if $self->get_type();
-  $string .= "=" if ($self->get_value() || scalar(@{$self->get_features()}) || scalar(@{$self->get_wiggle_datas()}));
+  $string .= $self->get_type()->get_object->to_string() if $self->get_type();
+  $string .= "=" if ($self->get_value || scalar($self->get_features) || scalar($self->get_wiggle_datas));
   $string .= $self->get_value();
-  foreach my $feature (@{$self->get_features()}) {
+  $string .= " with " . scalar($self->get_features) . " features";
+  foreach my $feature ($self->get_features(1)) {
     $string .= "," . $feature->to_string();
   }
-  foreach my $wiggle_data (@{$self->get_wiggle_datas()}) {
+  foreach my $wiggle_data ($self->get_wiggle_datas(1)) {
     $string .= "," . $wiggle_data->to_string();
   }
   return $string;
@@ -458,61 +529,9 @@ sub equals {
   return 1;
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::Data({
-      'name' => $self->get_name(),
-      'heading' => $self->get_heading(),
-      'value' => $self->get_value(),
-      'chadoxml_id' => $self->get_chadoxml_id(),
-      'anonymous' => $self->is_anonymous(),
-    });
-  foreach my $attribute (@{$self->get_attributes()}) {
-    $clone->add_attribute($attribute->clone());
-  }
-  foreach my $feature (@{$self->get_features()}) {
-    $clone->add_feature($feature->clone());
-  }
-  foreach my $wiggle_data (@{$self->get_wiggle_datas()}) {
-    $clone->add_wiggle_data($wiggle_data->clone());
-  }
-  foreach my $organism (@{$self->get_organisms()}) {
-    $clone->add_organism($organism->clone());
-  }
-  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
-  $clone->set_type($self->get_type()->clone()) if $self->get_type();
-  return $clone;
+sub save {
+  ModENCODE::Cache::save_datum(shift);
 }
-
-sub mimic {
-  my ($self, $other) = @_;
-  croak "Datum " . $self->to_string() . " cannot mimic an object of type " . ref($other) if (ref($self) ne ref($other));
-  $self->set_name($other->get_name());
-  $self->set_heading($other->get_heading());
-  $self->set_value($other->get_value());
-  $self->set_chadoxml_id($other->get_chadoxml_id());
-  $self->set_anonymous($other->is_anonymous());
-  $attributes{ident $self} = [];
-  $features{ident $self} = [];
-  $wiggle_datas{ident $self} = [];
-  $organisms{ident $self} = [];
-  foreach my $attribute (@{$other->get_attributes()}) {
-    $self->add_attribute($attribute);
-  }
-  foreach my $feature (@{$other->get_features()}) {
-    $self->add_feature($feature);
-  }
-  foreach my $wiggle_data (@{$other->get_wiggle_datas()}) {
-    $self->add_wiggle_data($wiggle_data);
-  }
-  foreach my $organism (@{$other->get_organisms()}) {
-    $self->add_organism($organism);
-  }
-  $termsource{ident $self} = undef;
-  $type{ident $self} = undef;
-  $self->set_termsource($other->get_termsource()) if $other->get_termsource();
-  $self->set_type($other->get_type()) if $other->get_type();
-}
-
 
 1;
+

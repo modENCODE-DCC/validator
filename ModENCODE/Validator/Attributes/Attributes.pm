@@ -122,7 +122,11 @@ use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %attributes                        :ATTR( :get<attributes>, :default<[]> );
+use constant PROTOCOL => 1;
+use constant DATUM => 2;
+
+my %attributes          :ATTR( :get<attributes>, :default<[]> );
+my %cursor_position     :ATTR( :default<0> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -131,33 +135,25 @@ sub BUILD {
   }
 }
 
-sub is_valid {
-  my ($self, $attribute) = @_;
-  my $validated_entry = grep { $_->{'attribute'}->equals($attribute); } @{$self->get_attributes()};
-
-  if ($validated_entry->{'is_valid'} == -1) {
-    croak "The attribute " . $attribute->to_string() . " hasn't been validated yet";
-  } else {
-    return $validated_entry->{'is_valid'};
-  }
-}
 sub add_attribute {
   my ($self, $attribute)  = @_;
-  $attribute->isa('ModENCODE::Chado::Attribute') or Carp::confess "Can't add a " . ref($attribute) . " to an attribute validator as an attribute.";
-  my $attribute_exists = scalar(
-    grep { $_->{'attribute'}->equals($attribute); } @{$self->get_attributes()}
-  );
-  if (!$attribute_exists) {
-    push @{$self->get_attributes()}, { 'attribute' => $attribute->clone(), 'is_valid' => -1 };
-  }
+  push @{$attributes{ident $self}}, $attribute unless scalar(grep { $_ == $attribute }  @{$attributes{ident $self}});
 }
+
+sub rewind {
+  my $self = shift;
+  $cursor_position{ident $self} = 0;
+}
+
+sub next_attribute {
+  my $self = shift;
+  my $attribute = $attributes{ident $self}->[$cursor_position{ident $self}++];
+  return $attribute;
+}
+
 sub validate {
   my ($self) = @_;
   croak "You must implement the 'validate' method in " . ref($self) . " before you use it as an attribute validator.";
-}
-sub merge {
-  my ($self) = @_;
-  croak "You must implement the 'merge' method in " . ref($self) . " before you use it as an attribute validator.";
 }
 
 1;

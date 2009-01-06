@@ -139,16 +139,60 @@ L<http://www.modencode.org>.
 
 use strict;
 use Class::Std;
+use ModENCODE::Cache;
 use Carp qw(croak);
 
 # Attributes
-my %name             :ATTR( :name<name> );
-my %value            :ATTR( :name<value>,               :default<''> );
-my %rank             :ATTR( :name<rank>,                :default<0> );
+
+my %experimentprop_id   :ATTR( :name<id>,                  :default<undef> );
+my %name                :ATTR( :get<name>,                 :init_arg<name> );
+my %value               :ATTR( :name<value>,               :default<''> );
+my %rank                :ATTR( :name<rank>,                :init_arg<rank>, :default<0> );
 
 # Relationships
-my %termsource       :ATTR( :get<termsource>,           :default<undef> );
-my %type             :ATTR( :get<type>,                 :default<undef> );
+my %termsource          :ATTR( :set<termsource>,           :init_arg<termsource>, :default<undef> );
+my %type                :ATTR( :set<type>,                 :init_arg<type>, :default<undef> );
+my %experiment          :ATTR( :init_arg<experiment> );
+
+sub new_no_cache {
+  return Class::Std::new(@_);
+}
+
+sub new {
+  my $temp = Class::Std::new(@_);
+  my $cached_experimentprop = ModENCODE::Cache::get_cached_experimentprop($temp);
+
+  if ($cached_experimentprop) {
+    # Update any cached experimentprop
+    my $need_save = 0;
+    if ($temp->get_value && !($cached_experimentprop->get_value())) {
+      $cached_experimentprop->set_value($temp->get_value);
+      $need_save = 1;
+    } 
+    if ($temp->get_rank && !($cached_experimentprop->get_rank())) {
+      $cached_experimentprop->set_rank($temp->get_rank);
+      $need_save = 1;
+    }
+    if ($temp->get_termsource && !($cached_experimentprop->get_termsource())) {
+      $cached_experimentprop->set_termsource($temp->get_termsource);
+      $need_save = 1;
+    }
+    if ($temp->get_type && !($cached_experimentprop->get_type())) {
+      $cached_experimentprop->set_type($temp->get_type);
+      $need_save = 1;
+    }
+    if ($temp->get_experiment && !($cached_experimentprop->get_experiment())) {
+      $cached_experimentprop->set_experiment($temp->get_experiment);
+      $need_save = 1;
+    }
+    ModENCODE::Cache::save_experimentprop($cached_experimentprop) if $need_save; # For update
+    return $cached_experimentprop;
+  }
+
+  # This is a new ExperimentProp
+  my $self = $temp;
+  return ModENCODE::Cache::add_experimentprop_to_cache($self);
+}
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -162,62 +206,60 @@ sub BUILD {
   }
 }
 
-sub set_type {
-  my ($self, $type) = @_;
-  ($type->isa('ModENCODE::Chado::CVTerm')) or croak("Can't add a " . ref($type) . " as a type.");
-  $type{ident $self} = $type;
-}
-
-sub set_termsource {
-  my ($self, $this_termsource) = @_;
-  ($this_termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($this_termsource) . " as a termsource.");
-  $termsource{ident $self} = $this_termsource;
-}
-
 sub to_string {
   my ($self) = @_;
   my $string;
   $string .= $self->get_rank() . ":" if (defined($self->get_rank()));
   $string .= $self->get_name() if $self->get_name();
-  $string .= "<" . $self->get_type()->to_string() . ">" if $self->get_type();
-  $string .= $self->get_termsource()->to_string() if $self->get_termsource();
+  $string .= "<" . $self->get_type()->get_object->to_string() . ">" if $self->get_type();
+  $string .= $self->get_termsource()->get_object->to_string() if $self->get_termsource();
   $string .= "='" . $self->get_value() . "'";
   return $string;
 }
 
-sub equals {
-  my ($self, $other) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_value() eq $other->get_value() && $self->get_rank() eq $other->get_rank());
-
-  if ($self->get_termsource()) {
-    return 0 unless $other->get_termsource();
-    return 0 unless $self->get_termsource()->equals($other->get_termsource());
-  } else {
-    return 0 if $other->get_termsource();
-  }
-
-  if ($self->get_type()) {
-    return 0 unless $other->get_type();
-    return 0 unless $self->get_type()->equals($other->get_type());
-  } else {
-    return 0 if $other->get_type();
-  }
-
-  return 1;
+sub get_termsource_id {
+  my $self = shift;
+  return $termsource{ident $self} ? $termsource{ident $self}->get_id : undef;
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::ExperimentProp({
-      'name' => $self->get_name(),
-      'value' => $self->get_value(),
-      'rank' => $self->get_rank(),
-    });
-  $clone->set_type($self->get_type()->clone()) if $self->get_type();
-  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
-  return $clone;
+sub get_termsource {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $termsource = $termsource{ident $self};
+  return undef unless defined $termsource;
+  return $get_cached_object ? $termsource{ident $self}->get_object : $termsource{ident $self};
 }
+
+sub get_type_id {
+  my $self = shift;
+  return $type{ident $self} ? $type{ident $self}->get_id : undef;
+}
+
+sub get_type {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $type = $type{ident $self};
+  return undef unless defined $type;
+  return $get_cached_object ? $type{ident $self}->get_object : $type{ident $self};
+}
+
+sub get_experiment_id {
+  my $self = shift;
+  return $experiment{ident $self} ? $experiment{ident $self}->get_id : undef;
+}
+
+sub get_experiment {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $experiment = $experiment{ident $self};
+  return undef unless defined $experiment;
+  return $get_cached_object ? $experiment{ident $self}->get_object : $experiment{ident $self};
+}
+
+sub save {
+  ModENCODE::Cache::save_experimentprop(shift);
+}
+
 
 1;
+

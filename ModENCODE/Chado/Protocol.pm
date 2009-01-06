@@ -159,33 +159,52 @@ use Carp qw(croak);
 my %all_protocols;
 
 # Attributes
-my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
-my %name             :ATTR( :name<name>,                :default<''> );
+my %protocol_id      :ATTR( :name<id>,                  :default<undef> );
+my %name             :ATTR( :get<name>,                 :init_arg<name> );
 my %version          :ATTR( :name<version>,             :default<undef> );
 my %description      :ATTR( :name<description>,         :default<''> );
 
 # Relationships
-my %termsource       :ATTR( :get<termsource>,           :default<undef> );
-my %attributes       :ATTR( :get<attributes>,           :default<[]> );
+my %termsource       :ATTR( :set<termsource>,           :init_arg<termsource>, :default<undef> );
+my %attributes       :ATTR( :set<attributes>,           :init_arg<attributes>, :default<[]> );
 
-sub new {
-  my $self = Class::Std::new(@_);
-  # Caching protocols
-#  $all_protocols{$self->get_name()} = {} if (!defined($all_protocols{$self->get_name()}));
-#
-#  my $cached_protocol = $all_protocols{$self->get_name()}->{$self->get_version()};
-#
-#  if ($cached_protocol) {
-#    # Add any additional info
-#    $cached_protocol->set_description($self->get_description()) if ($self->get_description() && !($cached_protocol->get_description()));
-#    return $cached_protocol;
-#  } else {
-#    $all_protocols{$self->get_name()}->{$self->get_version()} = $self;
-#  }
-  return $self;
+sub new_no_cache {
+  return Class::Std::new(@_);
 }
 
-sub BUILD {
+sub new {
+  my $temp = Class::Std::new(@_);
+  my $cached_protocol = ModENCODE::Cache::get_cached_protocol($temp);
+
+  if ($cached_protocol) {
+    # Update any cached protocol
+    my $need_save = 0;
+    if ($temp->get_version() && !($cached_protocol->get_object->get_version())) {
+      $cached_protocol->get_object->set_version($temp->get_version);
+      $need_save = 1;
+    }
+    if ($temp->get_description() && !($cached_protocol->get_object->get_description())) {
+      $cached_protocol->get_object->set_description($temp->get_description);
+      $need_save = 1;
+    }
+    if ($temp->get_termsource() && !($cached_protocol->get_object->get_termsource())) {
+      $cached_protocol->get_object->set_termsource($temp->get_termsource);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_attributes) && !scalar($cached_protocol->get_object->get_attributes)) {
+      $cached_protocol->get_object->set_attributes($temp->get_attributes);
+      $need_save = 1;
+    }
+    ModENCODE::Cache::save_protocol($cached_protocol) if $need_save;
+    return $cached_protocol;
+  }
+
+  # This is a new protocol
+  my $self = $temp;
+  return ModENCODE::Cache::add_protocol_to_cache($self);
+}
+
+sub START {
   my ($self, $ident, $args) = @_;
   my $attributes = $args->{'attributes'};
   if (defined($attributes)) {
@@ -204,69 +223,50 @@ sub BUILD {
 
 sub add_attribute {
   my ($self, $attribute) = @_;
-  ($attribute->isa('ModENCODE::Chado::Attribute')) or croak("Can't add a " . ref($attribute) . " as a attribute.");
-  push @{$attributes{ident $self}}, $attribute;
-}
-
-sub set_attributes {
-  my ($self, $attributes) = @_;
-  $attributes{ident $self} = [];
-  foreach my $attribute (@$attributes) {
-    $self->add_attribute($attribute);
+  ($attribute->get_object->isa('ModENCODE::Chado::Attribute')) or croak("Can't add a " . ref($attribute) . " as a attribute.");
+  if (!scalar(grep { ref($_) ? $_->get_id == $attribute->get_id : $_ == $attribute->get_id } @{$attributes{ident $self}})) {
+    push @{$attributes{ident $self}}, $attribute;
   }
+  $self->save();
 }
 
-sub set_termsource {
-  my ($self, $termsource) = @_;
-  ($termsource->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($termsource) . " as a termsource.");
-  $termsource{ident $self} = $termsource;
+sub get_termsource_id {
+  my $self = shift;
+  return $termsource{ident $self} ? $termsource{ident $self}->get_id : undef;
+}
+
+sub get_termsource {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $termsource = $termsource{ident $self};
+  return undef unless defined $termsource;
+  return $get_cached_object ? $termsource{ident $self}->get_object : $termsource{ident $self};
+}
+
+sub get_attribute_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$attributes{ident $self}}
+}
+
+sub get_attributes {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $attributes = $attributes{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$attributes : @$attributes;
 }
 
 sub to_string {
   my ($self) = @_;
   my $string = "'" . $self->get_name() . "." . $self->get_version() . "'";
-  $string .= "\n      Description:     " . $self->get_description() if $self->get_description();
-  $string .= "\n      Attributes:      <" . join(", ", map { $_->to_string() } @{$self->get_attributes()}) . ">" if scalar(@{$self->get_attributes()});
+  $string .= "\n      Description:     " . substr($self->get_description, 0, 50) if $self->get_description();
+  $string .= "\n      Attributes:      <" . join(", ", map { $_->to_string() } $self->get_attributes(1)) . ">" if scalar($self->get_attributes());
   $string .= "\n      Term Source REF: " . $self->get_termsource()->to_string() if ($self->get_termsource());
   return $string;
 }
 
-sub equals {
-  my ($self, $other) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless ($self->get_version() eq $other->get_version() && $self->get_description() eq $other->get_description() && $self->get_version() eq $other->get_version());
-
-  my @attributes = @{$self->get_attributes()};
-  return 0 unless scalar(@attributes) == scalar(@{$other->get_attributes()});
-  foreach my $attribute (@attributes) {
-    return 0 unless scalar(grep { $_->equals($attribute) } @{$other->get_attributes()});
-  }
-
-  if ($self->get_termsource()) {
-    return 0 unless $other->get_termsource();
-    return 0 unless $self->get_termsource()->equals($other->get_termsource());
-  } else {
-    return 0 if $other->get_termsource();
-  }
-
-
-  return 1;
-}
-
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::Protocol({
-      'name' => $self->get_name(),
-      'version' => $self->get_version(),
-      'description' => $self->get_description(),
-      'chadoxml_id' => $self->get_chadoxml_id(),
-    });
-  foreach my $attribute (@{$self->get_attributes()}) {
-    $clone->add_attribute($attribute->clone());
-  }
-  $clone->set_termsource($self->get_termsource()->clone()) if $self->get_termsource();
-  return $clone;
+sub save {
+  ModENCODE::Cache::save_protocol(shift);
 }
 
 1;
+

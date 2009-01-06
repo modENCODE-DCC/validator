@@ -302,19 +302,28 @@ my %port             :ATTR( :name<port>,             :default<undef> );
 my %dbname           :ATTR( :name<dbname>,           :default<undef> );
 my %username         :ATTR( :name<username>,         :default<''> );
 my %password         :ATTR( :name<password>,         :default<''> );
-my %cache            :ATTR(                          :default<{}> );
-my %cache_array      :ATTR(                          :default<{}> );
-#my %protocol_slots   :ATTR(                          :default<[]> );
-my %protocol_slots   :ATTR( :get<protocol_slots>,    :default<[]> );
+my %protocol_slots   :ATTR(                          :default<[]> );
 my %experiment       :ATTR(                          :default<undef> );
 my %prepared_queries :ATTR(                          :default<{}> );
 my %no_relationships :ATTR( :name<no_relationships>, :default<0> );
 
-sub START {
-  my ($self, $ident, $args) = @_;
+sub new {
+  my $self = Class::Std::new(@_);
+
   if (defined($self->get_dbname())) {
-    $self->get_dbh(1); # Try to pre-connect to the database; suppress warnings
+    # Try to pre-connect to the database; suppress warnings
+    # On failure, return undef
+    if (!$self->get_dbh(1)) {
+      log_error "Failed to initialize ModENCODE::Chado::Parser for " . $self->get_dbname . ".", "warning", ">";
+      my $errstr = $DBI::errstr;
+      chomp($errstr);
+      log_error $errstr, "warning";
+      log_error "", "warning", "<";
+      return undef;
+    }
   }
+
+  return $self;
 }
 
 sub DEMOLISH {
@@ -435,9 +444,6 @@ sub load_experiment {
 
 sub get_applied_protocol {
   my ($self, $applied_protocol_id) = @_;
-  if (my $cached_applied_protocol = $self->get_cached('applied_protocol', $applied_protocol_id)) {
-    return $cached_applied_protocol;
-  }
   my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 
       'chadoxml_id' => $applied_protocol_id 
     });
@@ -456,15 +462,11 @@ sub get_applied_protocol {
       $applied_protocol->add_output_datum($self->get_datum($row->{'data_id'}));
     }
   }
-  $self->add_to_cache('applied_protocol', $applied_protocol_id, $applied_protocol);
   return $applied_protocol;
 }
 
 sub get_protocol {
   my ($self, $protocol_id) = @_;
-  if (my $cached_protocol = $self->get_cached('protocol', $protocol_id)) {
-    return $cached_protocol;
-  }
   my $protocol = new ModENCODE::Chado::Protocol({ 'chadoxml_id' => $protocol_id });
   my $sth = $self->get_prepared_query("SELECT name, version, description, dbxref_id FROM protocol WHERE protocol_id = ?");
   $sth->execute($protocol_id);
@@ -480,15 +482,11 @@ sub get_protocol {
   while (my ($attr_id) = $sth->fetchrow_array()) {
     $protocol->add_attribute($self->get_attribute($attr_id));
   }
-  $self->add_to_cache('protocol', $protocol_id, $protocol);
   return $protocol;
 }
 
 sub get_datum {
   my ($self, $datum_id) = @_;
-  if (my $cached_datum = $self->get_cached('datum', $datum_id)) {
-    return $cached_datum;
-  }
   my $datum = new ModENCODE::Chado::Data({ 'chadoxml_id' => $datum_id });
   my $sth = $self->get_prepared_query("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
@@ -525,15 +523,16 @@ sub get_datum {
   while (my ($attr_id) = $sth->fetchrow_array()) {
     $datum->add_attribute($self->get_attribute($attr_id));
   }
-  $self->add_to_cache('datum', $datum_id, $datum);
   return $datum;
+}
+
+sub get_dbxref{
+  # Alias
+  get_termsource(@_);
 }
 
 sub get_termsource {
   my ($self, $dbxref_id) = @_;
-  if (my $cached_dbxref = $self->get_cached('dbxref', $dbxref_id)) {
-    return $cached_dbxref;
-  }
   return undef unless($dbxref_id);
   my $sth = $self->get_prepared_query("SELECT accession, version, db_id FROM dbxref WHERE dbxref_id = ?");
   $sth->execute($dbxref_id);
@@ -545,15 +544,11 @@ sub get_termsource {
       'version' => $row->{'version'},
       'db' => $self->get_db($row->{'db_id'}),
     });
-  $self->add_to_cache('dbxref', $dbxref_id, $dbxref);
   return $dbxref;
 }
 
 sub get_feature {
   my ($self, $feature_id) = @_;
-  if (my $cached_feature = $self->get_cached('feature', $feature_id)) {
-    return $cached_feature;
-  }
   return undef unless($feature_id);
   my $sth = $self->get_prepared_query("SELECT 
     f.name, f.uniquename, f.residues, f.seqlen, f.organism_id, f.type_id, 
@@ -608,28 +603,24 @@ sub get_feature {
       'organism' => $self->get_organism($row->{'organism_id'}),
       'primary_dbxref' => $self->get_termsource($row->{'primary_dbxref_id'}),
     });
-  $self->add_to_cache('feature', $feature_id, $feature);
 
   foreach my $analysisfeature_id (@analysisfeatures) {
-    $feature->add_analysisfeature($self->get_analysisfeature($analysisfeature_id));
+    $feature->get_object->add_analysisfeature($self->get_analysisfeature($analysisfeature_id));
   }
   foreach my $dbxref_id (@dbxrefs) {
-    $feature->add_dbxref($self->get_termsource($dbxref_id));
+    $feature->get_object->add_dbxref($self->get_termsource($dbxref_id));
   }
   foreach my $location_id (@locations) {
-    $feature->add_location($self->get_featureloc($location_id));
+    $feature->get_object->add_location($self->get_featureloc($location_id, $feature));
   }
   foreach my $relationship_id (@relationships) {
-    $feature->add_relationship($self->get_feature_relationship($relationship_id));
+    $feature->get_object->add_relationship($self->get_feature_relationship($relationship_id));
   }
   return $feature;
 }
 
 sub get_featureloc {
-  my ($self, $featureloc_id) = @_;
-  if (my $cached_featureloc = $self->get_cached('featureloc', $featureloc_id)) {
-    return $cached_featureloc;
-  }
+  my ($self, $featureloc_id, $feature) = @_;
   my $sth = $self->get_prepared_query("SELECT fmin, fmax, rank, strand, srcfeature_id FROM featureloc WHERE featureloc_id = ?");
   $sth->execute($featureloc_id);
   my $row = $sth->fetchrow_hashref();
@@ -639,17 +630,13 @@ sub get_featureloc {
       'fmax' => $row->{'fmax'},
       'rank' => $row->{'rank'},
       'strand' => $row->{'strand'},
-      'srcfeature' => $self->get_feature($row->{'srcfeature_id'}),
+      'srcfeature' => $feature || $self->get_feature($row->{'srcfeature_id'}),
     });
-  $self->add_to_cache('featureloc', $featureloc_id, $featureloc);
   return $featureloc;
 }
 
 sub get_feature_relationship {
   my ($self, $feature_relationship_id) = @_;
-  if (my $cached_feature_relationship = $self->get_cached('feature_relationship', $feature_relationship_id)) {
-    return $cached_feature_relationship;
-  }
   my $sth = $self->get_prepared_query("SELECT rank, subject_id, object_id, type_id FROM feature_relationship WHERE feature_relationship_id = ?");
   $sth->execute($feature_relationship_id);
   my $row = $sth->fetchrow_hashref();
@@ -660,19 +647,18 @@ sub get_feature_relationship {
       'subject' => $self->get_feature($row->{'subject_id'}),
       'object' => $self->get_feature($row->{'object_id'}),
     });
-  $self->add_to_cache('feature_relationship', $feature_relationship_id, $feature_relationship);
   return $feature_relationship;
 }
 
 sub get_analysisfeature {
   my ($self, $analysisfeature_id) = @_;
-  if (my $cached_analysisfeature = $self->get_cached('analysisfeature', $analysisfeature_id)) {
-    return $cached_analysisfeature;
-  }
   my $sth = $self->get_prepared_query("SELECT rawscore, normscore, significance, identity, feature_id, analysis_id FROM analysisfeature WHERE analysisfeature_id = ?");
   $sth->execute($analysisfeature_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+
+  my $analysis = $self->get_analysis($row->{'analysis_id'});
+  my $feature = $self->get_feature($row->{'feature_id'});
 
   my $analysisfeature = new ModENCODE::Chado::AnalysisFeature({ 
       'chadoxml_id' => $analysisfeature_id,
@@ -680,20 +666,14 @@ sub get_analysisfeature {
       'normscore' => $row->{'normscore'},
       'significance' => $row->{'significance'},
       'identity' => $row->{'identity'},
+      'analysis' => $analysis,
+      'feature' => $feature,
     });
-  my $feature = $self->get_feature($row->{'feature_id'});
-  $analysisfeature->set_feature($feature) if $feature;
-  my $analysis = $self->get_analysis($row->{'analysis_id'});
-  $analysisfeature->set_analysis($analysis) if $analysis;
-  $self->add_to_cache('analysisfeature', $analysisfeature_id, $analysisfeature);
   return $analysisfeature;
 }
 
 sub get_analysis {
   my ($self, $analysis_id) = @_;
-  if (my $cached_analysis = $self->get_cached('analysis', $analysis_id)) {
-    return $cached_analysis;
-  }
   my $sth = $self->get_prepared_query("SELECT name, description, program, programversion, algorithm, sourcename, sourceversion, sourceuri, timeexecuted FROM analysis WHERE analysis_id = ?");
   $sth->execute($analysis_id);
   my $row = $sth->fetchrow_hashref();
@@ -712,15 +692,11 @@ sub get_analysis {
       'sourceuri' => $row->{'sourceuri'},
       'timeexecuted' => $row->{'timeexecuted'},
     });
-  $self->add_to_cache('analysis', $analysis_id, $analysis);
   return $analysis;
 }
 
 sub get_organism {
   my ($self, $organism_id) = @_;
-  if (my $cached_organism = $self->get_cached('organism', $organism_id)) {
-    return $cached_organism;
-  }
   return undef unless($organism_id);
   my $sth = $self->get_prepared_query("SELECT genus, species FROM organism WHERE organism_id = ?");
   $sth->execute($organism_id);
@@ -730,15 +706,11 @@ sub get_organism {
       'genus' => $row->{'genus'},
       'species' => $row->{'species'},
     });
-  $self->add_to_cache('organism', $organism_id, $organism);
   return $organism;
 }
 
 sub get_wiggle_data {
   my ($self, $wiggle_data_id) = @_;
-  if (my $cached_wiggle_data = $self->get_cached('wiggle_data', $wiggle_data_id)) {
-    return $cached_wiggle_data;
-  }
   return undef unless($wiggle_data_id);
   my $sth = $self->get_prepared_query("SELECT type, name, visibility, color, altColor, priority, autoscale, gridDefault, maxHeightPixels, graphType, viewLimits, yLineMark, yLineOnOff, windowingFunction, smoothingWindow, data FROM wiggle_data WHERE wiggle_data_id = ?");
   $sth->execute($wiggle_data_id);
@@ -762,15 +734,11 @@ sub get_wiggle_data {
       'smoothingWindow' => $row->{'smoothingWindow'},
       'data' => $row->{'data'},
     });
-  $self->add_to_cache('wiggle_data', $wiggle_data_id, $wiggle_data);
   return $wiggle_data;
 }
 
 sub get_db {
   my($self, $db_id) = @_;
-  if (my $cached_db = $self->get_cached('db', $db_id)) {
-    return $cached_db;
-  }
   return undef unless ($db_id);
   my $sth = $self->get_prepared_query("SELECT name, url, description FROM db WHERE db_id = ?");
   $sth->execute($db_id);
@@ -781,20 +749,20 @@ sub get_db {
       'url' => $row->{'url'},
       'description' => $row->{'description'},
     });
-  $self->add_to_cache('db', $db_id, $db);
   return $db;
 }
 
 sub get_type {
   my ($self, $cvterm_id) = @_;
-  if (my $cached_cvterm = $self->get_cached('cvterm', $cvterm_id)) {
-    return $cached_cvterm;
-  }
   return undef unless($cvterm_id);
   my $sth = $self->get_prepared_query("SELECT cvt.name, cvt.definition, cvt.is_obsolete, cvt.dbxref_id, cv.name as cvname, cv.definition as cvdefinition FROM cvterm cvt INNER JOIN cv ON cvt.cv_id = cv.cv_id WHERE cvterm_id = ?");
   $sth->execute($cvterm_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+
+  #XXX: Rename SO:so terms to SO:mRNA
+  $row->{'name'} = "mRNA" if $row->{'name'} eq "so";
+
   my $cvterm = new ModENCODE::Chado::CVTerm({
       'name' => $row->{'name'},
       'definition' => $row->{'definition'},
@@ -805,16 +773,12 @@ sub get_type {
         }),
     });
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
-  $cvterm->set_dbxref($termsource) if $termsource;
-  $self->add_to_cache('cvterm', $cvterm_id, $cvterm);
+  $cvterm->get_object->set_dbxref($termsource) if $termsource;
   return $cvterm;
 }
 
 sub get_attribute {
   my ($self, $attribute_id) = @_;
-  if (my $cached_attribute = $self->get_cached('attribute', $attribute_id)) {
-    return $cached_attribute;
-  }
   my $attribute = new ModENCODE::Chado::Attribute({ 'chadoxml_id' => $attribute_id });
   my $sth = $self->get_prepared_query("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
   $sth->execute($attribute_id);
@@ -834,7 +798,6 @@ sub get_attribute {
     $attribute->add_organism($self->get_organism($organism_id));
   }
 
-  $self->add_to_cache('attribute', $attribute_id, $attribute);
   return $attribute;
 }
 
@@ -908,6 +871,21 @@ sub get_feature_id_by_name_and_type {
   return $found_feature_ids[0];
 }
 
+sub get_feature_by_dbs_and_accession {
+  my ($self, $db, $accession) = @_;
+  my $sth = $self->get_prepared_query("
+    SELECT f.feature_id FROM feature f
+    INNER JOIN feature_dbxref fdbx ON f.feature_id = fdbx.feature_id
+    INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id
+    INNER JOIN db ON dbx.db_id = db.db_id
+    WHERE db.name = ANY (?) AND dbx.accession = ? AND fdbx.is_current = TRUE
+    ");
+  $sth->execute($db, $accession);
+  my ($feature_id) = $sth->fetchrow_array();
+  return unless $feature_id;
+  return $self->get_feature($feature_id);
+}
+
 sub get_feature_by_genbank_id {
   my ($self, $genbank_id) = @_;
   return undef unless $genbank_id;
@@ -922,9 +900,20 @@ sub get_feature_by_genbank_id {
     WHERE 
     db.name = 'GB' 
     AND o.genus = 'Drosophila' AND o.species = 'melanogaster'
-    AND (cv.name = 'SO' OR cv.name = 'sequence') AND (cvt.name != 'gene' AND cvt.name != 'so')
+    AND cv.name IN('SO', 'sequence') AND cvt.name != 'gene'
     AND dbx.accession = ?
+    LIMIT 1
     ");
+  # TODO: Don't require fly
+#    SELECT f.feature_id FROM feature f 
+#    INNER JOIN feature_dbxref fdbx ON f.feature_id = fdbx.feature_id 
+#    INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id 
+#    WHERE 
+#    dbx.db_id = 13 AND -- GB
+#    f.type_id = 256
+#    AND dbx.accession = ?
+#    LIMIT 1
+
   $sth->execute($genbank_id);
   my $row = $sth->fetchrow_hashref();
   return undef if (!$row || !$row->{'feature_id'});
@@ -953,13 +942,9 @@ sub get_denormalized_protocol_slots {
   if (!scalar(@{$protocol_slots{ident $self}})) {
     log_error "Protocol slots are empty; perhaps you need to call load_experiment(\$experiment_id) first?";
   }
-  #my @new_protocol_slots = ($protocol_slots{ident $self}->[0]);
-  my @new_protocol_slots = ([]);
+  my @new_protocol_slots = ($protocol_slots{ident $self}->[0]);
   foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
-    my $num_duplicate_first_ap = scalar(denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@new_protocol_slots));
-    for (my $i=0; $i<$num_duplicate_first_ap; $i++) {
-	push @{$new_protocol_slots[0]}, $first_applied_protocol;
-    }		
+    denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@new_protocol_slots);
   }
   my @return_protocol_slots;
   for (my $i = 0; $i < scalar(@new_protocol_slots); $i++) {
@@ -970,18 +955,6 @@ sub get_denormalized_protocol_slots {
     }
   }
   return \@return_protocol_slots;
-}
-
-sub get_full_denormalized_protocol_slots {
-  my ($self) = @_;  
-  my @new_protocol_slots = ([]);
-  foreach my $first_applied_protocol (@{$protocol_slots{ident $self}->[0]}) {
-    my $num_duplicate_first_ap = scalar(denormalize_applied_protocol($first_applied_protocol, $protocol_slots{ident $self}, \@new_protocol_slots));
-    for (my $i = 0; $i < $num_duplicate_first_ap; $i++) {
-      push @{$new_protocol_slots[0]}, $first_applied_protocol;
-    }
-  }
-  return \@new_protocol_slots; 
 }
 
 sub get_tsv {
@@ -1138,35 +1111,6 @@ sub get_tsv_columns {
 
   return \@columns;
 }
-sub get_cached : RESTRICTED {
-  my ($self, $section, $key) = @_;
-  return $cache{ident $self}->{$section}->{$key};
-}
-
-sub add_to_cache : RESTRICTED {
-  my ($self, $section, $key, $value) = @_;
-
-  my $already_exists = defined($cache{ident $self}->{$section}->{$key});
-
-  $cache{ident $self}->{$section}->{$key} = $value;
-
-  # Cache aging
-  if (!$already_exists) {
-    push @{$cache_array{ident $self}->{$section}}, $key;
-
-    if (scalar(@{$cache_array{ident $self}->{$section}}) > 1000) {
-      #print STDERR "Shrinking cache of size " . scalar(@{$cache_array{ident $self}->{$section}}) . "\n" if $section eq "feature";
-      #print STDERR join("\n", map { $_->get_name() } values(%{$cache{ident $self}->{$section}})) . "\n" if $section eq "feature";
-      for (my $i = 0; $i < 200; $i++) {
-        my $key = shift @{$cache_array{ident $self}->{$section}};
-        delete @{$cache{ident $self}->{$section}}{$key};
-      }
-      #print STDERR "Shunk cache to size " . scalar(@{$cache_array{ident $self}->{$section}}) . "\n\n" if $section eq "feature";
-      #print STDERR join("\n", map { $_->get_name() } values(%{$cache{ident $self}->{$section}})) . "\n" if $section eq "feature";
-    }
-  }
-}
-
 sub xml_unescape : RESTRICTED {
   my ($value) = @_;
   $value =~ s/&gt;/>/g;
@@ -1313,7 +1257,7 @@ sub get_dbh : PRIVATE {
 
     if (!$suppress_warnings && (!defined($dbh{ident $self}) || !$dbh{ident $self})) {
       log_error "Couldn't connect to data source \"$dsn\", using username \"" . $self->get_username() . "\" and password \"" . $self->get_password() . "\"\n  " . $DBI::errstr;
-      exit;
+      return 0;
     }
   }
 

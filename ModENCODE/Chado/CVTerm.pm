@@ -134,114 +134,94 @@ use Carp qw(croak);
 
 use ModENCODE::Chado::DB;
 use ModENCODE::Chado::DBXref;
-
-my %all_cvterms;
+use ModENCODE::Cache;
 
 # Attributes
-my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
-my %name             :ATTR( :name<name> );
+my %cvterm_id        :ATTR( :name<id>,                  :default<undef> );
+my %name             :ATTR( :get<name>,                 :init_arg<name> );
 my %definition       :ATTR( :name<definition>,          :default<''> );
-my %is_obsolete      :ATTR( :name<is_obsolete>,         :default<0> );
+my %is_obsolete      :ATTR( :get<is_obsolete>,          :init_arg<is_obsolete>, :default<0> );
 
 # Relationships
-my %cv               :ATTR( :get<cv>, :init_arg<cv> );
-my %dbxref           :ATTR( :get<dbxref>,               :default<undef> );
+my %cv               :ATTR( :init_arg<cv> );
+my %dbxref           :ATTR( :set<dbxref>,               :init_arg<dbxref>, :default<undef> );
 
 
-sub new {
-  my $self = Class::Std::new(@_);
-  # Caching CVTerms
-  $all_cvterms{$self->get_cv()->get_name()} = {} if (!defined($all_cvterms{$self->get_cv()->get_name()}));
-  $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()} = {} if (!defined($all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}));
-  $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()} = {} if (!defined($all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}));
-
-  my $cached_cvterm = $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}->{$self->get_is_obsolete()};
-
-  if ($cached_cvterm) {
-    # Add any additional info
-    $cached_cvterm->set_definition($self->get_definition()) if ($self->get_definition() && !($cached_cvterm->get_definition()));
-    $cached_cvterm->set_dbxref($self->get_dbxref()) if ($self->get_dbxref() && !($cached_cvterm->get_dbxref()));
-    return $cached_cvterm;
-  } else {
-    $all_cvterms{$self->get_cv()->get_name()}->{$self->get_name()}->{$self->get_is_obsolete()} = $self;
-  }
-  return $self;
+sub new_no_cache {
+  return Class::Std::new(@_);
 }
 
-sub get_all_cvterms {
-  return \%all_cvterms;
+sub new {
+  my $temp = Class::Std::new(@_);
+  my $cached_cvterm = ModENCODE::Cache::get_cached_cvterm($temp);
+
+  if ($temp->get_name =~ /^\s*$/) {
+    use Carp qw(confess);
+    confess "Oh noes, created CVTerm with no name.";
+  }
+  if ($cached_cvterm) {
+    # Update any cached cvterm
+    my $need_save = 0;
+    if ($temp->get_definition && !($cached_cvterm->get_object->get_definition())) {
+      $cached_cvterm->get_object->set_definition($temp->get_definition);
+      $need_save = 1;
+    } 
+    if ($temp->get_dbxref && !($cached_cvterm->get_object->get_dbxref())) {
+      $cached_cvterm->get_object->set_dbxref($temp->get_dbxref);
+      $need_save = 1;
+    }
+    ModENCODE::Cache::save_cvterm($cached_cvterm) if $need_save; # For update
+    return $cached_cvterm;
+  }
+
+  # This is a new CVTerm
+  my $self = $temp;
+  return ModENCODE::Cache::add_cvterm_to_cache($self);
 }
 
 sub START {
   my ($self, $ident, $args) = @_;
   my $cv = $args->{'cv'};
-  if (defined($cv)) {
-    # Redo using the setter to make sure it's a valid CV
-    $self->set_cv($cv);
-  }
-  my $dbxref = $args->{'dbxref'};
-  if (defined($dbxref)) {
-    $self->set_dbxref($dbxref);
-  }
 }
 
-sub set_cv {
-  my ($self, $cv) = @_;
-  ($cv->isa('ModENCODE::Chado::CV')) or croak("Can't add a " . ref($cv) . " as a CV.");
-  $cv{ident $self} = $cv;
+sub get_cv_id {
+  my $self = shift;
+  return $cv{ident $self} ? $cv{ident $self}->get_id : undef;
 }
 
-sub set_dbxref {
-  my ($self, $dbxref) = @_;
-  ($dbxref->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($dbxref) . " as a DBXref.");
-  $dbxref{ident $self} = $dbxref;
+sub get_cv {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $cv = $cv{ident $self};
+  return undef unless defined $cv;
+  return $get_cached_object ? $cv{ident $self}->get_object : $cv{ident $self};
+}
+
+sub get_dbxref_id {
+  my $self = shift;
+  return $dbxref{ident $self} ? $dbxref{ident $self}->get_id : undef;
+}
+
+sub get_dbxref {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $dbxref = $dbxref{ident $self};
+  return undef unless defined $dbxref;
+  return $get_cached_object ? $dbxref{ident $self}->get_object : $dbxref{ident $self};
 }
 
 sub to_string {
   my ($self) = @_;
   my $string = "{";
-  $string .= $self->get_cv()->to_string() . ":" if $self->get_cv();
+  $string .= $self->get_cv()->get_object->to_string() . ":" if $self->get_cv();
   $string .= $self->get_name();
   $string .= "}";
   return $string;
 }
 
-sub equals {
-  my ($self, $other) = @_;
-  return 0 unless $self == $other;
-  return 1;
-
-#  return 0 unless ref($self) eq ref($other);
-#
-#  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_definition() eq $other->get_definition() && $self->get_is_obsolete() eq $other->get_is_obsolete());
-#
-#  if ($self->get_cv()) {
-#    return 0 unless $other->get_cv();
-#    return 0 unless $self->get_cv()->equals($other->get_cv());
-#  } else {
-#    return 0 if $other->get_cv();
-#  }
-#
-#  if ($self->get_dbxref()) {
-#    return 0 unless $other->get_dbxref();
-#    return 0 unless $self->get_dbxref()->equals($other->get_dbxref());
-#  } else {
-#    return 0 if $other->get_dbxref();
-#  }
-#
-#
-#  return 1;
+sub save {
+  ModENCODE::Cache::save_cvterm(shift);
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::CVTerm({
-      'name' => $self->get_name(),
-      'cv' => $self->get_cv(),
-      'definition' => $self->get_definition(),
-      'is_obsolete' => $self->get_is_obsolete(),
-    });
-  $clone->set_dbxref($self->get_dbxref()->clone()) if $self->get_dbxref();
-  return $clone;
-}
 1;
+

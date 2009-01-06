@@ -117,70 +117,66 @@ L<http://www.modencode.org>.
 use strict;
 use Class::Std;
 use Carp qw(croak);
-
-my %all_dbxrefs;
+use ModENCODE::Cache;
 
 # Attributes
-my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
-my %accession        :ATTR( :name<accession> );
-my %version          :ATTR( :name<version>,             :default<''> );
+my %dbxref_id        :ATTR( :name<id>,          :default<undef> );
+my %dirty            :ATTR( :default<1> );
+my %accession        :ATTR( :get<accession>,    :init_arg<accession> );
+my %version          :ATTR( :get<version>,      :init_arg<version>,     :default<''> );
 
 # Relationships
-my %db               :ATTR( :get<db>, :init_arg<db> );
+my %db               :ATTR( :init_arg<db> );
 
 use Carp qw(confess);
 
+sub dirty {
+  $dirty{ident shift} = 1;
+}
+
+sub is_dirty {
+  return $dirty{ident shift};
+}
+
+sub clean {
+  $dirty{ident shift} = 0;
+}
+
+sub new_no_cache {
+  return Class::Std::new(@_);
+}
+
 sub new {
-  confess "What, no accession?" unless $_[1]->{'accession'};
-  my $self = Class::Std::new(@_);
-  # Caching DBXrefs
-  $all_dbxrefs{$self->get_db()->get_name()} = {} if (!defined($all_dbxrefs{$self->get_db()->get_name()}));
-  $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()} = {} if (!defined($all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}));
-  $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()} = {} if (!defined($all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}));
+  my $temp = Class::Std::new(@_);
+  my $cached_dbxref = ModENCODE::Cache::get_cached_dbxref($temp);
 
-  my $cached_dbxref = $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}->{$self->get_version()};
   if ($cached_dbxref) {
+    # Nothing to update
     return $cached_dbxref;
-  } else {
-    $all_dbxrefs{$self->get_db()->get_name()}->{$self->get_accession()}->{$self->get_version()} = $self;
   }
 
-  return $self;
+  # This is a new DBXref
+  my $self = $temp;
+  return ModENCODE::Cache::add_dbxref_to_cache($self);
 }
 
-#sub set_accession {
-#  my ($self, $accession) = @_;
-#  if (!$self->get_accession()) {
-#    # TODO: Might be able to update position in cache!
-#  }
-#  $accession{ident $self} = $accession;
-#}
-
-sub get_all_dbxrefs {
-  return \%all_dbxrefs;
+sub get_db_id {
+  my $self = shift;
+  return $db{ident $self} ? $db{ident $self}->get_id : undef;
 }
 
-
-sub START {
-  my ($self, $ident, $args) = @_;
-  my $db = $args->{'db'};
-  if (defined($db)) {
-    # Redo using the setter to make sure it's a valid DB
-    $self->set_db($db);
-  }
+sub get_db {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $db = $db{ident $self};
+  return undef unless defined $db;
+  return $get_cached_object ? $db{ident $self}->get_object : $db{ident $self};
 }
 
-sub set_db {
-  my ($self, $db) = @_;
-  use Carp qw(confess);
-  confess "what happen" unless ($db);
-  ($db->isa('ModENCODE::Chado::DB')) or croak("Can't add a " . ref($db) . " as a DB.");
-  $db{ident $self} = $db;
-}
 
 sub to_string {
   my ($self) = @_;
-  my $string = "[REF:" . $self->get_db()->to_string() . ".";
+  my $string = "[REF:" . $self->get_db()->get_object->to_string() . ".";
   $string .= ($self->get_accession() || "xxx");
   $string .= "(" . $self->get_version() . ")" if defined($self->get_version());
   $string .= "]";
@@ -191,29 +187,16 @@ sub equals {
   my ($self, $other) = @_;
   return 0 unless $self == $other;
   return 1;
-#  return 0 unless ref($self) eq ref($other);
-#
-#  return 0 unless ($self->get_accession() eq $other->get_accession() && $self->get_version() eq $other->get_version());
-#
-#  if ($self->get_db()) {
-#    return 0 unless $other->get_db();
-#    return 0 unless $self->get_db()->equals($other->get_db());
-#  } else {
-#    return 0 if $other->get_db();
-#  }
-#
-#
-#  return 1;
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::DBXref({
-      'accession' => $self->get_accession(),
-      'version' => $self->get_version(),
-      'db' => $self->get_db()->clone(),
-    });
-  return $clone;
+sub save {
+  my $self = shift;
+  if ($dirty{ident $self}) {
+    $dirty{ident $self} = 0;
+    ModENCODE::Cache::save_dbxref($self);
+  }
 }
+
 
 1;
+

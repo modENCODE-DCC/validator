@@ -117,7 +117,7 @@ sub BUILD {
 }
 
 sub validate {
-  my ($self) = @_;
+  my $self = shift;
   my $success = 1;
 
   # Get soap client
@@ -135,13 +135,13 @@ sub validate {
   bless $login, 'HASH';
   $login = new ModENCODE::Validator::Wiki::LoginResult($login);
   
-  log_error "Fetching expanded data columns from the wiki...", "notice", ">";
+  log_error "Fetching expanded attributes for data from the wiki...", "notice", ">";
   my %pages;
-  foreach my $datum_hash (@{$self->get_data()}) {
-    my $datum = $datum_hash->{'datum'}->clone();
-    my ($name, $version) = ($datum->get_value() =~ /^(.*?)(?:&oldid=(\d*))?$/);
+  while (my $ap_datum = $self->next_datum) {
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    my ($name, $version) = ($datum->get_object->get_value() =~ /^(.*?)(?:&oldid=(\d*))?$/);
     $name =~ s/_/ /g;
-    if (!defined($pages{$datum->get_value()})) {
+    if (!defined($pages{$datum->get_object->get_value()})) {
       my $soap_data = SOAP::Data->name('query' => \SOAP::Data->value(
           SOAP::Data->name('name' => HTML::Entities::encode($name))->type('xsd:string'),
           SOAP::Data->name('revision' => $version)->type('xsd:int'),
@@ -151,81 +151,62 @@ sub validate {
       my $res = $soap_client->getFormData($soap_data);
 
       if (!$res) {
-        $pages{$datum->get_value()} = 0;
+        $pages{$datum->get_object->get_value()} = 0;
       } else {
         bless($res, 'HASH');
         my $result_data = new ModENCODE::Validator::Wiki::FormData($res);
-	#print STDERR "complete: " . $result_data->get_is_complete() . "\n";
         if ($result_data) {
-          if ($result_data->get_is_complete()) {
-            my @new_attributes;
-	    foreach my $formvalues (@{$result_data->get_values()}) {
-	      my $rank = 0;
-	      foreach my $formvalue (@{$formvalues->get_values()}) {
-		my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
-		my $type = new ModENCODE::Chado::CVTerm({
+          my @new_attributes;
+          foreach my $formvalues (@{$result_data->get_values()}) {
+            my $rank = 0;
+            foreach my $formvalue (@{$formvalues->get_values()}) {
+              my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
+              my $type = new ModENCODE::Chado::CVTerm({
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
-                  });
-		if (!length($term) && length($cv)) {
-		  $term = $cv;
-		  $cv = $result_data->get_types()->[0];
-		  if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
-                    my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
-		    $type = new ModENCODE::Chado::CVTerm({
+                });
+              if (!length($term) && length($cv)) {
+                $term = $cv;
+                $cv = $result_data->get_types()->[0];
+                if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
+                  my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+                  $type = new ModENCODE::Chado::CVTerm({
                       'name' => $term,
                       'cv' => new ModENCODE::Chado::CV({ 'name' => $canonical_cvname }),
-                      });
-		  }
-		} elsif (!length($term)) {
-		    $term = $formvalue;
-		}
-		my $new_attribute = new ModENCODE::Chado::Attribute({
-                    'heading' => $formvalues->get_name(),
-                    'value' => $term,
-                    'rank' => $rank,
-                    'type' => $type,
                     });
-		$rank++;
-		push @new_attributes, $new_attribute;
-	      }
-	    }
-	    $pages{$datum->get_value()} = \@new_attributes; # Array of merged 
-	    log_error "Expanded wiki page " . $datum->get_value(), "notice";
-	  } else {
-	      log_error "Required fields defined in wiki page " . 
-		  $datum->get_value() . " in " . $datum->get_heading() . 
-		  " [" . $datum->get_name() . "] are missing.", "error";
-	      $success = 0;
-	  }
+                }
+              } elsif (!length($term)) {
+                $term = $formvalue;
+              }
+              my $new_attribute = new ModENCODE::Chado::DatumAttribute({
+                  'heading' => $formvalues->get_name(),
+                  'value' => $term,
+                  'rank' => $rank,
+                  'type' => $type,
+                  'datum' => $datum,
+                });
+              $datum->get_object->add_attribute($new_attribute);
+              $rank++;
+              push @new_attributes, $new_attribute;
+            }
+          }
+          $pages{$datum->get_object->get_value()} = \@new_attributes; # Array of merged 
         }
       }
     }
 
-    if (!($pages{$datum->get_value()})) {
-      # If %pages is false for this attribute, couldn't find the expansion page; nothing to expand
-      if ($datum->get_value()) {
+    if (!($pages{$datum->get_object->get_value()})) {
+      if ($datum->get_object->get_value()) {
         $success = 0;
-        log_error "Couldn't expand " . $datum->get_value() . " in the " . $datum->get_heading() . " [" . $datum->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "error";
+        log_error "Couldn't expand " . $datum->get_object->get_value() . " in the " . $datum->get_object->get_heading() . " [" . $datum->get_object->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "error";
       } else {
-        log_error "Couldn't expand the empty value in the " . $datum->get_heading() . " [" . $datum->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "warning";
-        $datum_hash->{'merged_datum'} = $datum;
+        log_error "Couldn't expand the empty value in the " . $datum->get_object->get_heading() . " [" . $datum->get_object->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "warning";
       }
-    } else {
-      foreach my $attribute (@{$pages{$datum->get_value()}}) {
-        $datum->add_attribute($attribute);
-      }
-      $datum_hash->{'merged_datum'} = $datum;
     }
   }
   log_error "Done.", "notice", "<";
 
   return $success;
-}
-
-sub merge {
-  my ($self, $datum, $applied_protocol) = @_;
-  return $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
 }
 
 1;

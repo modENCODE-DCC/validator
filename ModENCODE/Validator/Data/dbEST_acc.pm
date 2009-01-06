@@ -125,12 +125,12 @@ use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Organism;
 use ModENCODE::Parser::Chado;
 use ModENCODE::ErrorHandler qw(log_error);
-use ModENCODE::Validator::TermSources;
-use File::Temp;
-use ModENCODE::Chado::XMLWriter;
+#use ModENCODE::Validator::TermSources;
 
-my %soap_client                 :ATTR;
-my %tmp_file                    :ATTR;
+use constant ESTS_AT_ONCE => 40;
+use constant MAX_TRIES => 2;
+
+my %soap_client                 :ATTR( :get<soap_client> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -146,127 +146,102 @@ sub validate {
   my $success = 1;
 
   # Get out the EST IDs we need to validate
-  my @data_to_validate = @{$self->get_data()};
-  my $index = 0;
-  foreach my $datum_hash (@data_to_validate) {
-      if ($datum_hash->{'datum'}->get_value() =~ m/^\s*$/) {
-	  log_error "Found a blank at " . $index, "error";
-      } 
-      $index++;
-  }
+  log_error "Validating presence of " . $self->num_data . " ESTs.", "notice", ">";
+  
+  log_error "Checking Chado databases...", "notice", ">";
+  foreach my $parse (
+    ['modENCODE', $self->get_modencode_chado_parser()],
+    ['FlyBase', $self->get_flybase_chado_parser()],
+    ['WormBase',  $self->get_wormbase_chado_parser()],
+  ) {
+    my ($parser_name, $parser) = @$parse;
+    if (!$parser) {
+      log_error "Can't check ESTs against the $parser_name database; skipping.", "warning";
+      next;
+    }
 
-  my @data_left;
+    log_error "Checking for " . $self->num_data . " ESTs already in the $parser_name database...", "notice", ">";
+    while (my $ap_datum = $self->next_datum) {
+      my ($applied_protocol, $direction, $datum) = @$ap_datum;
 
-  log_error "Validating " . scalar(@data_to_validate) . " ESTs...", "notice", ">";
+      my $datum_obj = $datum->get_object;
+      my $accession = $datum_obj->get_value;
 
-#  my $root_dir = $0;
-#  $root_dir =~ s/[^\/]*$//;
-#  $root_dir = "./" unless $root_dir =~ /\//;
-#  my $tmp_file = new File::Temp(
-#    'TEMPLATE' => "dbEST_acc_ESTs_XXXX",
-#    'DIR' => $root_dir,
-#    'SUFFIX' => '.xml',
-#    'UNLINK' => 1,
-#  );
-#  my $xmlwriter = new ModENCODE::Chado::XMLWriter();
-#  $xmlwriter->set_output_handle($tmp_file);
-#  $xmlwriter->add_additional_xml_writer($xmlwriter);
-
-  # Validate ESTs against ones we've already seen and store locally
-  log_error "Fetching " . scalar(@data_to_validate) . " ESTs from local modENCODE database...", "notice", ">";
-  my $parser = $self->get_parser_modencode();
-  my $term_source_validator = new ModENCODE::Validator::TermSources();
-
-  while (my $datum_hash = shift @data_to_validate) {
-    my $datum = $datum_hash->{'datum'}->clone();
-    my $id = $datum_hash->{'datum'}->get_value();
-    if (length($id)) {
-      my $feature = $parser->get_feature_by_genbank_id($id);
-      if (!$feature) {
-        push @data_left, $datum_hash;
+      if (!length($accession)) {
+        log_error "Empty value for EST accession in column " . $datum_obj->get_heading . " [" . $datum_obj->get_name . "].", "warning";
+        $self->remove_current_datum;
         next;
       }
-      if ($term_source_validator->check_and_update_features([$feature])) {
-#        $xmlwriter->write_standalone_feature($feature);
-#        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
 
-#        $datum->add_feature($placeholder_feature);
-        $datum->add_feature($feature);
-        $datum_hash->{'merged_datum'} = $datum;
-        $datum_hash->{'is_valid'} = 1;
-      } else {
-        $success = 0;
+      my $feature = $parser->get_feature_by_genbank_id($datum_obj->get_value);
+      next unless $feature;
+
+      my $cvterm = $feature->get_object->get_type(1)->get_name;
+      my $cv = $feature->get_object->get_type(1)->get_cv(1)->get_name;
+      my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+
+      if ($cvterm ne "EST") {
+        log_error "Found a feature in $parser_name, but it is of type '$cv:$cvterm', not 'SO:EST'. Not using it.", "warning";
+        next;
       }
+      if ($canonical_cvname ne "SO") {
+        # TODO: Use this and update the CV type?
+        log_error "Found a feature in $parser_name, but it is of type '$cv:$cvterm', not 'SO:EST'. Not using it.", "warning";
+        next;
+      }
+      
+      # If we found it, don't need to keep trying to validate it
+      $datum->get_object->add_feature($feature);
+      $self->remove_current_datum;
     }
+    log_error "Done; " . $self->num_data . " ESTs still to be found.", "notice", "<";
+
+    $self->rewind();
   }
+  log_error "Done.", "notice", "<";
 
-  @data_to_validate = @data_left;
-  @data_left = ();
-  log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
-
-  # Validate remaining ESTs against FlyBase
-  if (scalar(@data_to_validate)) {
-    log_error "Falling back to fetching remaining " . scalar(@data_to_validate) . " ESTs from FlyBase...", "notice", ">";
-    $parser = $self->get_parser_flybase();
-    my $i = 0;
-    while (my $datum_hash = shift @data_to_validate) {
-      my $datum = $datum_hash->{'datum'}->clone();
-      my $id = $datum_hash->{'datum'}->get_value();
-      if (length($id)) {
-        $i++;
-        my $feature = $parser->get_feature_by_genbank_id($id);
-        if (!$feature) {
-          push @data_left, $datum_hash;
-          next;
-        }
-#        $xmlwriter->write_standalone_feature($feature);
-#        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
-
-#        $datum->add_feature($placeholder_feature);
-        $datum->add_feature($feature);
-        $datum_hash->{'merged_datum'} = $datum;
-        $datum_hash->{'is_valid'} = 1;
-      }
-    }
-    @data_to_validate = @data_left;
-    @data_left = ();
-    log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
+  unless ($self->num_data) {
+    log_error "Done.", "notice", "<";
+    return $success;
   }
 
   # Validate remaining ESTs against GenBank by primary ID
-  if (scalar(@data_to_validate)) {
-    log_error "Falling back to pulling down EST information from Genbank by primary ID...", "notice", ">";
-    my $est_counter = 1;
-    my @all_results;
-    while (scalar(@data_to_validate)) {
-      # Generate search query "est1,est2,est3,..."
-      my @term_set;
-      for (my $i = 0; $i < 40; $i++) {
-        my $datum_hash = shift @data_to_validate;
-        last unless $datum_hash;
-        $est_counter++;
-        push @term_set, $datum_hash if length($datum_hash->{'datum'}->get_value());
-      }
-      my $fetch_term = join(",", map { $_->{'datum'}->get_value() } @term_set);
-      log_error "Fetching ESTs from " . ($est_counter - scalar(@term_set)) . " to " . ($est_counter-1) . ".", "notice";
+  log_error "Looking up " . $self->num_data . " ESTs in dbEST.", "notice", ">";
 
-      # Run query and get back the cookie that will let us fetch the result:
+  my @not_found_by_acc;
+  while ($self->num_data) {
+    # Get 40 ESTs at a time and search for them at dbEST
+    my @batch_query;
+    my $num_ests = 0;
+    while (my $ap_datum = $self->next_datum) {
+      push @batch_query, $ap_datum;
+      $self->remove_current_datum; # This is the last chance this EST gets to be found
+      last if (++$num_ests >= ESTS_AT_ONCE);
+    }
+    
+    log_error "Fetching batch of " . scalar(@batch_query) . " ESTs.", "notice", ">";
+    my $fetch_query = join(",", map { $_->[2]->get_object->get_value } @batch_query);
+
+    my $done = 0;
+    while ($done++ < MAX_TRIES) {
+
+      # Run query (est1,est2,...) and get back the cookie that will let us fetch the result:
       my $fetch_results;
       eval {
-        $fetch_results = $soap_client{ident $self}->run_eFetch({
+        $fetch_results = $self->get_soap_client->run_eFetch({
             'eFetchRequest' => {
               'db' => 'nucest',
-              'id' => $fetch_term,
+              'id' => $fetch_query,
               'tool' => 'modENCODE pipeline',
               'email' => 'yostinso@berkeleybop.org',
               'retmax' => 400,
             }
           });
       };
+
       if (!$fetch_results) {
         # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
-        log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-        unshift @data_to_validate, @term_set;
+        log_error "Couldn't retrieve any ESTs by ID; got no response from NCBI. Retrying in 30 seconds.", "notice";
         sleep 30;
         next;
       }
@@ -274,67 +249,76 @@ sub validate {
       if ($fetch_results->fault) {
         # Got back a SOAP fault, which means our query got through but NCBI gave us junk back.
         # Wait 30 seconds and retry - this seems to just happen sometimes.
-        log_error "Couldn't fetch ESTs by primary ID; got response \"" . $fetch_results->faultstring . "\" from NCBI. Retrying.", "notice";
-        unshift @data_to_validate, @term_set;
+        log_error "Couldn't fetch ESTs by primary ID; got response \"" . $fetch_results->faultstring . "\" from NCBI. Retrying in 30 seconds.", "notice";
         sleep 30;
         next;
       }
-      # Pull out the results
+
+      # No errors, pull out the results
       $fetch_results->match('/Envelope/Body/eFetchResult/GBSet/GBSeq');
       if (!length($fetch_results->valueof())) {
         if (!$fetch_results->match('/Envelope/Body/eFetchResult')) {
           # No eFetchResult result at all, which means we got back junk. Wait 30 seconds and retry.
-          log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-          unshift @data_to_validate, @term_set;
+          log_error "Couldn't retrieve EST by ID; got a junk response from NCBI. Retrying in 30 seconds.", "notice";
           sleep 30;
           next;
         } else {
-          # Got an empty result (this is what we're hoping for instead of the fault mentioned above)
-          log_error "Couldn't find any ESTs using when fetching for '" . $fetch_term . "' at NCBI.", "warning";
-          push @data_left, @term_set;
+          # Got an empty result
+          log_error "None of the " . scalar(@batch_query) . " ESTs found at NCBI using using query '" . $fetch_query . "'. Retrying, just in case.", "warning";
           sleep 5;
           next;
         }
       }
 
-      ######################################################################################
       # Got back an array of useful results. Figure out which of our current @term_set actually
       # got returned. Record ones that we didn't get back in @data_left.
-      my @a = cross_check_gb_records($fetch_results, @term_set);
+      my ($not_found, $false_positives) = handle_search_results($fetch_results, @batch_query);
 
-      push @data_left, @a;
-
-      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
-    }
-    @data_to_validate = @data_left;
-    @data_left = ();
-    log_error "Done.", "notice", "<";
-  }
-  if (scalar(@data_to_validate)) {
-    log_error "Falling back to pulling down EST information from Genbank by searching...", "notice", ">";
-
-    my $est_counter = 1;
-    my @all_results;
-    while (scalar(@data_to_validate)) {
-      # Generate search query "est1 OR est2 OR est3 OR ..."
-      my @term_set;
-      for (my $i = 0; $i < 40; $i++) {
-        my $datum_hash = shift @data_to_validate;
-        last unless $datum_hash;
-        $est_counter++;
-        push @term_set, $datum_hash if length($datum_hash->{'datum'}->get_value());
+      if (scalar(@$false_positives)) {
+        # TODO: Do more here?
+        log_error "Found " . scalar(@$false_positives) . " false positives at GenBank.", "warning";
       }
-      my $search_term = join(" OR ", map { $_->{'datum'}->get_value() } @term_set);
-      log_error "Searching ESTs from " . ($est_counter - scalar(@term_set)) . " to " . ($est_counter-1) . ".", "notice";
+
+      # Keep track of $not_found and to pass on to next segment
+      push @not_found_by_acc, @$not_found;
+
+      last; # Exit the retry 'til MAX_TRIES loop
+    }
+    if ($done > MAX_TRIES) {
+      # ALL of the queries failed, so pass on all the ESTs being queried to the next section
+      log_error "Couldn't fetch ESTs by ID after " . MAX_TRIES . " tries.", "warning";
+      @not_found_by_acc = @batch_query;
+    }
+    # If we found everything, move on to the next batch of ESTs
+    unless (scalar(@not_found_by_acc)) {
+      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
+      log_error "Done.", "notice", "<";
+      next; # SUCCESS
+    }
+
+
+    @batch_query = @not_found_by_acc;
+    @not_found_by_acc = ();
+
+    ###### FALL BACK TO SEARCH INSTEAD OF LOOKUP ######
+
+    # Do we need to fall back to searching because we couldn't find by accession?
+    log_error "Falling back to pulling down " . scalar(@batch_query) . " EST information from Genbank by searching...", "notice", ">";
+    $done = 0;
+    while ($done++ < MAX_TRIES) {
+      log_error "Searching for remaining batch of " . scalar(@batch_query) . " ESTs.", "notice";
+
+      # Run query (est1,est2,...) and get back the cookie that will let us fetch the result:
+      my $search_query = join(" OR ", map { $_->[2]->get_object->get_value } @batch_query);
 
       # Run query and get back the cookie that will let us fetch the result:
       my $search_results;
       eval {
-        $search_results = $soap_client{ident $self}->run_eSearch({
+        $search_results = $self->get_soap_client->run_eSearch({
             'eSearchRequest' => {
               'db' => 'nucleotide',
-	   #   'rettype' => 'native',
-              'term' => $search_term,
+              #   'rettype' => 'native',
+              'term' => $search_query,
               'tool' => 'modENCODE pipeline',
               'email' => 'yostinso@berkeleybop.org',
               'usehistory' => 'y',
@@ -344,8 +328,7 @@ sub validate {
       };
       if (!$search_results) {
         # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
-        log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-        unshift @data_to_validate, @term_set;
+        log_error "Couldn't retrieve any ESTs by searching; got no response from NCBI. Retrying in 30 seconds.", "notice";
         sleep 30;
         next;
       }
@@ -353,22 +336,21 @@ sub validate {
       if ($search_results->fault) {
         # Got back a SOAP fault, which means our query got through but NCBI gave us junk back.
         # Wait 30 seconds and retry - this seems to just happen sometimes.
-        log_error "Couldn't search for EST ID's; got response \"" . $search_results->faultstring . "\" from NCBI. Retrying.", "notice";
-        unshift @data_to_validate, @term_set;
+        log_error "Couldn't search for ESTs by primary ID; got response \"" . $search_results->faultstring . "\" from NCBI. Retrying in 30 seconds.", "notice";
         sleep 30;
         next;
       }
+
       # Pull out the cookie and query key that will allow us to actually fetch the results proper
       $search_results->match('/Envelope/Body/eSearchResult/WebEnv');
       my $webenv = $search_results->valueof();
       $search_results->match('/Envelope/Body/eSearchResult/QueryKey');
       my $querykey = $search_results->valueof();
 
-      # If we didn't get a valid query key or cookie, something screwy happened without a fault.
-      # Wait 30 seconds and retry.
       if (!length($querykey) || !length($webenv)) {
-        log_error "Couldn't get a search cookie when searching for ESTs; got an unexpected response from NCBI. Retrying.", "notice";
-        unshift @data_to_validate, @term_set;
+        # If we didn't get a valid query key or cookie, something screwy happened without a fault.
+        # Wait 30 seconds and retry.
+        log_error "Couldn't get a search cookie when searching for ESTs; got an unexpected response from NCBI. Retrying in 30 seconds.", "notice";
         sleep 30;
         next;
       }
@@ -379,7 +361,7 @@ sub validate {
 
       my $fetch_results;
       eval {
-        $fetch_results = $soap_client{ident $self}->run_eFetch({
+        $fetch_results = $self->get_soap_client->run_eFetch({
             'eFetchRequest' => {
               'db' => 'nucleotide',
 	      #'rettype' => 'native',
@@ -394,36 +376,31 @@ sub validate {
 
       if (!$fetch_results) {
         # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
-        log_error "Couldn't retrieve EST by ID; got a blank response from NCBI.", "error";
-        push @data_left, @term_set;
-        sleep 10;
+        log_error "Couldn't retrieve any ESTs by search result; got no response from NCBI. Retrying in 30 seconds.", "notice";
+        sleep 30;
         next;
       }
 
       if ($fetch_results->fault) {
-        my $faultstring = $fetch_results->faultstring;
         # Got back a SOAP fault, which means our query got through but NCBI gave us junk back.
         # Sadly, this is also what happens when there are no results. The standard Eutils response 
         # is "Error: download dataset is empty", which apparently translates to a SOAP fault. Since
         # the search itself worked, we'll assume that NCBI didn't just die and that what we're really
-        # seeing is a lack of results, in which case push all of the ESTs in this package back on the
-        # stack.
-        push @data_left, @term_set;
+        # seeing is a lack of results, in which all of the ESTs being searched for failed.
+        log_error "Couldn't fetch ESTs by primary ID; got response \"" . $fetch_results->faultstring . "\" from NCBI. Retrying, just in case.", "error";
         sleep 5;
-        next;
+        last;
       }
 
       if (!length($fetch_results->valueof())) {
         if (!$fetch_results->match('/Envelope/Body/eFetchResult')) {
           # No eFetchResult result at all, which means we got back junk. Wait 30 seconds and retry.
           log_error "Couldn't retrieve EST by ID; got an unknown response from NCBI. Retrying.", "notice";
-          unshift @data_to_validate, @term_set;
           sleep 30;
           next;
         } else {
           # Got an empty result (this is what we're hoping for instead of the fault mentioned above)
-          log_error "Couldn't find any ESTs using when searching for '" . $search_term . "' at NCBI.", "warning";
-          push @data_left, @term_set;
+          log_error "None of the " . scalar(@batch_query) . " ESTs found at NCBI using using query '" . $search_query . "'. Retrying, just in case.", "warning";
           sleep 5;
           next;
         }
@@ -431,182 +408,162 @@ sub validate {
 
       # Got back an array of useful results. Figure out which of our current @term_set actually
       # got returned. Record ones that we didn't get back in @data_left.
+      my ($not_found, $false_positives) = handle_search_results($fetch_results, @batch_query);
 
-      push @data_left, cross_check_gb_records($fetch_results, @term_set);
+      if (scalar(@$false_positives)) {
+        # TODO: Do more here?
+        log_error "Found " . scalar(@$false_positives) . " false positives at GenBank.", "warning";
+      }
 
-      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
+      # Keep track of $not_found and to pass on to next segment
+      push @not_found_by_acc, @$not_found;
+
+      last; # Exit the retry 'til MAX_TRIES loop
     }
-    @data_to_validate = @data_left;
-    @data_left = ();
-    log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
+    if ($done > MAX_TRIES) {
+      # ALL of the queries failed, so pass on all the ESTs being queried to the next section
+      log_error "Couldn't fetch ESTs by ID after " . MAX_TRIES . " tries.", "warning";
+      @not_found_by_acc = @batch_query;
+    }
+    # If we found everything, move on to the next batch of ESTs
+    unless (scalar(@not_found_by_acc)) {
+      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
+      log_error "Done.", "notice", "<";
+      next; # SUCCESS
+    }
+    log_error "Done.", "notice", "<";
+
+    ###### ERROR - DIDN'T FIND ALL ESTS ######
+    $success = 0;
+    foreach my $missing_est (@not_found_by_acc) {
+      my $datum_obj = $missing_est->[2]->get_object;
+      log_error "Didn't find EST " . $datum_obj->get_value . " anywhere!", "error";
+    }
+    log_error "Done.", "notice", "<";
   }
   log_error "Done.", "notice", "<";
-  if (scalar(@data_to_validate)) {
-    my $est_list = "'" . join("', '", map { $_->{'datum'}->get_value() } @data_to_validate) . "'";
-    log_error "Can't validate all ESTs. There is/are " . scalar(@data_to_validate) . " EST(s) that could not be validated. See previous errors.", "error";
-    $success = 0;
-  }
 
+  log_error "Done.", "notice", "<";
   return $success;
 }
 
-sub merge {
-  my ($self, $datum, $applied_protocol) = @_;
+sub handle_search_results {
+  my ($fetch_results, @ap_data) = @_;
+  my @ests_not_found;
+  my @unmatched_result_accs = $fetch_results->valueof();
+  foreach my $ap_datum (@ap_data) {
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    my $datum_obj = $datum->get_object;
 
-  my $validated_datum = $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
+    if ($datum_obj->get_value() eq "AH001028") {
+      #special case - we hope to never see this id again
+      log_error "AH001028 (specifically) is a very strange GenBank entry that we cannot deal with. Skipping it.", "warning";
+      next;
+    }
 
-  # If there's a GFF attached to this particular protocol, update any entries referencing this EST
-  if (scalar(@{$validated_datum->get_features()})) {
-    my $gff_validator = $self->get_data_validator()->get_validators()->{'modencode:GFF3'};
-    if ($gff_validator) {
-      foreach my $other_datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
-        if (
-          $other_datum->get_type()->get_name() eq "GFF3" && 
-          ModENCODE::Config::get_cvhandler()->cvname_has_synonym($other_datum->get_type()->get_cv()->get_name(), "modencode")
-        ) {
-          if (defined($other_datum->get_value()) && length($other_datum->get_value())) {
-            my $gff_feature = $gff_validator->get_feature_by_id_from_file(
-              $validated_datum->get_value(),
-              $other_datum->get_value()
-            );
-            if ($gff_feature) {
-              # Update the GFF feature to look like this feature (but don't break any links
-              # it may have to other features in the GFF, then return the updated feature as
-              # part of the validated_datum
-              croak "Unable to continue; the validated dbEST_acc datum " . $validated_datum->to_string() . " has more than one associated feature!" if (scalar(@{$validated_datum->get_features()}) > 1);
-              # Rather than blindly mimic, we need to merge the feature from GFF with the fetched feature
-              my $fetched_feature = $validated_datum->get_features()->[0];
-              # Always override: name, uniquename, residues, seqlen,
-              # timeaccessioned, timelastmodified, is_analysis, organism, type
-              $gff_feature->set_name($fetched_feature->get_name());
-              $gff_feature->set_uniquename($fetched_feature->get_uniquename());
-              $gff_feature->set_residues($fetched_feature->get_residues());
-              $gff_feature->set_seqlen($fetched_feature->get_seqlen());
-              $gff_feature->set_timeaccessioned($fetched_feature->get_timeaccessioned());
-              $gff_feature->set_timelastmodified($fetched_feature->get_timelastmodified());
-              $gff_feature->set_is_analysis($fetched_feature->get_is_analysis());
-              $gff_feature->set_organism($fetched_feature->get_organism());
-              $gff_feature->set_type($fetched_feature->get_type());
+    my ($genbank_feature) = grep { $datum_obj->get_value() eq $_->{'GBSeq_primary-accession'} } $fetch_results->valueof();
+    if (!$genbank_feature) {
+      push @ests_not_found, $ap_datum;
+      next;
+    }
+    @unmatched_result_accs = grep { $datum_obj->get_value() ne $_->{'GBSeq_primary-accession'} } @unmatched_result_accs;
 
-              # Add any additional analysisfeatures
-              foreach my $analysisfeature (@{$fetched_feature->get_analysisfeatures()}) {
-                $gff_feature->add_analysisfeature($analysisfeature);
-              }
-              # Add any additional locations
-              foreach my $location (@{$fetched_feature->get_locations()}) {
-                $gff_feature->add_location($location);
-              }
-              # Add any additional dbxrefs
-              foreach my $dbxref (@{$fetched_feature->get_dbxrefs()}) {
-                $gff_feature->add_dbxref($dbxref);
-              }
-              # Leave the primary_dbxref alone
+    # Pull out enough information from the GenBank record to create a Chado feature
+    my ($seq_locus) = $genbank_feature->{'GBSeq_locus'};
+    my ($genbank_gb) = grep { $_ =~ m/^gb\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gb =~ s/^gb\|//;
+    my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
+    my $genbank_acc = $genbank_feature->{'GBSeq_primary-accession'};
+    my ($est_name) = ($genbank_feature->{'GBSeq_definition'} =~ m/^(\S+)/);
+    my $sequence = $genbank_feature->{'GBSeq_sequence'};
+    my $seqlen = length($sequence);
+    my $timeaccessioned = $genbank_feature->{'GBSeq_create-date'};
+    my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
+    my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
 
-              $validated_datum->set_features( [$gff_feature] );
-            }
-          }
-        }
+    if (!($seq_locus)) {      
+      if ($genbank_gb) {
+        log_error "dbEST id for " . $datum_obj->get_value() . " is not the primary identifier, but matches GenBank gb: $genbank_gb.", "warning";
+      } elsif ($genbank_gi) {
+        log_error "dbEST id for " . $datum_obj->get_value() . " is not the primary identifier, but matches GenBank gi: $genbank_gi.", "warning";
+      } else {
+        log_error "Found a record with matching accession for " . $datum_obj->get_value() . ", but no GBSeq_locus entry, so it's invalid", "error";
+        push @ests_not_found, $ap_datum;
+        next;
       }
     }
-  }
-  return $validated_datum;
-}
 
-sub cross_check_gb_records {
-    my ($fetch_results, @term_set) = @_;
-    my @data_left = ();
-    foreach my $datum_hash (@term_set) {
-        my $datum = $datum_hash->{'datum'}->clone();
-	
-        my ($genbank_feature) = grep { $datum->get_value() eq $_->{'GBSeq_primary-accession'} } $fetch_results->valueof();
-	
-        if ($genbank_feature) {
-	    # Pull out enough information from the GenBank record to create a Chado feature
-	    
-#          my ($dbest_id) = grep { $_ =~ m/^gnl\|dbEST\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $dbest_id =~ s/^gnl\|dbEST\|//;
-	    my ($seq_locus) = $genbank_feature->{'GBSeq_locus'};
-	    my ($genbank_gb) = grep { $_ =~ m/^gb\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gb =~ s/^gb\|//;
-	    my ($genbank_gi) = grep { $_ =~ m/^gi\|/ } @{$genbank_feature->{'GBSeq_other-seqids'}->{'GBSeqid'}}; $genbank_gi =~ s/^gi\|//;
-	    my $genbank_acc = $genbank_feature->{'GBSeq_primary-accession'};
-	    my ($est_name) = ($genbank_feature->{'GBSeq_definition'} =~ m/^(\S+)/);
-	    my $sequence = $genbank_feature->{'GBSeq_sequence'};
-	    my $seqlen = length($sequence);
-	    my $timeaccessioned = $genbank_feature->{'GBSeq_create-date'};
-	    my $timelastmodified = $genbank_feature->{'GBSeq_update-date'};
-	    my ($genus, $species) = ($genbank_feature->{'GBSeq_organism'} =~ m/^(\S+)\s+(.*)$/);
-#	    use Data::Dumper;
-#	    print "gi: " . Dumper($genbank_gi) . "acc: " . Dumper($genbank_acc) . "locus: " . Dumper($seq_locus) . "\n";
-	    if (!($seq_locus)) {	      
-		log_error ("dbEST id for " . $datum->get_value() . " is not the primary identifier", "warning");
-		if ($genbank_gb) {
-		    log_error "but matches genbank gb: $genbank_gb", "warning";
-		} elsif ($genbank_gi) {
-		    log_error "but matches genbank gi: $genbank_gi", "warning";
-		} else {
-		    log_error "ID match not found", "error";		
-		    push @data_left, $datum_hash;
-		    next;
-		}
-		log_error "using GB primary accession: $genbank_acc", "notice";
-	    }
-	    
-	    # Create the feature object
-	    my $feature = new ModENCODE::Chado::Feature({
-		'name' => $est_name,
-		'uniquename' => $genbank_acc,
-		'residues' => $sequence,
-		'seqlen' => $seqlen,
-		'timeaccessioned' => $timeaccessioned,
-		'timelastmodified' => $timelastmodified,
-		'type' => new ModENCODE::Chado::CVTerm({
-		    'name' => 'EST',
-		    'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' })
-						       }),
-			'organism' => new ModENCODE::Chado::Organism({
-			    'genus' => $genus,
-			    'species' => $species,
-								     }),
-		'primary_dbxref' => new ModENCODE::Chado::DBXref({
-		    'accession' => $genbank_acc,
-		    'db' => new ModENCODE::Chado::DB({
-			'name' => 'GB',
-			'description' => 'GenBank',
-						     }),
-								 }),
-		'dbxrefs' => [ new ModENCODE::Chado::DBXref({
-		    'accession' => $genbank_gi,
-		    'db' => new ModENCODE::Chado::DB({
-			'name' => 'dbEST',
-			'description' => 'dbEST gi IDs',
-						     }),
-							    }),
-		    ],
-							});
-	    
-	    
-	    # Add the feature object to a copy of the datum for later merging
-	    $datum->add_feature($feature);
-	    $datum_hash->{'merged_datum'} = $datum;
-	    $datum_hash->{'is_valid'} = 1;
-        } elsif ($datum->get_value() eq "AH001028") {
-	    #special case - we hope to never see this id again
-	    log_error ("\'" . $datum->get_value() . "\' is a problematic ID.  Skipping...", "warning");
-	    $datum_hash->{'is_valid'} = 0;
-	    #$datum->add_feature($feature);
-	    $datum_hash->{'merged_datum'} = $datum;
-	    #next;
-	} else {
-	    log_error "Couldn't find the EST identified by '" . $datum->get_value() . "' in search results from NCBI.", "warning";
-	    log_error "Will retry finding matches in GenBank.", "warning";
-	    push @data_left, $datum_hash;
-        }
+    # Create the Chado feature
+    # First check to see if this feature has already been found (in say GFF)
+    my $organism = new ModENCODE::Chado::Organism({ 'genus' => $genus, 'species' => $species });
+    my $type = new ModENCODE::Chado::CVTerm({ 'name' => 'EST', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }) });
+
+    my $feature = ModENCODE::Cache::get_feature_by_uniquename_and_type($datum_obj->get_value(), $type);
+    if ($feature) {
+      log_error "Found already created feature " . $datum_obj->get_value() . " to represent EST feature.", "debug";
+      if ($organism->get_id == $feature->get_object->get_organism_id) {
+        log_error "  Using it because unique constraints are identical.", "debug";
+        # Add DBXrefs
+        $feature->get_object->add_dbxref(new ModENCODE::Chado::DBXref({
+              'accession' => $genbank_gi,
+              'db' => new ModENCODE::Chado::DB({
+                  'name' => 'dbEST',
+                  'description' => 'dbEST gi IDs',
+                }),
+            })
+        );
+        $feature->get_object->add_dbxref(new ModENCODE::Chado::DBXref({
+              'accession' => $genbank_acc,
+              'db' => new ModENCODE::Chado::DB({
+                  'name' => 'GB',
+                  'description' => 'GenBank',
+                }),
+            }),
+        );
+      } else {
+        log_error "  Not using it because organisms (new: " .  $organism->get_object->to_string . ", existing: " .  $feature->get_object->get_organism(1)->to_string . ") differ.", "debug";
+        $feature = undef;
+      }
     }
 
-    return @data_left;
+    if (!$feature) {
+      $feature = new ModENCODE::Chado::Feature({
+          'name' => $est_name,
+          'uniquename' => $genbank_acc,
+          'residues' => $sequence,
+          'seqlen' => $seqlen,
+          'timeaccessioned' => $timeaccessioned,
+          'timelastmodified' => $timelastmodified,
+          'type' => $type,
+          'organism' => $organism,
+          'primary_dbxref' => new ModENCODE::Chado::DBXref({
+              'accession' => $genbank_acc,
+              'db' => new ModENCODE::Chado::DB({
+                  'name' => 'GB',
+                  'description' => 'GenBank',
+                }),
+            }),
+          'dbxrefs' => [ new ModENCODE::Chado::DBXref({
+              'accession' => $genbank_gi,
+              'db' => new ModENCODE::Chado::DB({
+                  'name' => 'dbEST',
+                  'description' => 'dbEST gi IDs',
+                }),
+            }),
+          ],
+        });
+    }
+
+    # Add the feature to the datum
+    $datum->get_object->add_feature($feature);
+  }
+  @unmatched_result_accs = map { $_->{'GBSeq_primary-accession'} } @unmatched_result_accs;
+
+  return (\@ests_not_found, \@unmatched_result_accs);
 }
 
 
-sub get_parser_flybase : PRIVATE {
+
+sub get_flybase_chado_parser : PROTECTED {
   my ($self) = @_;
   my $parser = new ModENCODE::Parser::Chado({
       'dbname' => ModENCODE::Config::get_cfg()->val('databases flybase', 'dbname'),
@@ -616,11 +573,12 @@ sub get_parser_flybase : PRIVATE {
       'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
       'caching' => 0,
     });
+  return undef unless $parser;
   $parser->set_no_relationships(1);
   return $parser;
 }
 
-sub get_parser_wormbase : PRIVATE {
+sub get_wormbase_chado_parser : PROTECTED {
   my ($self) = @_;
   my $parser = new ModENCODE::Parser::Chado({
       'dbname' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'dbname'),
@@ -630,11 +588,12 @@ sub get_parser_wormbase : PRIVATE {
       'password' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'password'),
       'caching' => 0,
     });
+  return undef unless $parser;
   $parser->set_no_relationships(1);
   return $parser;
 }
 
-sub get_parser_modencode : PRIVATE {
+sub get_modencode_chado_parser : PROTECTED {
   my ($self) = @_;
   my $parser = new ModENCODE::Parser::Chado({
       'dbname' => ModENCODE::Config::get_cfg()->val('databases modencode', 'dbname'),
@@ -644,6 +603,7 @@ sub get_parser_modencode : PRIVATE {
       'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
       'caching' => 0,
     });
+  return undef unless $parser;
   $parser->set_no_relationships(1);
   return $parser;
 }

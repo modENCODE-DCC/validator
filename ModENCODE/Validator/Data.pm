@@ -114,149 +114,131 @@ use ModENCODE::Validator::Data::CEL;
 use ModENCODE::Validator::Data::BED;
 use ModENCODE::Validator::Data::WIG;
 use ModENCODE::Validator::Data::dbEST_acc;
+use ModENCODE::Validator::Data::dbEST_acc_list;
 use ModENCODE::Validator::Data::Result_File;
 use ModENCODE::Validator::Data::GFF3;
 use ModENCODE::Validator::Data::SO_transcript;
-use ModENCODE::Validator::Data::dbEST_acc_list;
+use ModENCODE::Validator::Data::SO_protein;
 use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
-#use ModENCODE::Validator::Data::NCBITrace;
+
 use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %validators                  :ATTR( :get<validators>,                :default<{}> );
+use constant DEBUG => 1;
 
-sub BUILD {
+my %termsource_validators       :ATTR( :default<{}> );
+my %type_validators             :ATTR( :default<{}> );
+my %experiment                  :ATTR( :name<experiment> );
+
+sub START {
   my ($self, $ident, $args) = @_;
-  # TODO: Figure out how to be more canonical about CV names w/ respect to validation function identifiers
-  $validators{$ident}->{'modencode:CEL'} = new ModENCODE::Validator::Data::CEL({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:transcriptional_fragment_map'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:Signal_Graph_File'} = new ModENCODE::Validator::Data::WIG({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:accession_number_list_data_file'} = new ModENCODE::Validator::Data::dbEST_acc_list({ 'data_validator' => $self });
-  $validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript({ 'data_validator' => $self });
-  $validators{$ident}->{'Result File'} = new ModENCODE::Validator::Data::Result_File({ 'data_validator' => $self });
-  $validators{$ident}->{'modencode:TraceArchive_record'} = new ModENCODE::Validator::Data::TA_acc({ 'data_validator' => $self });
-  $validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'data_validator' => $self });
+  $type_validators{$ident}->{'modencode:CEL'} = new ModENCODE::Validator::Data::CEL({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:transcriptional_fragment_map'} = new ModENCODE::Validator::Data::BED({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:Signal_Graph_File'} = new ModENCODE::Validator::Data::WIG({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:accession_number_list_data_file'} = new ModENCODE::Validator::Data::dbEST_acc_list({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'SO:protein'} = new ModENCODE::Validator::Data::SO_protein({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:TraceArchive_record'} = new ModENCODE::Validator::Data::TA_acc({ 'experiment' => $self->get_experiment });
+  $termsource_validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'experiment' => $self->get_experiment });
 }
 
-sub merge {
-  my ($self, $experiment) = @_;
-  #$experiment = $experiment->clone();
-
-  log_error "Merging data elements into experiment object.", "notice", ">";
-  
-  my @unique_data;
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      foreach my $datum (@{$applied_protocol->get_output_data()}, @{$applied_protocol->get_input_data()}) {
-        # Actual equality, not ->equals, since we want to validate the data
-        if (!scalar(grep { $datum == $_->{'datum'} && $applied_protocol == $_->{'applied_protocol'} } @unique_data)) {
-          push @unique_data, { 'datum' => $datum, 'applied_protocol' => $applied_protocol };
-        }
-      }
-    }
-  }
-  foreach my $datum (@unique_data) {
-    my $applied_protocol = $datum->{'applied_protocol'};
-    $datum = $datum->{'datum'};
-    my $datum_type = $datum->get_type();
-    my $validator = $self->get_validator_for_type($datum_type);
-
-    if (!$validator && $datum->get_termsource() && $datum->get_termsource()->get_db()) {
-      my $datum_termsource_type = $datum->get_termsource()->get_db()->get_description();
-      $validator =  $validators{ident $self}->{$datum_termsource_type};
-    }
-
-    next unless $validator;
-    my $newdatum = $validator->merge($datum, $applied_protocol);
-    croak "Cannot merge data columns if they do not validate" unless $newdatum;
-    $datum->mimic($newdatum);
-  }
-  log_error "Done.", "notice", "<";
-  return $experiment;
-}
 
 sub get_validator_for_type : PRIVATE {
   my ($self, $type) = @_;
-  my $cvname = $type->get_cv()->get_name();
+  my $cvname = $type->get_cv(1)->get_name();
   my $cvterm = $type->get_name();
 
-  my @validator_keys = keys(%{$validators{ident $self}});
+  my @validator_keys = keys(%{$type_validators{ident $self}});
   foreach my $validator_key (@validator_keys) {
     my ($cv, $term) = split(/:/, $validator_key);
     if ($term eq $cvterm && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($cvname, $cv)) {
-      return $validators{ident $self}->{$validator_key};
+      return $type_validators{ident $self}->{$validator_key};
     }
   }
 }
 
 sub validate {
-  my ($self, $experiment) = @_;
-  $experiment = $experiment->clone();
+  my $self = shift;
   my $success = 1;
+  my $experiment = $self->get_experiment;
 
   # For any field that is a "* File" 
   # For any field with a DBxref's DB description of URL_*
   # Convert to a feature. Need some automatically-loaded handlers here
 
-  my @unique_data;
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      foreach my $datum (@{$applied_protocol->get_output_data()}, @{$applied_protocol->get_input_data()}) {
-        # Actual equality, not ->equals, since we want to validate the data
-        if (!scalar(grep { $datum == $_->{'datum'} && $applied_protocol == $_->{'applied_protocol'} } @unique_data)) {
-          push @unique_data, { 'datum' => $datum, 'applied_protocol' => $applied_protocol };
-        }
-      }
+  my @all_data;
+  foreach my $applied_protocol_slot (@{$experiment->get_applied_protocol_slots}) {
+    foreach my $applied_protocol (@$applied_protocol_slot) {
+      push @all_data, map { [ $applied_protocol, 'input', $_ ] } $applied_protocol->get_input_data;
+      push @all_data, map { [ $applied_protocol, 'output', $_ ] } $applied_protocol->get_output_data;
     }
   }
+  my %seen;
+  @all_data = grep { !$seen{$_->[0]->get_id . '.' . $_->[1] . '.' . $_->[2]->get_id}++ } @all_data;
+
+  log_error "There are " . scalar(@all_data) . " unique data/applied protocol pairs found.", "debug", ">" if DEBUG;
+
+  # Preprocess any Result File column which will fetch files at remote URLs, etc.
+  my $file_validator = new ModENCODE::Validator::Data::Result_File({ 'experiment' => $self->get_experiment });
+  foreach my $ap_datum (@all_data) {
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    if ($datum->get_object->get_heading() =~ m/Result *Files?/i) {
+      $file_validator->add_datum_pair($ap_datum);
+    }
+  }
+  if ($file_validator->num_data) {
+    $success = 0 unless $file_validator->validate();
+  }
+
 
   # For any data field with a cvterm of type where there exists a validator module
-  foreach my $datum (@unique_data) {
-    my $applied_protocol = $datum->{'applied_protocol'};
-    $datum = $datum->{'datum'};
-    my $datum_type = $datum->get_type();
-    my $parser_module = $datum_type->get_cv()->get_name() . ":" . $datum_type->get_name();
+  foreach my $ap_datum (@all_data) {
 
-    # Special case: Any field with a heading of "Result File" should be checked as a generic data file
-    if ($datum->get_heading() =~ m/Result *Files?/i) {
-      my $file_validator = $validators{ident $self}->{'Result File'};
-      $file_validator->add_datum($datum, $applied_protocol);
-#      if (!$file_validator->validate()) {
-#        $success = 0;
-#      }
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    log_error $applied_protocol->get_protocol(1)->get_name . " has $direction datum " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name .  "].", "debug" if DEBUG;
+
+    my $datum_type = $datum->get_object->get_type(1);
+    my $validator;
+
+    if ($datum_type) {
+      $validator = $self->get_validator_for_type($datum_type);
     }
 
-    my $validator = $self->get_validator_for_type($datum_type);
-
-    if (!$validator && $datum->get_termsource() && $datum->get_termsource()->get_db()) {
-      my $datum_termsource_type = $datum->get_termsource()->get_db()->get_description();
-      $validator =  $validators{ident $self}->{$datum_termsource_type};
+    my $datum_termsource_type;
+    if (!$validator && $datum->get_object->get_termsource) {
+      # Fall back to validating by term source
+      $datum_termsource_type = $datum->get_object->get_termsource(1)->get_db(1)->get_description();
+      $validator =  $termsource_validators{ident $self}->{$datum_termsource_type};
     }
 
     # If there wasn't a specified validator for this data type, continue
-    if (!$validator) {
-      log_error "No validator for data type $parser_module.", "warning";
+    if (!$validator && !$datum->get_object->is_anonymous) {
+      my $message = "No validator for";
+      $message .= " datum type " . (($datum_type) ?  $datum_type->get_name . ":" . $datum_type->get_cv(1)->get_name : "(no type)");
+      $message .= " with termsource " . (($datum_termsource_type) ? $datum_termsource_type : "(no termsource)");
+      $message .= " " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "].";
+      log_error $message, "warning";
       next;
-    } else {
-#	log_error "Validator for $parser_module to be used.","notice";
+    } elsif (!$validator) {
+      next;
     }
-#    print STDERR "adding validator datum: " . $datum->get_value() . " \n";
-    $validator->add_datum($datum, $applied_protocol);
+    $validator->add_datum_pair($ap_datum);
   }
-  foreach my $validator (values(%{$validators{ident $self}})) {
-    if (scalar(@{$validator->get_data()})) {
-#	print STDERR "----Validator " . ref($validator) . " running...\n";
-      if (!$validator->validate()) {
-        $success = 0;
-      }
+  log_error "Done adding applied_protocol/data pairs to validators.", "debug", "<" if DEBUG;
+
+  log_error "Running validators.", "notice", ">";
+  foreach my $validator (values(%{$termsource_validators{ident $self}}), values(%{$type_validators{ident $self}})) {
+    if ($validator->num_data() && !$validator->validate()) {
+      return 0;
     }
   }
+  log_error "Done.", "notice", "<";
   return $success;
 }
 

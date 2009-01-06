@@ -135,104 +135,97 @@ use Class::Std;
 use Carp qw(carp croak);
 
 # Attributes
-my %rank             :ATTR( :name<rank> );
+my %relationship_id  :ATTR( :name<id>,                          :default<undef> );
+my %dirty            :ATTR( :default<1> );
+my %rank             :ATTR( :get<rank>, :init_arg<rank>,        :default<0> );
 
 # Relationships
-my %subject          :ATTR( :get<subject>,              :default<undef> ); # Subject does type to
-my %object           :ATTR( :get<object>,               :default<undef> ); # Object (e.g. transcript part_of gene)
-my %type             :ATTR( :get<type>,                 :default<undef> );
+my %subject          :ATTR(             :init_arg<subject> ); # Subject does type to
+my %object           :ATTR(             :init_arg<object> );  # Object (e.g. transcript part_of gene)
+my %type             :ATTR(             :init_arg<type> );
 
-sub BUILD {
-  my ($self, $ident, $args) = @_;
-  my $object = $args->{'object'};
-  if (defined($object)) {
-    $self->set_object($object);
-  }
-  my $subject = $args->{'subject'};
-  if (defined($subject)) {
-    $self->set_subject($subject);
-  }
-  my $type = $args->{'type'};
-  if (defined($type)) {
-    $self->set_type($type);
-  }
+sub new_no_cache {
+  return Class::Std::new(@_);
 }
 
-sub set_object {
-  my ($self, $object) = @_;
-  ($object->isa('ModENCODE::Chado::Feature')) or Carp::confess("Can't add a " . ref($object) . " as a object.");
-  $object{ident $self} = $object;
+sub new {
+  my $temp = Class::Std::new(@_);
+  my $cached_feature = ModENCODE::Cache::get_cached_feature_relationship($temp);
+
+  if ($cached_feature) {
+    return $cached_feature;
+  }
+
+  # This is a new feature
+  my $self = $temp;
+  return ModENCODE::Cache::add_feature_relationship_to_cache($self);
 }
 
-sub set_subject {
-  my ($self, $subject) = @_;
-  ($subject->isa('ModENCODE::Chado::Feature')) or Carp::confess("Can't add a " . ref($subject) . " as a subject.");
-  $subject{ident $self} = $subject;
+
+
+sub get_subject_id {
+  my $self = shift;
+  return $subject{ident $self} ? $subject{ident $self}->get_id : undef;
 }
 
-sub set_type {
-  my ($self, $type) = @_;
-  ($type->isa('ModENCODE::Chado::CVTerm')) or croak("Can't add a " . ref($type) . " as a type.");
-  $type{ident $self} = $type;
+sub get_subject {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $subject = $subject{ident $self};
+  return undef unless defined $subject;
+  return $get_cached_object ? $subject->get_object : $subject;
 }
 
-sub equals {
-  my ($self, $other, $feature_parent) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless ($self->get_rank() eq $other->get_rank());
-  if ($self->get_type()) {
-    return 0 unless $other->get_type();
-    return 0 unless $self->get_type()->equals($other->get_type());
-  } else {
-    return 0 if $other->get_type();
-  }
-
-
-  if ($self->get_object()) {
-    return 0 unless $other->get_object();
-    return 0 unless $self->get_object() == ($other->get_object());
-  } else {
-    return 0 if $other->get_object();
-  }
-  if ($self->get_subject()) {
-    return 0 unless $other->get_subject();
-    return 0 unless $self->get_subject() == ($other->get_subject());
-  } else {
-    return 0 if $other->get_subject();
-  }
-
-  return 1;
+sub get_object_id {
+  my $self = shift;
+  return $object{ident $self} ? $object{ident $self}->get_id : undef;
 }
 
-sub clone_for {
-  my ($self, $uncloned_parent, $cloned_parent) = @_;
-  my $clone = new ModENCODE::Chado::FeatureRelationship({
-      'rank' => $self->get_rank(),
-    });
-  $clone->set_type($self->get_type()->clone()) if $self->get_type();
+sub get_object {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $object = $object{ident $self};
+  return undef unless defined $object;
+  return $get_cached_object ? $object->get_object : $object;
+}
 
-  if ($self->get_object()) {
-    if ($uncloned_parent == $self->get_object()) {
-      $clone->set_object($cloned_parent);
-    } else {
-      $clone->set_object($self->get_object()->clone()) if $self->get_object();
-    }
-  }
-  if ($self->get_subject()) {
-    if ($uncloned_parent == $self->get_subject()) {
-      $clone->set_subject($cloned_parent);
-    } else {
-      $clone->set_subject($self->get_subject()->clone()) if $self->get_subject();
-    }
-  }
-  return $clone;
+sub get_type_id {
+  my $self = shift;
+  return $type{ident $self} ? $type{ident $self}->get_id : undef;
+}
+
+sub get_type {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $type = $type{ident $self};
+  return undef unless defined $type;
+  return $get_cached_object ? $type->get_object : $type;
 }
 
 sub to_string {
   my ($self) = @_;
-  my $string = $self->get_object()->to_string() . " " . $self->get_type()->get_name() . " the parent";
+  my $string = $self->get_object(1)->to_string() . " " . $self->get_type(1)->get_name() . " the parent";
   return $string;
+}
+
+sub save {
+  my $self = shift;
+  if ($dirty{ident $self}) {
+    $dirty{ident $self} = 0;
+    ModENCODE::Cache::save_feature_relationship($self);
+  }
+}
+
+sub clean {
+  $dirty{ident shift} = 0;
+}
+
+sub dirty {
+  $dirty{ident shift} = 1;
+}
+
+sub is_dirty {
+  return $dirty{ident shift};
 }
 
 1;

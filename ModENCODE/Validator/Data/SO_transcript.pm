@@ -94,6 +94,7 @@ L<http://www.modencode.org>.
 
 =cut
 use strict;
+use ModENCODE::Validator::Data::Data;
 use base qw( ModENCODE::Validator::Data::Data );
 use Class::Std;
 use Carp qw(croak carp);
@@ -106,131 +107,112 @@ use ModENCODE::Chado::Organism;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Config;
 
-my %cached_features              :ATTR( :default<{}> );
-my %modencode_parser             :ATTR( :default<undef> );
-my %flybase_parser               :ATTR( :default<undef> );
-
 sub validate {
   my ($self) = @_;
-  log_error "Loading transcripts from database.", "notice", ">";
   my $success = 1;
 
-  my @ids;
-  my $i = 0;
-  foreach my $datum_hash (@{$self->get_data()}) {
-    $i++;
-    if (length($datum_hash->{'datum'}->get_value())) {
-      my $feature = $cached_features{ident $self}->{$datum_hash->{'datum'}->get_value()};
-      next if (!$feature && defined($feature));
-      if (!$feature && !defined($feature)) {
-        log_error "Fetching feature " . $datum_hash->{'datum'}->get_value() . ", $i of " . scalar(@{$self->get_data()}) . ".", "notice";
-        my $feature_id = $self->get_parser_modencode()->get_feature_id_by_name_and_type(
-          $datum_hash->{'datum'}->get_value(),
-          new ModENCODE::Chado::CVTerm({
-              'name' => 'transcript',
-              'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
-            }),
-          1,
-        );
-        if ($feature_id) {
-          $feature = $self->get_parser_modencode()->get_feature($feature_id);
-        }
-      }
-      if (!$feature && !defined($feature)) {
-        my $feature_id = $self->get_parser_flybase()->get_feature_id_by_name_and_type(
-          $datum_hash->{'datum'}->get_value(),
-          new ModENCODE::Chado::CVTerm({
-              'name' => 'transcript',
-              'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
-            }),
-          1,
-        );
-        if ($feature_id) {
-          $feature = $self->get_parser_flybase()->get_feature($feature_id);
-        }
-      }
-      if (!$feature && !defined($feature)) {
-        log_error "Couldn't get a feature object for supposed transcript " . $datum_hash->{'datum'}->get_value() . ".", "error";
-        $success = 0;
-        $cached_features{ident $self}->{$datum_hash->{'datum'}->get_value()} = 0;
-        next;
-      } elsif ($feature) {
-        $cached_features{ident $self}->{$datum_hash->{'datum'}->get_value()} = $feature;
-      }
-      my $datum = $datum_hash->{'datum'}->clone();
-      $datum->add_feature($feature);
-      $datum_hash->{'merged_datum'} = $datum;
+  log_error "Loading transcripts from Chado database(s).", "notice", ">";
+
+  foreach my $parse (
+    ['modENCODE', $self->get_modencode_chado_parser(), [ 'FlyBase Annotation IDs' ]],
+    ['FlyBase', $self->get_flybase_chado_parser(), [ 'FlyBase Annotation IDs' ]],
+    ['WormBase',  $self->get_wormbase_chado_parser(), [ 'Wormbase ID' ]],
+  ) {
+    my ($parser_name, $parser, $dbnames) = @$parse;
+    if (!$parser) {
+      log_error "Can't check transcripts against the $parser_name database; skipping.", "warning";
+      next;
     }
+
+    log_error "Checking for transcripts in the $parser_name database.", "notice";
+
+    while (my $ap_datum = $self->next_datum) {
+      my ($applied_protocol, $direction, $datum) = @$ap_datum;
+
+      my $datum_obj = $datum->get_object;
+      my $accession = $datum_obj->get_value;
+
+      if (!length($accession)) {
+        log_error "Empty value for EST accession in column " . $datum_obj->get_heading . " [" . $datum_obj->get_name . "].", "warning";
+        $self->remove_current_datum;
+        next;
+      }
+
+      my $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession);
+      next unless $feature;
+
+      if ($feature->get_object->get_type(1)->get_name ne "transcript" && $feature->get_object->get_type(1)->get_name ne "mRNA") {
+        log_error "Found a feature for $accession in $parser_name, but it is a " . $feature->get_object->get_type(1)->get_name . ", not a transcript. Skipping.", "warning";
+        next;
+      }
+
+      # Don't need to revalidate if we've found it
+      $self->remove_current_datum;
+
+      log_error "Found transcript $accession in $parser_name.", "debug";
+      $datum->get_object->add_feature($feature);
+    }
+    $self->rewind();
+  }
+  if ($self->num_data) {
+    # Some transcripts weren't found in any parser
+    my @accessions;
+    while (my $ap_datum = $self->next_datum) {
+      my ($applied_protocol, $direction, $datum) = @$ap_datum;
+      push @accessions, $datum->get_object->get_value;
+    }
+    $success = 0;
+    log_error "Couldn't find transcripts (" . join(", ", sort(@accessions)) . ") in any database.", "error";
   }
 
   log_error "Done.", "notice", "<";
   return $success;
 }
 
-sub merge {
-  my ($self, $datum, $applied_protocol) = @_;
-  my $validated_datum = $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
 
-
-  # If there's a GFF attached to this particular protocol, update any entries referencing this transcript
-  if ($validated_datum && scalar(@{$validated_datum->get_features()})) {
-    my $gff_validator = $self->get_data_validator()->get_validators()->{'modencode:GFF3'};
-    if ($gff_validator) {
-      foreach my $other_datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
-        if (
-          $other_datum->get_type()->get_name() eq "GFF3" && 
-          ModENCODE::Config::get_cvhandler()->cvname_has_synonym($other_datum->get_type()->get_cv()->get_name(), "modencode")
-        ) {
-          if (defined($other_datum->get_value()) && length($other_datum->get_value())) {
-            my $gff_feature = $gff_validator->get_feature_by_id_from_file(
-              $validated_datum->get_value(),
-              $other_datum->get_value()
-            );
-            if ($gff_feature) {
-              # Update the GFF feature to look like this feature (but don't break any links
-              # it may have to other features in the GFF, then return the updated feature as
-              # part of the validated_datum
-              croak "Unable to continue; the validated dbEST_acc datum " . $validated_datum->to_string() . " has more than one associated feature!" if (scalar(@{$validated_datum->get_features()}) > 1);
-              $gff_feature->mimic($validated_datum->get_features()->[0]);
-              $validated_datum->set_features( [$gff_feature] );
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return $validated_datum;
+sub get_flybase_chado_parser : PROTECTED {
+  my ($self) = @_;
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases flybase', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases flybase', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
+      'caching' => 0,
+    });
+  return undef unless $parser;
+  $parser->set_no_relationships(1);
+  return $parser;
 }
 
-sub get_parser_flybase : PRIVATE {
+sub get_wormbase_chado_parser : PROTECTED {
   my ($self) = @_;
-  if (!$flybase_parser{ident $self}) {
-    $flybase_parser{ident $self} = new ModENCODE::Parser::Chado({
-        'dbname' => ModENCODE::Config::get_cfg()->val('databases flybase', 'dbname'),
-        'host' => ModENCODE::Config::get_cfg()->val('databases flybase', 'host'),
-        'port' => ModENCODE::Config::get_cfg()->val('databases flybase', 'port'),
-        'username' => ModENCODE::Config::get_cfg()->val('databases flybase', 'username'),
-        'password' => ModENCODE::Config::get_cfg()->val('databases flybase', 'password'),
-        'no_relationships' => 1,
-      });
-  }
-  return $flybase_parser{ident $self};
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases wormbase', 'password'),
+      'caching' => 0,
+    });
+  return undef unless $parser;
+  $parser->set_no_relationships(1);
+  return $parser;
 }
 
-sub get_parser_modencode : PRIVATE {
+sub get_modencode_chado_parser : PROTECTED {
   my ($self) = @_;
-  if (!$modencode_parser{ident $self}) {
-    $modencode_parser{ident $self} = new ModENCODE::Parser::Chado({
-        'dbname' => ModENCODE::Config::get_cfg()->val('databases modencode', 'dbname'),
-        'host' => ModENCODE::Config::get_cfg()->val('databases modencode', 'host'),
-        'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
-        'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
-        'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
-        'no_relationships' => 1,
-      });
-  }
-  return $modencode_parser{ident $self};
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases modencode', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases modencode', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
+      'caching' => 0,
+    });
+  return undef unless $parser;
+  $parser->set_no_relationships(1);
+  return $parser;
 }
 
 1;

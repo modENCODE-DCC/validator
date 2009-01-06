@@ -117,7 +117,7 @@ sub BUILD {
 }
 
 sub validate {
-  my ($self) = @_;
+  my $self = shift;
   my $success = 1;
 
   # Get soap client
@@ -136,12 +136,12 @@ sub validate {
   $login = new ModENCODE::Validator::Wiki::LoginResult($login);
   
   log_error "Fetching expanded attributes from the wiki...", "notice", ">";
+
   my %pages;
-  foreach my $attribute_hash (@{$self->get_attributes()}) {
-    my $attribute = $attribute_hash->{'attribute'}->clone();
-    my ($name, $version) = ($attribute->get_value() =~ /^(.*?)(?:&oldid=(\d*))?$/);
+  while (my $attribute = $self->next_attribute) {
+    my ($name, $version) = ($attribute->get_object->get_value() =~ /^(.*?)(?:&oldid=(\d*))?$/);
     $name =~ s/_/ /g;
-    if (!defined($pages{$attribute->get_value()})) {
+    if (!defined($pages{$attribute->get_object->get_value()})) {
       my $soap_data = SOAP::Data->name('query' => \SOAP::Data->value(
           SOAP::Data->name('name' => HTML::Entities::encode($name))->type('xsd:string'),
           SOAP::Data->name('revision' => $version)->type('xsd:int'),
@@ -149,87 +149,78 @@ sub validate {
         ))
       ->type('FormDataQuery');
       my $res = $soap_client->getFormData($soap_data);
-      #print STDERR "form_data: " . Dumper($res);
+
       if (!$res) {
-        $pages{$attribute->get_value()} = 0;
+        $pages{$attribute->get_object->get_value()} = 0;
       } else {
         bless($res, 'HASH');
         my $result_data = new ModENCODE::Validator::Wiki::FormData($res);
         if ($result_data) {
-          if ($result_data->get_is_complete()) {
-	    my @new_attributes = ( $attribute );
-	  
-	    #if ($result_data->get_is_required()) {
-	    #  print STDERR $result_data->get_name() . " is required"; }
-	    #else {
-	    #  print STDERR $result_data->get_name() . " is not required"; }
-	    foreach my $formvalues (@{$result_data->get_values()}) {
-	      my $rank = 0;
-	      foreach my $formvalue (@{$formvalues->get_values()}) {
-                my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
-		my $type = new ModENCODE::Chado::CVTerm({
+          my @new_attributes;
+          foreach my $formvalues (@{$result_data->get_values()}) {
+            my $rank = 0;
+            foreach my $formvalue (@{$formvalues->get_values()}) {
+              my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
+              my $type = new ModENCODE::Chado::CVTerm({
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
-                  });
-		if (!length($term) && length($cv)) {
-		  $term = $cv;
-		  $cv = $result_data->get_types()->[0];
-		  if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
-                    my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
-		    $type = new ModENCODE::Chado::CVTerm({
-                        'name' => $term,
-                        'cv' => new ModENCODE::Chado::CV({ 'name' => $canonical_cvname }),
-                      });
-		  }
-		} elsif (!length($term)) {
-		    $term = $formvalue;
-		}
-		my $new_attribute = new ModENCODE::Chado::Attribute({
+                });
+              if (!length($term) && length($cv)) {
+                $term = $cv;
+                $cv = $result_data->get_types()->[0];
+                if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
+                  my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+                  $type = new ModENCODE::Chado::CVTerm({
+                      'name' => $term,
+                      'cv' => new ModENCODE::Chado::CV({ 'name' => $canonical_cvname }),
+                    });
+                }
+              } elsif (!length($term)) {
+                $term = $formvalue;
+              }
+              my $new_attribute;
+              if ($attribute->get_object->isa('ModENCODE::Chado::ProtocolAttribute')) {
+                $new_attribute = new ModENCODE::Chado::ProtocolAttribute({
                     'heading' => $formvalues->get_name(),
                     'value' => $term,
-		    'rank' => $rank,
-		    'type' => $type,
-		    });
-		$rank++;
-		push @new_attributes, $new_attribute;
-	      }
-	    }
-	    $pages{$attribute->get_value()} = \@new_attributes; # Array of merged 
-	    log_error "Expanded wiki page " . $attribute->get_value(), "notice";
-	  } else {
-	      log_error "Required fields defined in wiki page " . 
-		  $attribute->get_value() . " in " . $attribute->get_heading() . 
-		  " [" . $attribute->get_name() . "] are missing.", "error";
-	      $success = 0;
-	  }
+                    'rank' => $rank,
+                    'type' => $type,
+                    'protocol' => $attribute->get_object->get_protocol,
+                  });
+                $attribute->get_object->get_protocol(1)->add_attribute($new_attribute);
+              } elsif ($attribute->get_object->isa('ModENCODE::Chado::DatumAttribute')) {
+                $new_attribute = new ModENCODE::Chado::DatumAttribute({
+                    'heading' => $formvalues->get_name(),
+                    'value' => $term,
+                    'rank' => $rank,
+                    'type' => $type,
+                    'datum' => $attribute->get_object->get_datum,
+                  });
+                $attribute->get_object->get_datum(1)->add_attribute($new_attribute);
+              } else {
+                croak "Unknown attribute type: " . ref($attribute);
+              }
+              $rank++;
+              push @new_attributes, $new_attribute;
+            }
+          }
+          $pages{$attribute->get_object->get_value()} = \@new_attributes; # Array of merged 
         }
       }
     }
 
-    if (!($pages{$attribute->get_value()})) {
-      # If %pages is false for this attribute, couldn't find the expansion page; nothing to expand
-      if ($attribute->get_value()) {
+    if (!($pages{$attribute->get_object->get_value()})) {
+      if ($attribute->get_object->get_value()) {
         $success = 0;
-        log_error "Couldn't expand " . $attribute->get_value() . " in the " . $attribute->get_heading() . " [" . $attribute->get_name() . "] field into a new set of attribute columns in the " . ref($self) . " validator.  This is either because the URL is incorrect or the wiki page is incomplete", "error";
+        log_error "Couldn't expand " . $attribute->get_object->get_value() . " in the " . $attribute->get_object->get_heading() . " [" . $attribute->get_object->get_name() . "] field into a new set of attribute columns in the " . ref($self) . " validator.", "error";
       } else {
-        log_error "Couldn't expand the empty value in the " . $attribute->get_heading() . " [" . $attribute->get_name() . "] field into a new set of attribute columns in the " . ref($self) . " validator.", "warning";
-        $attribute_hash->{'merged_attributes'} = $attribute;
+        log_error "Couldn't expand the empty value in the " . $attribute->get_object->get_heading() . " [" . $attribute->get_object->get_name() . "] field into a new set of attribute columns in the " . ref($self) . " validator.", "warning";
       }
-    } else {
-      $attribute_hash->{'merged_attributes'} = $pages{$attribute->get_value()};
     }
   }
   log_error "Done.", "notice", "<";
 
   return $success;
-}
-
-sub merge {
-  my ($self, $datum) = @_;
-
-  my ($validated_entry) = grep { $_->{'attribute'}->equals($datum); } @{$self->get_attributes()};
-
-  return $validated_entry->{'merged_attributes'};
 }
 
 1;

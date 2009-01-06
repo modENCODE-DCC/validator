@@ -110,7 +110,6 @@ use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Organism;
 use ModENCODE::Parser::Chado;
 use ModENCODE::ErrorHandler qw(log_error);
-use ModENCODE::Validator::TermSources;
 use File::Temp;
 use HTTP::Request::Common 'POST';
 use LWP::UserAgent;
@@ -122,6 +121,146 @@ use XML::XPath;
 my %soap_client                 :ATTR;
 my %tmp_file                    :ATTR;
 
+
+# TODO: these should be changed to trace_archive_record once it's in SO
+use constant TRACE_CV_NAME => "modencode";
+use constant TRACE_CVTERM_NAME => "TraceArchive_record";
+
+use constant MAX_TRIES => 2;
+use constant TRACES_AT_ONCE => 200;
+
+
+sub validate {
+  my ($self) = @_;
+  my $success = 1;
+
+  
+  log_error "Validating " . scalar($self->num_data) . " traces...", "notice", ">";
+
+  # See if it's in the local instance already
+  log_error "Checking local Chado database...", "notice", ">";
+  foreach my $parse (
+    ['modENCODE', $self->get_modencode_chado_parser(), [ 'TA' ]],
+  ) {
+    my ($parser_name, $parser, $dbnames) = @$parse;
+    if (!$parser) {
+      log_error "Can't check traces against the $parser_name database; skipping.", "warning";
+      next;
+    }
+    while (my $ap_datum = $self->next_datum) {
+      my ($applied_protocol, $direction, $datum) = @$ap_datum;
+
+      my $datum_obj = $datum->get_object;
+      my $accession = $datum_obj->get_value;
+
+      my $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession);
+      next unless $feature;
+
+      $self->remove_current_datum;
+    }
+    $self->rewind();
+  }
+  log_error "Done.", "notice", "<";
+
+
+  log_error "Looking up " . $self->num_data . " traces in TA.", "notice", ">";
+  # Pull any remaining data
+  my @not_found_by_acc;
+  while ($self->num_data) {
+    # Get TRACES_AT_ONCE traces at a time and search at the TraceArchive
+    my @batch_query;
+    my $num_traces = 0;
+    while (my $ap_datum = $self->next_datum) {
+      push @batch_query, $ap_datum;
+      $self->remove_current_datum; # This is the last chance this trace gets to be found
+      last if (++$num_traces >= TRACES_AT_ONCE);
+    }
+
+    log_error "Fetching batch of " . scalar(@batch_query) . " traces.", "notice", ">";
+    my $fetch_query = "retrieve xml_info " . join(",", map { $_->[2]->get_object->get_value } @batch_query);
+
+    my $done = 0;
+    while ($done++ < MAX_TRIES) {
+      # TODO: Get from trace archive
+      my $trace_xml;
+      eval {
+        $trace_xml = query_traceDB($fetch_query);
+      };
+
+      if (!$trace_xml) {
+        # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
+        log_error "Couldn't retrieve traces by ID; got an unknown response from TraceArchive. Retrying in 30 seconds.", "notice";
+        sleep 30;
+        next;
+      }
+
+      my $fetch_results = parse_traceXML($trace_xml);
+      log_error "Retrieved " . scalar(@$fetch_results) . " traces. Verifying.", "notice";
+
+      my ($not_found, $false_positives) = handle_search_results($fetch_results, @batch_query);
+
+      if (scalar(@$false_positives)) {
+        # TODO: Do more here?
+        log_error "Found " . scalar(@$false_positives) . " false positives at GenBank.", "warning";
+      }
+
+      # Keep track of $not_found and to pass on to next segment
+      push @not_found_by_acc, @$not_found;
+
+      last; # Exit the retry 'til MAX_TRIES loop
+    }
+    if ($done > MAX_TRIES) {
+      # ALL of the queries failed, so pass on all the ESTs being queried to the next section
+      log_error "Couldn't fetch traces after " . MAX_TRIES . " tries.", "warning";
+      @not_found_by_acc = @batch_query;
+    }
+    # If we found everything, move on to the next batch of ESTs
+    unless (scalar(@not_found_by_acc)) {
+      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
+      log_error "Done.", "notice", "<";
+      next; # SUCCESS
+    }
+    log_error "Done.", "notice", "<";
+
+
+    ###### ERROR - DIDN'T FIND ALL TRACES ######
+    $success = 0;
+    foreach my $missing_trace (@not_found_by_acc) {
+      my $datum_obj = $missing_trace->[2]->get_object;
+      log_error "Didn't find trace " . $datum_obj->get_value() . " in search results from NCBI.", "warning";
+    }
+    log_error "Done.", "notice", "<";
+  }
+  log_error "Done.", "notice", "<";
+
+  log_error "Done.", "notice", "<";
+  return $success;
+}
+
+sub merge {
+  my ($self, $datum, $applied_protocol) = @_;
+
+  my $validated_datum = $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
+
+
+  return $validated_datum;
+}
+
+
+sub get_modencode_chado_parser : PROTECTED {
+  my ($self) = @_;
+  my $parser = new ModENCODE::Parser::Chado({
+      'dbname' => ModENCODE::Config::get_cfg()->val('databases modencode', 'dbname'),
+      'host' => ModENCODE::Config::get_cfg()->val('databases modencode', 'host'),
+      'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
+      'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
+      'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
+      'caching' => 0,
+    });
+  return undef unless $parser;
+  $parser->set_no_relationships(1);
+  return $parser;
+}
 
 sub query_traceDB : PRIVATE {
     $ENV{'LANG'}='C';
@@ -143,208 +282,97 @@ sub parse_traceXML : PRIVATE {
     my ($data) = @_;
     my $count = 0;
     $data = '<wrapper>' . $data . '</wrapper>';
-	#use Data::Dumper;
-	#print STDERR Dumper($data);
     my $parser = XML::XPath->new(xml => $data);
     my $nodeset = $parser->findnodes('/wrapper/trace'); #each record is wrapped in a trace-identifier 
-#    log_error "Parsed " . $nodeset->size . " trace records","notice";
+    log_error "Parsing " . $nodeset->size . " trace records", "debug", ">";
     my @trace_data;
     foreach my $node ($nodeset->get_nodelist) {
         my $ti = $node->findvalue('./ti');
-
         my $trace_name = $node->findvalue('./trace_name');
         my $load_date = $node->findvalue('.//load_date');
 	my $organism = $node->findvalue('.//species_code');
-	my $sequence = $node->findvalue('.//sequence');
-	my $seqlen = $node->findvalue('.//basecall_length');
 	$organism = ucfirst(lc($organism));
 	my ($genus, $species) = ($organism =~ m/^(\S+)\s+(.*)$/);
 	
-#       print "processed $count: $ti | $trace_name | $load_date | $genus $species \n";                              
-        my $single_trace = { "trace_id" => $ti, "name" => $trace_name, "load_date" => $load_date, "genus" => $genus, "species" => $species, "seqlen" => $seqlen, "sequence" => $sequence };
+        my $single_trace = { "trace_id" => $ti, "name" => $trace_name, "load_date" => $load_date, "genus" => $genus, "species" => $species };
         push @trace_data, $single_trace;
         $count++;
     }
+    log_error "Done.", "debug", "<";
     return \@trace_data;
 }
 
+sub handle_search_results {
+  my ($fetch_results, @ap_data) = @_;
 
-sub validate {
-  my ($self) = @_;
-  my $success = 1;
+  my @traces_not_found;
+  my @unmatched_result_accs = @$fetch_results;
+  foreach my $ap_datum (@ap_data) {
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    my $datum_obj = $datum->get_object;
 
-  # Get out the Trace IDs we need to validate
-  my @data_to_validate = @{$self->get_data()};
-
-  my @data_left;
-  log_error "Validating " . scalar(@data_to_validate) . " Traces...", "notice", ">";
-
-  # Validate Traces against ones we've already seen and store locally
-#  log_error "Fetching " . scalar(@data_to_validate) . " Traces from local modENCODE database...", "notice", ">";
-#  my $parser = $self->get_parser_modencode();
-#  my $term_source_validator = new ModENCODE::Validator::TermSources();
-
-#  while (my $datum_hash = shift @data_to_validate) {
-#    my $datum = $datum_hash->{'datum'}->clone();
-#    my $id = $datum_hash->{'datum'}->get_value();
-#    if (length($id)) {
-#      my $feature = $parser->get_feature_by_genbank_id($id);  ##need to add a method for get_feature_by_trace_id($id)
-#      if (!$feature) {
-#        push @data_left, $datum_hash;
-#        next;
-#      }
-##      if ($term_source_validator->check_and_update_features([$feature])) {
-##        $xmlwriter->write_standalone_feature($feature);
-##        my $placeholder_feature = new ModENCODE::Chado::Feature({ 'chadoxml_id' => $feature->get_chadoxml_id() });
-#
-##        $datum->add_feature($placeholder_feature);
-#        $datum->add_feature($feature);
-#        $datum_hash->{'merged_datum'} = $datum;
-#        $datum_hash->{'is_valid'} = 1;
-#      } else {
-#        $success = 0;
-#      }
-#    }
-#  }
-
-#  @data_to_validate = @data_left;
-#  @data_left = ();
-#  log_error "Done (" . scalar(@data_to_validate) . " remaining).", "notice", "<";
-  my $est_counter = 0;
-  # Validate remaining Trace IDs against Trace Archive by primary ID
-  if (scalar(@data_to_validate)) {
-    log_error "Pulling down Trace information from Trace Archive by ID in batches of 200...", "notice", ">";
-    my $trace_counter = 1;
-    my @all_results;
-    while (scalar(@data_to_validate)) {
-      # Generate search query "est1,est2,est3,..."
-      my @term_set;
-      for (my $i = 0; $i < 200; $i++) {
-        my $datum_hash = shift @data_to_validate;
-        last unless $datum_hash;
-        $est_counter++;
-        push @term_set, $datum_hash if length($datum_hash->{'datum'}->get_value());
-      }
-      my $fetch_term = join(",", map { $_->{'datum'}->get_value() } @term_set);
-      log_error "Fetching Traces from " . ($est_counter - scalar(@term_set)) . " to " . ($est_counter-1) . "...", "notice", "=";
-      ModENCODE::ErrorHandler::set_logtype(ModENCODE::ErrorHandler::LOGGING_PREFIX_OFF);
-
-      # Run query and get back the xml of the results                      :
-      my $query = 'retrieve xml_info ' . $fetch_term;
-      my $trace_xml;
-      eval {
-        $trace_xml = query_traceDB($query);
-      };
-
-      if (!$trace_xml)      {
-        # Couldn't get anything useful back (bad network connection?). Wait 30 seconds and retry.
-        log_error "Couldn't retrieve Traces by ID; got an unknown response from TA. Retrying.", "notice";
-        unshift @data_to_validate, @term_set;
-        sleep 30;
-        next;
-      }
-
-      #parse the results into a resulting array
-      my $data = parse_traceXML($trace_xml);
-
-      log_error " Retrieved " . scalar(@$data) . " traces. Validating...", "notice", ".";
-
-      ######################################################################################
-
-      foreach my $datum_hash (@term_set) {
-	      my $datum = $datum_hash->{'datum'}->clone();
-      	my ($trace) = grep { $_->{'trace_id'} eq $datum->get_value() } @$data;
-        
-        if ($trace) {
-          my $ti = $trace->{'trace_id'};
-          my $trace_name = $trace->{'name'};
-          my $load_date = $trace->{'load_date'};
-	  my $species   = $trace->{'species'};
-	  my $genus     = $trace->{'genus'};
-	  my $sequence  = $trace->{'sequence'};
-	  my $seqlen = $trace->{'seqlen'};
-          #create the feature object
-          my $feature = new ModENCODE::Chado::Feature({
-              'name' => $trace_name,
-              'uniquename' => $ti,
-              'timeaccessioned' => $load_date,
-	      'seqlen' => $seqlen,
-	      'residues' => $sequence,
-              'type' => new ModENCODE::Chado::CVTerm({
-                'name' => 'TraceArchive_record',  ##this should be changed to trace_archive_record        
-                'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
-                }),
-              'organism' => new ModENCODE::Chado::Organism({
-                  'genus' => $genus,
-                  'species' => $species,
-                }),
-              'primary_dbxref' => new ModENCODE::Chado::DBXref({
-                'accession' => $ti,
-                'db' => new ModENCODE::Chado::DB({
-                  'name' => 'TA',
-                  'description' => 'TraceArchive',
-                  }),
-                }),
-              'dbxrefs' => [ new ModENCODE::Chado::DBXref({
-                'accession' => $ti,
-                'db' => new ModENCODE::Chado::DB({
-                  'name' => 'TA',
-                  'description' => 'TraceArchive',
-                  }),
-                }),
-              ],
-          });
-	  #print STDERR $feature;
-          # Add the feature object to a copy of the datum for later merging
-          $datum->add_feature($feature);
-          $datum_hash->{'merged_datum'} = $datum;
-          $datum_hash->{'is_valid'} = 1;
-        } else {
-          log_error "Couldn't find the Trace identified by " . $datum->get_value() . " in search results from NCBI.", "warning";
-          push @data_left, $datum_hash;
-        }
-      }
-      sleep 5; # Make no more than one request every 3 seconds (2 for flinching, Milo)
-      log_error "Done.  " . scalar(@data_to_validate) . " to go...","notice";
-      ModENCODE::ErrorHandler::set_logtype(ModENCODE::ErrorHandler::LOGGING_PREFIX_ON);
+    my ($ta_feature) = grep { $datum_obj->get_value() eq $_->{'trace_id'} } @$fetch_results;
+    if (!$ta_feature) {
+      push @traces_not_found, $ap_datum;
+      next;
     }
-    @data_to_validate = @data_left;
-    @data_left = ();
-    log_error "Done (" . scalar(@data_to_validate) . " trace IDs remaining).", "notice", "<";
+    @unmatched_result_accs = grep { $datum_obj->get_value ne $_->{'trace_id'} } @unmatched_result_accs;
+
+    # Pull out enough information from TA record to create a Chado feature
+    my $ti = $ta_feature->{'trace_id'};
+    my $trace_name = $ta_feature->{'name'};
+    my $load_date = $ta_feature->{'load_date'};
+    my $species   = $ta_feature->{'species'};
+    my $genus     = $ta_feature->{'genus'};
+
+    # Create the Chado feature
+    # First check to see if this feature has already been found (in say, GFF)
+    my $organism = new ModENCODE::Chado::Organism({ 'genus' => $genus, 'species' => $species });
+    my $type = new ModENCODE::Chado::CVTerm({ 'name' => TRACE_CVTERM_NAME, 'cv' => new ModENCODE::Chado::CV({ 'name' => TRACE_CV_NAME }) });
+
+    my $feature = ModENCODE::Cache::get_feature_by_uniquename_and_type($datum_obj->get_value(), $type);
+    if ($feature) {
+      log_error "Found already created feature " . $datum_obj->get_value() . " to represent trace feature.", "debug";
+      if ($organism->get_id == $feature->get_object->get_organism_id) {
+        log_error "  Using it because unique constraints are identical.", "debug";
+        # Add DBXref
+        $feature->get_object->add_dbxref(new ModENCODE::Chado::DBXref({
+              'accession' => $ti,
+              'db' => new ModENCODE::Chado::DB({
+                  'name' => 'TA',
+                  'description' => 'TraceArchive',
+                }),
+            })
+        );
+      } else {
+        log_error "  Not using it because organisms (new: " .  $organism->get_object->to_string . ", existing: " .  $feature->get_object->get_organism(1)->to_string . ") differ.", "debug";
+        $feature = undef;
+      }
+    }
+
+    if (!$feature) {
+      $feature = new ModENCODE::Chado::Feature({
+          'name' => $trace_name,
+          'uniquename' => $ti,
+          'timeaccessioned' => $load_date,
+          'type' => $type,
+          'organism' => $organism,
+          'primary_dbxref' => new ModENCODE::Chado::DBXref({
+              'accession' => $ti,
+              'db' => new ModENCODE::Chado::DB({
+                  'name' => 'TA',
+                  'description' => 'TraceArchive',
+                }),
+            }),
+        });
+    }
+
+    # Add the feature to the datum
+    $datum->get_object->add_feature($feature);
   }
+  @unmatched_result_accs = map { $_->{'trace_id'} } @unmatched_result_accs;
 
-  log_error "Done.", "notice", "<";
-  if (scalar(@data_to_validate)) {
-    my $trace_list = "'" . join("', '", map { $_->{'datum'}->get_value() } @data_to_validate) . "'";
-    log_error "Can't validate all traces. There is/are " . scalar(@data_to_validate) . " trace(s) that could not be validated. See previous errors.", "error";
-    $success = 0;
-  }
-
-  return $success;
-}
-
-sub merge {
-  my ($self, $datum, $applied_protocol) = @_;
-
-  my $validated_datum = $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
-
-
-  return $validated_datum;
-}
-
-
-sub get_parser_modencode : PRIVATE {
-  my ($self) = @_;
-  my $parser = new ModENCODE::Parser::Chado({
-      'dbname' => ModENCODE::Config::get_cfg()->val('databases modencode', 'dbname'),
-      'host' => ModENCODE::Config::get_cfg()->val('databases modencode', 'host'),
-      'port' => ModENCODE::Config::get_cfg()->val('databases modencode', 'port'),
-      'username' => ModENCODE::Config::get_cfg()->val('databases modencode', 'username'),
-      'password' => ModENCODE::Config::get_cfg()->val('databases modencode', 'password'),
-      'caching' => 0,
-    });
-  $parser->set_no_relationships(1);
-  return $parser;
+  return (\@traces_not_found, \@unmatched_result_accs);
 }
 
 1;

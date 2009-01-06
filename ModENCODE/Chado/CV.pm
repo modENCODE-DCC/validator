@@ -96,24 +96,35 @@ L<http://www.modencode.org>.
 
 use strict;
 use Class::Std;
+use ModENCODE::Cache;
 use Carp qw(croak);
 
-my %all_cvs;
-
 # Attributes
-my %name             :ATTR( :name<name> );
+my %cv_id            :ATTR( :name<id>,                  :default<undef> );
+my %name             :ATTR( :get<name>,                 :init_arg<name> );
 my %definition       :ATTR( :name<definition>,          :default<''> );
 
+sub new_no_cache {
+  return Class::Std::new(@_);
+}
+
 sub new {
-  my $self = Class::Std::new(@_);
-  # Caching CVs
-  my $cached_cv = $all_cvs{$self->get_name()};
+  my $temp = Class::Std::new(@_);
+  my $cached_cv = ModENCODE::Cache::get_cached_cv($temp);
   if ($cached_cv) {
-    $cached_cv->set_definition($self->get_definition()) if ($self->get_definition() && !($cached_cv->get_definition));
+    # Update any cached CV
+    my $need_save = 0;
+    if ($temp->get_definition && !($cached_cv->get_definition)) {
+      $cached_cv->set_definition($temp->get_definition);
+      $need_save = 1;
+    }
+    ModENCODE::Cache::save_cv($cached_cv) if $need_save; # For update
     return $cached_cv;
   }
-  $all_cvs{$self->get_name()} = $self;
-  return $self;
+
+  # This is a new CV
+  my $self = $temp;
+  return ModENCODE::Cache::add_cv_to_cache($self);
 }
 
 
@@ -122,22 +133,10 @@ sub to_string {
   return $self->get_name();
 }
 
-sub equals {
-  my ($self, $other) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_definition() eq $other->get_definition());
-
-  return 1;
+sub save {
+  ModENCODE::Cache::save_cv(shift);
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::CV({
-      'name' => $self->get_name(),
-      'definition' => $self->get_definition(),
-    });
-  return $clone;
-}
+
 
 1;

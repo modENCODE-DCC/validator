@@ -92,102 +92,125 @@ use Class::Std;
 use Carp qw(croak carp);
 use HTTP::Request::Common 'GET';
 use LWP::UserAgent;
-#use ModENCODE::Chado::Attribute;
-#use ModENCODE::Chado::Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %cached_files            :ATTR( :default<{}> );
+my %seen_filenames      :ATTR( :default<{}> );
+my %seen_data           :ATTR( :default<{}> );       
 
 sub validate {
   my ($self) = @_;
   my $success = 1;
   my $path = "";
-  log_error ("Validating specified file(s) existence", "notice", ">");
-  foreach my $datum_hash (@{$self->get_data()}) {
-      my $datum_success = 1;
-      my $datum = $datum_hash->{'datum'}->clone();
-      if (length($datum->get_value())) {
-	  my $filename = $datum->get_value();
-	  if (!($cached_files{ident $self}->{$filename})) {
-	      if ($datum->get_value() =~ m'(http|ftp)s?://') {
-		  #if there's a URL specified, try to fetch it.
-		  my $url = $datum->get_value();
-		  my @filename = split(/\//, $url);
-		  my $f_length = @filename;
-		  $filename = @filename[$f_length-1];
-		  
-		  log_error ("URL found for Result File [" . $datum->get_name() . "] = " . $filename , "notice", ">");
-		  
-		  #open a connection, grab the file, and stick it in a local file.  we are already in the local directory,
-		  #so it should put it in the right place.      
-		  my $fetch_success = 0;
-		  my $error_msg = "Stick in the GET reply here.";
-		  my $req = HTTP::Request->new('GET', $datum->get_value());
-		  my $ua = LWP::UserAgent->new();
-		  log_error ("Fetching remote file from $url...", "notice");
-		  if (-r $filename) {
-		      log_error("$filename found locally...overwriting...", "notice");
-		  }
-		  my $res = $ua->request($req,$filename);
-		  if ($res->is_success) {
-		      my $filesize = -s $filename;
-		      #set the datum to have the local filename
-		      $datum->set_value($filename);
-		      log_error ("Retrieved " . $filesize . " bytes from remote site.","notice");
-		  } elsif ($res->is_error) {	
-		      #not okay.  report the error
-		      $error_msg = $res->status_line;
-		      log_error ("Error retrieving Result File [" . $datum->get_name() . "] from " . $datum->get_value(), "error");
-		      log_error ("HTTP Response for $filename was:  " . $error_msg , "error");
-		      $datum_success = 0;
-		      $success = 0;
-		  }
-		  $cached_files{ident $self}->{$url} = $filename;
-		  log_error ("","notice","<");
-	      } else {
-		  $cached_files{ident $self}->{$filename} = $filename;
-	      }
-	      if (!-r $filename) {
-		  log_error "Can't find Result File [" . $datum->get_name() . "]=" . $datum->get_value() . ".", "error";
-		  $datum_success = 0;
-		  $success = 0;
-	      } else {
-		  log_error "File found: " . $filename , "notice";
-	      }
-	  } else { #its cached
-	      if ($filename =~ m'(http|ftp)s?://') {
-		  #if we're here, there's a URL specified, and the file should have already been processed.
-		  #we want to replace the url with the local filename.
-		  my $url = $datum->get_value();
-		  my @filename = split(/\//, $url);
-		  my $f_length = @filename;
-		  $filename = @filename[$f_length-1];
-		  if (-r $filename) {
-		      $datum->set_value($filename);
-		  } else {
-		  log_error "Can't find Result File [" . $datum->get_name() . "]=" . $datum->get_value() . ".", "error";
-		  $datum_success = 0;
-		  $success = 0;
-		  }
-	      }
-	      #log_error ("Already come across this file. Will only process $filename once.", "notice");
-	  }   
-      } else {
-	  log_error "No File for " . $datum->get_heading(), 'warning';
-	  $datum_success = 1;
-	  next;
+
+  log_error ("Validating existence of Result File(s)", "notice", ">");
+  while (my $ap_datum = $self->next_datum) {
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+
+    my $filename = $datum->get_object->get_value;
+    if (!length($filename)) {
+      log_error "No entry for " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "].", 'warning';
+      next;
+    }
+
+    next if $seen_data{$datum->get_id}++; # Don't re-update the same datum
+    if ($seen_filenames{ident $self}->{$filename}) {
+      # A different datum, but the same filename (different column)
+      log_error "Referring to the same file in two different data columns!", "error";
+      $success = 0;
+      next;
+    }
+
+    my $datum_obj = $datum->get_object;
+
+    if ($datum_obj->get_value() =~ m'(http|ftp)s?://') {
+      # If this datum's value is a URL, pull it down and replace the current
+      # datum with a pointer to the local file
+
+      my $url = $datum_obj->get_value();
+      my @filename = split(/\//, $url);
+      my $f_length = @filename;
+      $filename = @filename[$f_length-1];
+
+      log_error ("URL ($url) found for Result File [" . $datum_obj->get_name() . "]; saving as " . $filename . ".", "notice", ">");
+
+      # Tag the datum with the date of download
+      my @attributes = $datum_obj->get_attributes;
+      my $current_time = time();
+      my $current_date = Date::Format::time2str("%Y-%m-%d", $current_time, 'GMT');
+      push @attributes, new ModENCODE::Chado::DatumAttribute({
+          'value' => $url,
+          'type' => new ModENCODE::Chado::CVTerm({'name' => 'anyURI', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+          'name' => 'URL',
+          'heading' => 'File Download URL',
+          'datum' => $datum,
+        });
+      push @attributes, new ModENCODE::Chado::DatumAttribute({
+          'value' => $current_date,
+          'type' => new ModENCODE::Chado::CVTerm({'name' => 'date', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+          'name' => 'Date',
+          'heading' => 'File Download Date',
+          'datum' => $datum,
+        });
+      my $new_datum = new ModENCODE::Chado::Data({
+          'heading' => $datum_obj->get_heading,
+          'name' => $datum_obj->get_name,
+          'value' => $filename,
+          'termsource' => $datum_obj->get_termsource,
+          'type' => $datum_obj->get_type,
+          'attributes' => \@attributes,
+          'features' => $datum_obj->get_features || undef,
+          'wiggle_datas' => $datum_obj->get_wiggle_datas || undef,
+          'organisms' => $datum_obj->get_organisms || undef,
+        });
+
+      # Need to replace a datum everywhere it occurs. The easiest way to do this is by 
+      # replacing it in the CachedObject we got it from.
+      ModENCODE::Cache::update_datum($datum->get_object, $new_datum->get_object);
+
+      #open a connection, grab the file, and stick it in a local file.  we are already in the local directory,
+      #so it should put it in the right place.      
+      my $fetch_success = 0;
+      my $error_msg = "Stick in the GET reply here.";
+
+      my $req = HTTP::Request->new('GET', $url);
+      my $ua = LWP::UserAgent->new();
+      log_error ("Fetching remote file from $url...", "notice");
+
+      if (-r $filename) {
+        log_error("$filename found locally...overwriting...", "notice");
       }
-      
-      $datum_hash->{'is_valid'} = $datum_success;
-      $datum_hash->{'merged_datum'} = $datum;
+
+      unlink($filename) if (-e $filename);
+      my $res = $ua->request($req, $filename);
+      if ($res->is_success) {
+        my $filesize = -s $filename;
+        #set the datum to have the local filename
+        log_error ("Retrieved " . $filesize . " bytes from remote site.","notice");
+      } elsif ($res->is_error) {
+        #not okay.  report the error
+        $error_msg = $res->status_line;
+        log_error ("Error retrieving Result File [" . $datum_obj->get_name() . "] from " . $datum_obj->get_value(), "error");
+        log_error ("HTTP Response for $filename was:  " . $error_msg , "error");
+        $success = 0;
+        next;
+      }
+
+      $seen_filenames{ident $self}->{$url} = $filename;
+      log_error "Done.", "notice", "<";
+    } else {
+      # Already a local file, just make sure it exists
+      $seen_filenames{ident $self}->{$filename} = $filename;
+    }
+
+    if (!-r $filename) {
+      log_error "Can't find Result File [" . $datum_obj->get_name() . "]=" . $filename . ".", "error";
+      $success = 0;
+    } else {
+      log_error "Found Result File: " . $filename , "notice";
+    }
   }
   log_error ("Done.","notice","<");
   return $success;
-}
-
-sub merge {
-    my ($self, $datum, $applied_protocol) = @_;
-    return $datum;
 }
 
 1;

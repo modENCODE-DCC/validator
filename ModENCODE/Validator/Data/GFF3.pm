@@ -236,357 +236,101 @@ use Class::Std;
 use Data::Dumper;
 use Carp qw(croak carp);
 use SOAP::Lite;
-use Bio::FeatureIO::gff_modencode;
 use ModENCODE::Config;
-use ModENCODE::Chado::Feature;
-use ModENCODE::Chado::CVTerm;
-use ModENCODE::Chado::CV;
-use ModENCODE::Chado::Organism;
-use ModENCODE::Chado::AnalysisFeature;
-use ModENCODE::Chado::Analysis;
-use ModENCODE::Chado::FeatureRelationship;
-use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Parser::GFF3;
 
-my %cached_gff_features         :ATTR( :default<{}> );
+my %cached_gff_files            :ATTR( :default<{}> );
 my %features_by_uniquename      :ATTR( :default<{}> );
+my %seen_data                   :ATTR( :default<{}> );       
+
 
 sub validate {
   my ($self) = @_;
-  log_error "Parsing attached GFF3 files.", "notice", ">";
   my $success = 1;
 
+  log_error "Validating attached GFF3 file(s).", "notice", ">";
 
-  my %features_by_id;
-  foreach my $datum_hash (@{$self->get_data()}) {
-    my $datum = $datum_hash->{'datum'}->clone();
-    my $applied_protocol = $datum_hash->{'applied_protocol'};
-    my $gff_file = $datum->get_value();
-    next unless length($gff_file);
-    if (!$cached_gff_features{ident $self}->{$gff_file}) {
-      if (!-r $gff_file) {
-        log_error "Cannot read GFF file '$gff_file'.";
-        $success = 0;
-        next;
-      }
-      log_error "Parsing GFF file " . $gff_file . "...", "notice", ">";
-      unless (open GFF, $gff_file) {
-        log_error "Cannot open GFF file '$gff_file' for reading.";
-        $success = 0;
-        next;
-      }
-      my $analysis = new ModENCODE::Chado::Analysis({
-          'name' => $applied_protocol->get_protocol()->get_name(),
-          'program' => $applied_protocol->get_protocol()->get_name(),
-          'programversion' => $applied_protocol->get_protocol()->get_version(),
-        });
+  while (my $ap_datum = $self->next_datum) {
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    next if $seen_data{$datum->get_id}++; # Don't re-update the same datum
+    
+    my $datum_obj = $datum->get_object;
 
-      my @build_config_strings = ModENCODE::Config::get_cfg()->GroupMembers('genome_build');
-      my $build_config = {};
-      foreach my $build_config_string (@build_config_strings) {
-        my (undef, $source, $build) = split / +/, $build_config_string, 3;
-        $build_config->{$source} = {} unless $build_config->{$source};
-        $build_config->{$source}->{$build} = [] unless $build_config->{$source}->{$build};
-        my @chromosomes = split /, */, ModENCODE::Config::get_cfg()->val($build_config_string, 'chromosomes');
-        my $region_type = ModENCODE::Config::get_cfg()->val($build_config_string, 'region_type');
-        foreach my $chr (@chromosomes) {
-          push @{$build_config->{$source}->{$build}}, { 
-            'seq_id' => $chr, 
-            'region_type' => $region_type,
-            'start' => ModENCODE::Config::get_cfg()->val($build_config_string, $chr . '_start'),
-            'end' => ModENCODE::Config::get_cfg()->val($build_config_string, $chr . '_end'),
-            'organism' => ModENCODE::Config::get_cfg()->val($build_config_string, 'organism'),
-          };
-        }
-      }
+    if (!length($datum_obj->get_value())) {
+      log_error "No GFF3 file for " . $datum_obj->get_heading(), 'warning';
+      next;
+    } elsif (!-r $datum_obj->get_value()) {
+      log_error "Cannot find GFF3 file " . $datum_obj->get_value() . " for column " . $datum_obj->get_heading() . " [" . $datum_obj->get_name . "].", "error";
+      $success = 0;
+      next;
+    } elsif ($cached_gff_files{ident $self}->{$datum_obj->get_value()}++) {
+      log_error "Referring to the same GFF3 file (" . $datum_obj->get_value . ") in two different data columns!", "error";
+      $success = 0;
+      next;
+    }
 
-      my $gffio = new Bio::FeatureIO(-fh => \*GFF, -format => 'gff_modencode', -version => 3, -build_config => $build_config);
-      while (my @group_features = $gffio->next_feature_group()) {
-        foreach my $top_level_feature (@group_features) {
-          # These all get cached in features_by_id and features_by_uniquename
-          my $feature = $self->gff_feature_to_chado_features($gffio, $top_level_feature, $analysis, \%features_by_id);
-          if ($feature == -1) {
-            $success = 0;
-            next;
-          }
-          if ($feature) {
-            $datum->add_feature($feature);
-          }
-        }
-      }
-      $cached_gff_features{ident $self}->{$gff_file} = \%features_by_id;
-      close GFF;
-      log_error "Done.", "notice", "<";
-    } else {
-      foreach my $feature (values(%{$cached_gff_features{ident $self}->{$gff_file}})) {
-        $datum->add_feature($feature);
+    log_error "Parsing GFF3 file: " . $datum_obj->get_value . ".", "notice", ">";
+    # Read the file
+    unless (open(GFF, $datum_obj->get_value)) {
+      log_error "Couldn't open GFF file " . $datum_obj->get_value . " for reading.", "error";
+      $success = 0;
+      next;
+    }
+
+    # Get genome builds
+    my $config = ModENCODE::Config::get_cfg();
+    my @build_config_strings = $config->GroupMembers('genome_build');
+    my $build_config = {};
+    foreach my $build_config_string (@build_config_strings) {
+      my (undef, $source, $build) = split(/ +/, $build_config_string);
+      $build_config->{$source} = {} unless $build_config->{$source};
+      $build_config->{$source}->{$build} = {} unless $build_config->{$source}->{$build};
+      my @chromosomes = split(/, */, $config->val($build_config_string, 'chromosomes'));
+      my $type = $config->val($build_config_string, 'type');
+      foreach my $chr (@chromosomes) {
+        $build_config->{$source}->{$build}->{$chr}->{'seq_id'} = $chr;
+        $build_config->{$source}->{$build}->{$chr}->{'type'} = $type;
+        $build_config->{$source}->{$build}->{$chr}->{'start'} = $config->val($build_config_string, $chr . '_start');
+        $build_config->{$source}->{$build}->{$chr}->{'end'} = $config->val($build_config_string, $chr . '_end');
+        $build_config->{$source}->{$build}->{$chr}->{'organism'} = $config->val($build_config_string, 'organism');
       }
     }
 
-    $datum_hash->{'merged_datum'} = $datum;
+    my $parser = new ModENCODE::Parser::GFF3({
+        'gff3' => \*GFF,
+        'builds' => $build_config,
+        'id_callback' => *id_callback,
+      });
+    my $group_iter = $parser->iterator();
+    my $group_num = 0;
+    while ($group_iter->has_next()) {
+      log_error "Processing GFF feature group #$group_num.", "notice", ">";
+      $group_num++;
+      my @features = $group_iter->next();
+      log_error scalar(@features) . " features found.", "notice";
+      foreach my $feature (@features) {
+        $datum->get_object->add_feature($feature);
+      }
+      log_error "Done.", "notice", "<";
+    }
+    
+    close GFF;
+    log_error "Done.", "notice", "<";
   }
+
   log_error "Done.", "notice", "<";
-  $features_by_uniquename{ident $self} = {};
   return $success;
 }
 
-sub get_feature_by_id_from_file {
-  my ($self, $id, $gff_file) = @_;
-  if ($cached_gff_features{ident $self}->{$gff_file}) {
-    return $cached_gff_features{ident $self}->{$gff_file}->{$id};
-  }
-  return undef;
+my $gff_counter = 1;
+sub id_callback {
+  my ($id, $name, $seqid, $source, $type, $start, $end, $score, $strand, $phase) = @_;
+  # TODO: Generate ID better
+  # In particular, change gff_ to filename and/or experiment_num
+  $id ||= $name || "gff_" . sprintf("ID%.6d", ++$gff_counter);
+  return $id;
 }
 
-sub gff_feature_to_chado_features : PRIVATE {
-  my ($self, $gff_io, $gff_obj, $analysis, $features_by_id) = @_;
-
-  my $gff_obj_id;
-  if (
-    defined($gff_obj->get_Annotations('ID')) && 
-    defined(($gff_obj->get_Annotations('ID'))[0]) && 
-    length(($gff_obj->get_Annotations('ID'))[0]->value())) {
-    $gff_obj_id = ($gff_obj->get_Annotations('ID'))[0]->value();
-  }
-
-  # Get the sequence region feature, or create one if it doesn't yet exist
-  my $this_seq_region = $gff_io->sequence_region($gff_obj->seq_id());
-  if (!$this_seq_region) {
-    log_error "Cannot find a sequence region defined by ##sequence-region or ##genome-build header for " . $gff_obj->seq_id() . ".", "error";
-    return -1;
-  }
-  my $this_seq_region_feature = $features_by_id->{$this_seq_region->seq_id()};
-  if (!$this_seq_region_feature) {
-    $this_seq_region_feature = new ModENCODE::Chado::Feature({
-        'uniquename' => $this_seq_region->seq_id(),
-        'name' => $this_seq_region->seq_id(),
-        'type' => new ModENCODE::Chado::CVTerm({
-            'name' => $this_seq_region->type()->name(),
-            'cv' => new ModENCODE::Chado::CV({ 
-                'name' => 'SO',
-              }),
-          }),
-      });
-    if ($gff_obj_id eq $this_seq_region->seq_id()) {
-      $this_seq_region_feature->set_uniquename($this_seq_region_feature->get_uniquename . "_" . $this_seq_region->type()->name() . "/" . $this_seq_region->start() . "," . $this_seq_region->end() . "_region")
-    }
-    my $genus = ($this_seq_region->get_Annotations('Organism_Genus'))[0];
-    my $species = ($this_seq_region->get_Annotations('Organism_Species'))[0];
-    $genus = $genus->value() if ref($genus);
-    $species = $species->value() if ref($species);
-
-    my $organism = new ModENCODE::Chado::Organism({
-        'genus' => ($genus || "Unknown"),
-        'species' => ($species || "organism"),
-      });
-    $this_seq_region_feature->set_organism($organism);
-    $features_by_id->{$this_seq_region->seq_id()} = $this_seq_region_feature;
-  }
-
-  # Deal with typing the sequence region
-  if ($gff_obj_id eq $this_seq_region->seq_id()) {
-    # If we have a feature with the same ID as the seqregion, then assign its type to
-    # the seqregion, instead of relying on the default "region"
-      if (!($this_seq_region_feature->get_type())) {
-	  log_error "You have an error with your GFF file at the feature " . $this_seq_region_feature->to_string() . "\n  You might not have your features in the correct order.  Be sure your Parent features occur first, followed by Target features, followed by the rest.", "error";
-	  return -1;
-      } else {
-	  $this_seq_region_feature->get_type()->set_name($gff_obj->type()->name());
-      }
-    # Return this as the feature
-    return $this_seq_region_feature;
-  }
-
-  # Build this feature
-  my ($feature_start, $feature_end) = ($gff_obj->location()->start(), $gff_obj->location()->end());
-
-  if ($feature_start > $feature_end) {
-    $_ = $feature_start;
-    $feature_start = $feature_end;
-    $feature_end = $_;
-  }
-  my $name = $gff_obj->name() || $gff_obj_id || "gff_obj_" . $gff_obj->type()->name() . "/$feature_start,$feature_end";
-
-  my $gff_id = ($gff_obj->get_Annotations('ID'))[0] || ident($gff_obj);
-
-  my $uniquename = $gff_obj->source() . "_" . $gff_id . ":gff_obj_" . $gff_obj->type()->name() . "/$feature_start,$feature_end";
-  $uniquename .= ";strand=" . $gff_obj->strand() if defined($gff_obj->strand());
-  $uniquename .= ";score=" . $gff_obj->score() if defined($gff_obj->score());
-  $uniquename .= ";phase=" . $gff_obj->phase() if defined($gff_obj->phase());
-  $uniquename .= ";on_chr=" . $gff_obj->seq_id();
-
-  my $feature = $features_by_uniquename{ident $self}->{$uniquename};
-  if (!$feature) {
-
-    my $genus = ($this_seq_region->get_Annotations('Organism_Genus'))[0];
-    my $species = ($this_seq_region->get_Annotations('Organism_Species'))[0];
-    $genus = $genus->value() if ref($genus);
-    $species = $species->value() if ref($species);
-
-    my $organism = new ModENCODE::Chado::Organism({
-        'genus' => ($genus || 'Unknown'),
-        'species' => ($species || 'organism'),
-      });
-
-    my $type = new ModENCODE::Chado::CVTerm({
-        'name' => $gff_obj->type()->name(),
-        'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
-      });
-
-    my $primary_location;
-   
-    if (defined($feature_start) || defined($feature_end)) {
-      $primary_location = new ModENCODE::Chado::FeatureLoc({ # vs. chromosome
-          'rank' => 0,
-          'srcfeature' => $this_seq_region_feature,
-          'fmin' => $feature_start,
-          'fmax' => $feature_end,
-          'strand' => ($gff_obj->strand() eq '-' ? -1 : 1),
-          'phase' => ($gff_obj->phase() eq '.' ? 0 : $gff_obj->phase()),
-        });
-    }
-
-
-    ##########################################
-    # If the Target attribute is used, create a placeholder feature for it
-    my $target_location;
-    my ($target) = $gff_obj->annotation()->get_Annotations("Target");
-    if ($target) {
-      # This will later be replaced with:
-      #  a link to a feature from the SDRF
-      #  a link to a feature in the final structure
-      my ($target_start, $target_end, $target_name) = ($target->start(), $target->end(), $target->target_id()) if $target;
-      if ($target_start > $target_end) {
-        $_ = $target_start;
-        $target_start = $target_end;
-        $target_end = $_;
-      }
-
-      # Create the target feature or get it if already created
-      my $target_feature = $features_by_id->{$target_name};
-      if (!$target_feature) {
-        $uniquename .= ";hit_from_" . $target_name . "($target_start,$target_end)";
-        $uniquename .= "_by_analysis_" . $analysis->get_program() . ":" . $analysis->get_programversion();
-        # Target features are just placeholders, so only have a name
-        $target_feature = new ModENCODE::Chado::Feature({
-            'name' => $target_name,
-            'uniquename' => $target_name . "_to_be_loaded",
-          });
-        my $analysisfeature = new ModENCODE::Chado::AnalysisFeature({
-            'feature' => $target_feature,
-            'analysis' => $analysis,
-          });
-        if ($gff_obj->score()) {
-          my $rawscore = ref($gff_obj->score) ? $gff_obj->score()->value() : $gff_obj->score();
-          $rawscore = undef if ($rawscore eq '.' || $rawscore eq '');
-          $analysisfeature->set_rawscore($rawscore);
-        }
-        $target_feature->add_analysisfeature($analysisfeature);
-        $features_by_id->{$target_name} = $target_feature;
-      }
-      $target_location = new ModENCODE::Chado::FeatureLoc({ # vs. target/est
-          'rank' => 1,
-          'srcfeature' => $target_feature,
-          'fmin' => $target_start,
-          'fmax' => $target_end,
-        });
-    }
-    ##########################################
-
-    $feature = new ModENCODE::Chado::Feature({
-        'name' => $name,
-        'organism' => $organism,
-        'uniquename' => $uniquename,
-        'type' => $type,
-      });
-    $feature->add_location($primary_location) if $primary_location;
-    if (defined($gff_obj_id)) {
-      my $feature_by_id = $features_by_id->{$gff_obj_id};
-      if ($feature_by_id) {
-        # If we've actually seen this feature before, use the old version
-        # (assuming the locations don't conflict!)
-        if (scalar(@{$feature_by_id->get_locations()})) {
-          if ($primary_location && !scalar(grep { $primary_location->equals($_) } @{$feature_by_id->get_locations()})) {
-            log_error "Mismatch between feature locations in GFF files with the same IDs for ID=$gff_obj_id.";
-            return -1;
-          }
-        }
-        $feature = $feature_by_id;
-      }
-      $features_by_id->{$gff_obj_id} = $feature;
-    }
-    $features_by_uniquename{ident $self}->{$uniquename} = $feature;
-    # Add the hit to the target if any; this is also how the target_feature is tied in (srcfeature_id)
-    if ($target_location) {
-      # Add the location (and thus the target_feature, since it's the srcfeature_id)
-      $feature->add_location($target_location) if ($target_location);
-      # Make this an analysisfeature
-      $feature->set_is_analysis(1);
-      my $analysisfeature = new ModENCODE::Chado::AnalysisFeature({
-          'feature' => $feature,
-          'analysis' => $analysis,
-        });
-      if ($gff_obj->score()) {
-	my $rawscore = ref($gff_obj->score) ? $gff_obj->score()->value() : $gff_obj->score();
-        $rawscore = undef if ($rawscore eq '.' || $rawscore eq '');
-        $analysisfeature->set_rawscore($rawscore);
-      }
-      $feature->add_analysisfeature($analysisfeature);
-    }
-  }
-  
-  my @child_gff_features = $gff_obj->get_SeqFeatures();
-  if (scalar(@child_gff_features)) {
-    # Has children
-    my $rank = 0;
-    foreach my $child_gff_obj ($gff_obj->get_SeqFeatures()) {
-      my $child_feature = $self->gff_feature_to_chado_features($gff_io, $child_gff_obj, $analysis, $features_by_id);
-      if ($child_feature == -1) {
-        return -1;
-        next;
-      }
-      my $relationship_type = "part_of";
-      if ($child_gff_obj->get_Annotations('parental_relationship')) {
-        foreach my $parental_relationship ($child_gff_obj->get_Annotations('parental_relationship')) {
-          my ($term, $parent) = split /\//, $parental_relationship->value();
-          if ($parent eq $gff_obj_id) {
-            $relationship_type = $term;
-            last;
-          }
-        }
-      }
-
-      my $feature_relationship = new ModENCODE::Chado::FeatureRelationship({
-          'rank' => 0,
-          'type' => new ModENCODE::Chado::CVTerm({
-              'name' => $relationship_type,
-              'cv' => new ModENCODE::Chado::CV({ 'name' => 'SO' }),
-            }),
-          'subject' => $child_feature,
-          'object' => $feature,
-        });
-
-      $child_feature->add_relationship($feature_relationship);
-      $feature->add_relationship($feature_relationship);
-
-    }
-  }
-
-  if (
-    (defined($gff_obj_id) && $gff_obj_id eq $this_seq_region->seq_id()) 
-    ||
-    $gff_obj->type()->name() eq $this_seq_region->type()->name()
-  ) {
-    # Don't return the seq_region features
-    return undef;
-  } else {
-    return $feature;
-  }
-}
-
-sub merge {
-  my ($self, $datum, $applied_protocol) = @_;
-  return $self->get_datum($datum, $applied_protocol)->{'merged_datum'};
-}
 
 1;

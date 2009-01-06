@@ -190,574 +190,459 @@ use Class::Std;
 use Carp qw(croak carp);
 use HTML::Entities ();
 use ModENCODE::ErrorHandler qw(log_error);
+use File::Temp;
 
-my %indent              :ATTR(                             :default<0> );
-my %indent_width        :ATTR( :name<indent_width>,        :default<2> );
-my %data_this_proto     :ATTR(                             :default<{ 'input' => [], 'output' => []> });
-my %seen_relationships  :ATTR(                             :default<{}> );
-my %all_relationships   :ATTR(                             :default<[]> );
-my %delayed_writes      :ATTR(                             :default<[]> );
-my %output_handle       :ATTR( :name<output_handle>,       :default<\*STDOUT> );
-my $current_uniqid = 0;
-my $additional_xml_writers = [];
+my %indent              :ATTR(                          :default<0> );
+my %indent_width        :ATTR( :name<indent_width>,     :default<2> );
+my %output_handle       :ATTR( :name<output_handle>,    :default<\*STDOUT> );
+my %seen_ids            :ATTR( :name<seen_ids>,         :default<{}> );
+my %tempfiles           :ATTR( :name<tempfiles>,        :default<{}> );
 
-# Semi-macro-ified version (protocols are macro-d, data isn't)
-sub add_additional_xml_writer {
-  my $xml_writer = shift;
-  $xml_writer = shift if length(@_); # Allow use as either static or object method
-  push @$additional_xml_writers, $xml_writer;
+sub set_output_file {
+  my ($self, $filename) = @_;
+  log_error "(Writing submission to file $filename.)", "notice";
+  return open($output_handle{ident $self}, "+>", $filename);
 }
 
 sub write_chadoxml {
   my ($self, $experiment) = @_;
   $self->set_indent(0);
-  $self->clear_seen_data();
-  $self->println("<chadoxml>");
-  $delayed_writes{ident $self} = [];
-
-  # Append things from additional element files (already-written features)
-  foreach my $xml_writer (@$additional_xml_writers) {
-    $self->println("<!-- begin imported section -->");
-    my $fh = $xml_writer->get_output_handle();
-    seek($fh, 0, 0);
-    while (my $line = <$fh>) {
-      $line =~ s/^\s*|\s*[\n\r]*$//g;
-      $self->println($line);
-    }
-    $self->println("<!-- end imported section -->");
+  $seen_ids{ident $self} = {};
+  my @tempfile_names = ('dbxrefs', 'cvterms', 'organisms', 'features', 'featurelocs', 'feature_relationships', 'analyses', 'analysisfeatures', 'attributes', 'protocols', 'wiggle_data', 'data', 'default');
+  foreach my $tempfile (@tempfile_names) {
+    $self->get_tempfiles()->{$tempfile} = File::Temp::tempfile();
   }
 
-  # Write all of the dbxrefs
-  log_error "Writing dbxrefs.", "notice", ">";
-  my $all_dbxrefs = ModENCODE::Chado::DBXref::get_all_dbxrefs();
-  foreach my $db (keys(%$all_dbxrefs)) {
-    foreach my $accession (keys(%{$all_dbxrefs->{$db}})) {
-      foreach my $version (keys(%{$all_dbxrefs->{$db}->{$accession}})) {
-        my $dbxref = $all_dbxrefs->{$db}->{$accession}->{$version};
-        $dbxref->set_chadoxml_id($self->generate_uniqid("DBXref"));
-        $self->write_dbxref($dbxref);
-      }
-    }
-  }
-  log_error "Done.", "notice", "<";
-
-  log_error "Writing controlled vocabulary terms.", "notice", ">";
-  # Write all of the cvterms
-  my $all_cvterms = ModENCODE::Chado::CVTerm::get_all_cvterms();
-  foreach my $cv (keys(%$all_cvterms)) {
-    foreach my $term (keys(%{$all_cvterms->{$cv}})) {
-      foreach my $is_obsolete (keys(%{$all_cvterms->{$cv}->{$term}})) {
-        my $cvterm = $all_cvterms->{$cv}->{$term}->{$is_obsolete};
-        $cvterm->set_chadoxml_id($self->generate_uniqid("CVTerm"));
-        $self->write_cvterm($cvterm);
-      }
-    }
-  }
-  log_error "Done.", "notice", "<";
-
-  log_error "Writing Chado features.", "notice", ">";
-  # Write all of the features
-  $all_relationships{ident $self} = [];
-  my $all_features = ModENCODE::Chado::Feature::get_all_features();
-  foreach my $feature (@$all_features) {
-    $feature->set_chadoxml_id($self->generate_uniqid("Feature"));
-    $self->write_feature($feature);
-  }
-  log_error "Done.", "notice", "<";
-
-  log_error "Writing feature relationships.", "notice", ">";
-  # Write all of the feature relationships
-  foreach my $relationship (@{$all_relationships{ident $self}}) {
-    $self->write_feature_relationship($relationship);
-  }
-  undef @{$all_relationships{ident $self}};
-  log_error "Done.", "notice", "<";
-
-  log_error "Writing protocol definitions.", "notice", ">";
-  # Write all of the protocols
-  my @seen_protocols;
+  # Assign IDs to and write the applied protocols
+  log_error "Writing protocols and data.", "notice", ">";
+  my $ap_id = 0;
   for (my $i = 0; $i < $experiment->get_num_applied_protocol_slots(); $i++) {
     my $applied_protocols = $experiment->get_applied_protocols_at_slot($i);
     foreach my $applied_protocol (@$applied_protocols) {
-      my $protocol = $applied_protocol->get_protocol();
-      my $seen_protocol;
-      if (!scalar(($seen_protocol) = grep { $_->equals($protocol) } @seen_protocols)) {
-        $protocol->set_chadoxml_id($self->generate_uniqid("Protocol"));
-        $self->write_protocol($protocol);
-        push @seen_protocols, $protocol;
-      } else {
-        $protocol->set_chadoxml_id($seen_protocol->get_chadoxml_id());
-      }
-    }
-  }
-  log_error "Done.", "notice", "<";
-
-  log_error "Writing applied protocols.", "notice", ">";
-  # Write all of the applied protocols
-  for (my $i = 0; $i < $experiment->get_num_applied_protocol_slots(); $i++) {
-    my $applied_protocols = $experiment->get_applied_protocols_at_slot($i);
-    foreach my $applied_protocol (@$applied_protocols) {
-      $applied_protocol->set_chadoxml_id($self->generate_uniqid("AppliedProtocol"));
+      $applied_protocol->set_id($ap_id++);
       $self->write_applied_protocol($applied_protocol);
     }
-    $self->shift_seen_data()
   }
-  log_error "Done.", "notice", "<";
+  log_error "Done.", "notice", ">";
+
 
   # Write the experiment
-  log_error "Writing experiment definition.", "notice", ">";
-  $experiment->set_chadoxml_id($self->generate_uniqid("Experiment"));
-  $self->println("<experiment id=\"" . $experiment->get_chadoxml_id() . "\">");
+  log_error "Writing experiment data.", "notice", ">";
+  my $id = "experiment_" . $experiment->get_id();
+  $self->println("<experiment id=\"$id\">");
   $self->println("<description>" . xml_escape($experiment->get_description()) . "</description>");
   $self->println("<uniquename>" . xml_escape($experiment->get_uniquename()) . "</uniquename>");
   foreach my $applied_protocol (@{$experiment->get_applied_protocols_at_slot(0)}) {
     $self->println("<experiment_applied_protocol>");
-    $self->println("<first_applied_protocol_id>" . $applied_protocol->get_chadoxml_id() . "</first_applied_protocol_id>");
+    $self->println("<first_applied_protocol_id>" . $self->write_applied_protocol($applied_protocol) . "</first_applied_protocol_id>");
     $self->println("</experiment_applied_protocol>");
   }
   log_error "Done.", "notice", "<";
   
   $self->println("</experiment>");
+
+  log_error "Writing experiment properties", "notice", ">";
   # Write the experiment properties
-  foreach my $experiment_property (@{$experiment->get_properties()}) {
-    $self->write_experiment_prop($experiment_property, $experiment);
+  foreach my $experiment_property ($experiment->get_properties(1)) {
+    $self->write_experiment_prop($experiment_property, $id);
   }
-  # Do delayed writes
-  $self->write_delayed_writes();
+  log_error "Done.", "notice", "<";
 
-
-
-  $self->println("</chadoxml>");
-}
-
-sub write_delayed_writes : PRIVATE {
-  my ($self) = @_;
-  foreach my $delayed_write (@{$delayed_writes{ident $self}}) {
-    &$delayed_write();
+  log_error "Combining temporary output files.", "notice", ">";
+  # Combine temporary files into actual output
+  print {$output_handle{ident $self}} "<chadoxml>\n";
+  foreach my $tempfile (@tempfile_names) {
+    my $tmpfh = $self->get_tempfiles()->{$tempfile};
+    seek($tmpfh, 0, 0);
+    while (<$tmpfh>) {
+      print {$output_handle{ident $self}} $_;
+    }
+    close $tmpfh;
   }
+  print {$output_handle{ident $self}} "</chadoxml>\n";
+  log_error "Done.", "notice", "<";
+
 }
 
 sub write_applied_protocol : PRIVATE {
   my ($self, $applied_protocol) = @_;
   
-  $self->println("<applied_protocol id=\"" . $applied_protocol->get_chadoxml_id() . "\">");
-  $self->println("<protocol_id>" . $applied_protocol->get_protocol()->get_chadoxml_id() . "</protocol_id>");
-  for (my $i = 0; $i < scalar(@{$applied_protocol->get_input_data()}); $i++) {
-    my $datum = $applied_protocol->get_input_data()->[$i];
-    my $seen_datum = $self->seen_datum($datum, 'input');
-    $self->println("<applied_protocol_data>");
-    $self->println("<direction>input</direction>");
-    if ($seen_datum) {
-      # Replace existing data with this one that is equal
-      $applied_protocol->get_input_data()->[$i] = $seen_datum;
-      $self->println("<data_id>" . $seen_datum->get_chadoxml_id() . "</data_id>");
-    } else {
-      $datum->set_chadoxml_id($self->generate_uniqid("Datum"));
-      $self->add_seen_datum($datum, 'input');
-      $self->println("<data_id>");
-      $self->write_datum($datum);
-      $self->println("</data_id>");
+  my $id = "applied_protocol_" . $applied_protocol->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println("<applied_protocol id=\"$id\">");
+    $self->println("<protocol_id>" . $self->write_protocol($applied_protocol->get_protocol(1)) . "</protocol_id>");
+    foreach my $input_datum ($applied_protocol->get_input_data(1)) {
+      $self->println("<applied_protocol_data>");
+      $self->println("<direction>input</direction>");
+      $self->println("<data_id>" . $self->write_datum($input_datum) .  "</data_id>");
+      $self->println("</applied_protocol_data>");
     }
-    $self->println("</applied_protocol_data>");
-  }
-  for (my $i = 0; $i < scalar(@{$applied_protocol->get_output_data()}); $i++) {
-    my $datum = $applied_protocol->get_output_data()->[$i];
-    my $seen_datum = $self->seen_datum($datum, 'output');
-    $self->println("<applied_protocol_data>");
-    $self->println("<direction>output</direction>");
-    if ($seen_datum) {
-      # Replace existing data with this one that is equal
-      $applied_protocol->get_output_data()->[$i] = $seen_datum;
-      $self->println("<data_id>" . $seen_datum->get_chadoxml_id() . "</data_id>");
-    } else {
-      $datum->set_chadoxml_id($self->generate_uniqid("Datum"));
-      $self->add_seen_datum($datum, 'output');
-      $self->println("<data_id>");
-      $self->write_datum($datum);
-      $self->println("</data_id>");
+    foreach my $output_datum ($applied_protocol->get_output_data(1)) {
+      $self->println("<applied_protocol_data>");
+      $self->println("<direction>output</direction>");
+      $self->println("<data_id>" . $self->write_datum($output_datum) .  "</data_id>");
+      $self->println("</applied_protocol_data>");
     }
-    $self->println("</applied_protocol_data>");
+    $self->println("</applied_protocol>");
   }
-  $self->println("</applied_protocol>");
+  return $id;
 
 }
 
 sub write_protocol : PRIVATE {
   my ($self, $protocol) = @_;
-  $self->println("<protocol id=\"" . $protocol->get_chadoxml_id() . "\">");
-  $self->println("<name>" . xml_escape($protocol->get_name()) . "</name>");
-  $self->println("<version>" . xml_escape($protocol->get_version()) . "</version>");
-  $self->println("<description>" . xml_escape($protocol->get_description()) . "</description>");
+  my $id = "protocol_" . $protocol->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('protocols', "<protocol id=\"$id\">");
+    $self->println_to('protocols', "<name>" . xml_escape($protocol->get_name()) . "</name>");
+    $self->println_to('protocols', "<version>" . xml_escape($protocol->get_version()) . "</version>");
+    $self->println_to('protocols', "<description>" . xml_escape($protocol->get_description()) . "</description>");
 
-  foreach my $attribute (@{$protocol->get_attributes()}) {
-    $self->println("<protocol_attribute>");
-    $self->println("<attribute_id>");
-    $self->write_attribute($attribute);
-    $self->println("</attribute_id>");
-    $self->println("</protocol_attribute>");
+    foreach my $attribute ($protocol->get_attributes(1)) {
+      $self->println_to('protocols', "<protocol_attribute>");
+      $self->println_to('protocols', "<attribute_id>" . $self->write_attribute($attribute) . "</attribute_id>");
+      $self->println_to('protocols', "</protocol_attribute>");
+    }
+
+    if ($protocol->get_termsource()) {
+      $self->println_to('protocols', "<dbxref_id>" . $self->write_dbxref($protocol->get_termsource(1)) .  "</dbxref_id>");
+    }
+
+    $self->println_to('protocols', "</protocol>");
   }
-
-  if ($protocol->get_termsource()) {
-    $self->println("<dbxref_id>" . $protocol->get_termsource()->get_chadoxml_id() . "</dbxref_id>");
-  }
-
-  $self->println("</protocol>");
+  return $id;
 }
 
 sub write_experiment_prop : PRIVATE {
-  my ($self, $experiment_prop, $experiment) = @_;
-  $self->println("<experiment_prop>");
-  $self->println("<experiment_id>" . $experiment->get_chadoxml_id() . "</experiment_id>");
-  $self->println("<name>" . xml_escape($experiment_prop->get_name()) . "</name>");
-  $self->println("<value>" . xml_escape($experiment_prop->get_value()) . "</value>");
-  $self->println("<rank>" . xml_escape($experiment_prop->get_rank()) . "</rank>");
-  if ($experiment_prop->get_termsource()) {
-    $self->println("<dbxref_id>" . $experiment_prop->get_termsource()->get_chadoxml_id() . "</dbxref_id>");
+  my ($self, $experiment_prop, $experiment_id) = @_;
+  my $id = "experiment_prop_" . $experiment_prop->get_id();
+  if ($seen_ids{ident $self}->{$id}++) {
+    $self->println("$id");
+  } else {
+    $self->println("<experiment_prop id=\"$id\">");
+    $self->println("<experiment_id>$experiment_id</experiment_id>");
+    $self->println("<name>" . xml_escape($experiment_prop->get_name()) . "</name>");
+    $self->println("<value>" . xml_escape($experiment_prop->get_value()) . "</value>");
+    $self->println("<rank>" . xml_escape($experiment_prop->get_rank()) . "</rank>");
+    if ($experiment_prop->get_termsource()) {
+      $self->println("<dbxref_id>" . $self->write_dbxref($experiment_prop->get_termsource(1)) .  "</dbxref_id>");
+    }
+    if ($experiment_prop->get_type()) {
+      $self->println("<type_id>" . $self->write_cvterm($experiment_prop->get_type(1)) . "</type_id>");
+    }
+    $self->println("</experiment_prop>");
   }
-
-  if ($experiment_prop->get_type()) {
-    $self->println("<type_id>" . $experiment_prop->get_type()->get_chadoxml_id() . "</type_id>");
-  }
-  $self->println("</experiment_prop>");
+  return $id;
 }
 
 sub write_datum : PRIVATE {
   my ($self, $datum) = @_;
-  $self->println("<data id=\"" . $datum->get_chadoxml_id() . "\">");
-  $self->println("<name>" . xml_escape($datum->get_name()) . "</name>");
-  $self->println("<heading>" . xml_escape($datum->get_heading()) . "</heading>");
-  $self->println("<value>" . xml_escape($datum->get_value()) . "</value>");
+  my $id = "datum_" . $datum->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('data', "<data id=\"$id\">");
+    $self->println_to('data', "<name>" . xml_escape($datum->get_name()) . "</name>");
+    $self->println_to('data', "<heading>" . xml_escape($datum->get_heading()) . "</heading>");
+    $self->println_to('data', "<value>" . xml_escape($datum->get_value()) . "</value>");
 
-  if ($datum->get_termsource()) {
-    $self->println("<dbxref_id>" . $datum->get_termsource()->get_chadoxml_id() . "</dbxref_id>");
-  }
-
-  if ($datum->get_type()) {
-    $self->println("<type_id>" . $datum->get_type()->get_chadoxml_id() . "</type_id>");
-  }
-
-  foreach my $feature (@{$datum->get_features()}) {
-    $self->println("<data_feature>");
-      $self->println("<feature_id>" . $feature->get_chadoxml_id() . "</feature_id>");
-    $self->println("</data_feature>");
-  }
-
-  foreach my $wiggle_data (@{$datum->get_wiggle_datas()}) {
-    $self->println("<data_wiggle_data>");
-    if ($wiggle_data->get_chadoxml_id() && $wiggle_data->get_chadoxml_id() !~ /^\d+$/) {
-      $self->println("<wiggle_data_id>" . $wiggle_data->get_chadoxml_id() . "</wiggle_data_id>");
-    } else {
-      $wiggle_data->set_chadoxml_id($self->generate_uniqid("Wiggle_Data"));
-      $self->println("<wiggle_data_id>");
-      $self->write_wiggle_data($wiggle_data);
-      $self->println("</wiggle_data_id>");
+    if ($datum->get_termsource()) {
+      $self->println_to('data', "<dbxref_id>" . $self->write_dbxref($datum->get_termsource(1)) .  "</dbxref_id>");
     }
-    $self->println("</data_wiggle_data>");
-  }
+    if ($datum->get_type()) {
+      $self->println_to('data', "<type_id>" . $self->write_cvterm($datum->get_type(1)) . "</type_id>");
+    }
 
-  foreach my $organism (@{$datum->get_organisms()}) {
-    $self->println("<data_organism>");
-    $self->println("<organism_id>");
-    $self->write_organism($organism);
-    $self->println("</organism_id>");
-    $self->println("</data_organism>");
-  }
+    foreach my $feature ($datum->get_features(1)) {
+      $self->println_to('data', "<data_feature>");
+      $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
+      $self->println_to('data', "</data_feature>");
+    }
 
-  foreach my $attribute (@{$datum->get_attributes()}) {
-    $self->println("<data_attribute>");
-    $self->println("<attribute_id>");
-    $self->write_attribute($attribute);
-    $self->println("</attribute_id>");
-    $self->println("</data_attribute>");
-  }
+    foreach my $wiggle_data ($datum->get_wiggle_datas(1)) {
+      $self->println_to('data', "<data_wiggle_data>");
+      $self->println_to('data', "<wiggle_data_id>" . $self->write_wiggle_data($wiggle_data) . "</wiggle_data_id>");
+      $self->println_to('data', "</data_wiggle_data>");
+    }
 
-  $self->println("</data>");
-}
+    foreach my $organism ($datum->get_organisms(1)) {
+      $self->println_to('data', "<data_organism>");
+      $self->println_to('data', "<organism_id>" . $self->write_organism($organism) . "</organism_id>");
+      $self->println_to('data', "</data_organism>");
+    }
 
-sub write_standalone_feature {
-  my ($self, $feature) = @_;
-  unless ($feature->get_chadoxml_id() && $feature->get_chadoxml_id() !~ /^\d+$/) {
-    $feature->set_chadoxml_id($self->generate_uniqid("Feature"));
-    $self->write_feature($feature);
+    foreach my $attribute ($datum->get_attributes(1)) {
+      $self->println_to('data', "<data_attribute>");
+      $self->println_to('data', "<attribute_id>" . $self->write_attribute($attribute) . "</attribute_id>");
+      $self->println_to('data', "</data_attribute>");
+    }
+
+    $self->println_to('data', "</data>");
   }
-  return $feature->get_chadoxml_id();
+  return $id;
 }
 
 sub write_feature : PRIVATE {
   my ($self, $feature) = @_;
-  $self->println("<feature id=\"" . $feature->get_chadoxml_id() . "\">");
-  $self->println("<name>" . xml_escape($feature->get_name()) . "</name>");
-  $self->println("<uniquename>" . xml_escape($feature->get_uniquename()) . "</uniquename>");
-  $self->println("<residues>" . xml_escape($feature->get_residues()) . "</residues>");
-  $self->println("<seqlen>" . xml_escape($feature->get_seqlen()) . "</seqlen>") if length($feature->get_seqlen());
-  $self->println("<timeaccessioned>" . xml_escape($feature->get_timeaccessioned()) . "</timeaccessioned>") if length($feature->get_timeaccessioned());
-  $self->println("<timelastmodified>" . xml_escape($feature->get_timelastmodified()) . "</timelastmodified>") if length($feature->get_timelastmodified());
-  $self->println("<is_analysis>" . xml_escape($feature->get_is_analysis()) . "</is_analysis>") if length(xml_escape($feature->get_is_analysis()));
+  my $id = "feature_" . $feature->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('features', "<feature id=\"$id\">");
+    $self->println_to('features', "<name>" . xml_escape($feature->get_name()) . "</name>");
+    $self->println_to('features', "<uniquename>" . xml_escape($feature->get_uniquename()) . "</uniquename>");
+    $self->println_to('features', "<residues>" . xml_escape($feature->get_residues()) . "</residues>");
+    $self->println_to('features', "<seqlen>" . xml_escape($feature->get_seqlen()) . "</seqlen>") if length($feature->get_seqlen());
+    $self->println_to('features', "<timeaccessioned>" . xml_escape($feature->get_timeaccessioned()) . "</timeaccessioned>") if length($feature->get_timeaccessioned());
+    $self->println_to('features', "<timelastmodified>" . xml_escape($feature->get_timelastmodified()) . "</timelastmodified>") if length($feature->get_timelastmodified());
+    $self->println_to('features', "<is_analysis>" . xml_escape($feature->get_is_analysis()) . "</is_analysis>") if length(xml_escape($feature->get_is_analysis()));
 
-  if ($feature->get_type()) {
-    $self->println("<type_id>" . $feature->get_type()->get_chadoxml_id() . "</type_id>");
-  }
-  if ($feature->get_organism()) {
-    $self->println("<organism_id>");
-    $self->write_organism($feature->get_organism());
-    $self->println("</organism_id>");
-  }
-  if ($feature->get_primary_dbxref()) {
-    $self->println("<dbxref_id>" . $feature->get_primary_dbxref()->get_chadoxml_id() . "</dbxref_id>");
-  }
-  foreach my $feature_dbxref (@{$feature->get_dbxrefs()}) {
-    $self->println("<feature_dbxref>");
-    $self->println("<dbxref_id>" . $feature_dbxref->get_chadoxml_id() . "</dbxref_id>");
-    $self->println("</feature_dbxref>");
-  }
-  foreach my $feature_location (@{$feature->get_locations()}) {
-    $self->write_featureloc_later_for_feature($feature_location, $feature);
-  }
-  foreach my $analysisfeature (@{$feature->get_analysisfeatures()}) {
-    $self->write_analysisfeature_later_for_feature($analysisfeature, $feature);
-  }
-  if ($feature->get_relationships()) {
-    foreach my $feature_relationship (@{$feature->get_relationships()}) {
-      # Save this feature relationship to write later
-      push @{$all_relationships{ident $self}}, $feature_relationship;
+    if ($feature->get_type()) {
+      $self->println_to('features', "<type_id>" . $self->write_cvterm($feature->get_type(1)) . "</type_id>");
+    }
+    if ($feature->get_organism()) {
+      $self->println_to('features', "<organism_id>" . $self->write_organism($feature->get_organism(1)) . "</organism_id>");
+    }
+    if ($feature->get_primary_dbxref()) {
+      $self->println_to('features', "<dbxref_id>" . $self->write_dbxref($feature->get_primary_dbxref(1)) . "</dbxref_id>");
+    }
+    foreach my $feature_dbxref ($feature->get_dbxrefs(1)) {
+      $self->println_to('features', "<feature_dbxref>");
+      $self->println_to('features', "<dbxref_id>" . $self->write_dbxref($feature_dbxref) . "</dbxref_id>");
+      $self->println_to('features', "</feature_dbxref>");
+    }
+    foreach my $analysisfeature (@{$feature->get_analysisfeatures()}) {
+      $self->write_analysisfeature($analysisfeature, $id);
+    }
+    $self->println_to('features', "</feature>");
+
+    # Don't put these inside the feature object; rather, write later
+    # That way any additional <feature> objects that need to be written 
+    # won't end up inside the above feature tag.
+    foreach my $feature_relationship ($feature->get_relationships(1)) {
+      $self->write_feature_relationship($feature_relationship);
+    }
+    foreach my $feature_location (@{$feature->get_locations()}) {
+      $self->write_featureloc($feature_location, $id);
     }
   }
-  $self->println("</feature>");
+  return $id;
 }
 
 sub write_feature_relationship : PRIVATE {
-  my ($self, $feature_relationship, $feature_parent) = @_;
-  
-  my $subject = $feature_relationship->get_subject();
-  my $object = $feature_relationship->get_object();
+  my ($self, $feature_relationship) = @_;
 
-  if ($subject xor $object) {
-    log_error "Attempting to write a feature_relationship with a subject but no object or vice versa.", "error";
-    exit;
-  }
+  # Make sure the features are written before we start recursing feature_relationship->object->feature_relationship
+  $self->write_feature($feature_relationship->get_subject(1));
+  $self->write_feature($feature_relationship->get_object(1));
 
-  my $seen_subject = 1;
-  my $seen_object = 1;
-  if (!$subject->get_chadoxml_id() || $subject->get_chadoxml_id() =~ /^\d+$/) {
-    $seen_subject = 0;
-    $subject->set_chadoxml_id($self->generate_uniqid("Feature"));
-  }
-  if (!$object->get_chadoxml_id() || $object->get_chadoxml_id() =~ /^\d+$/) {
-    $seen_object = 0;
-    $object->set_chadoxml_id($self->generate_uniqid("Feature"));
-  }
-
-  if (!$self->seen_relationship($subject, $object, $feature_relationship->get_type())) {
-    $self->add_seen_relationship($subject, $object, $feature_relationship->get_type());
-
-    $self->println("<feature_relationship>");
-    $self->println("<rank>" . xml_escape($feature_relationship->get_rank()) . "</rank>") if length($feature_relationship->get_rank());
+  my $id = "feature_relationship_" . $feature_relationship->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('feature_relationships', "<feature_relationship>");
+    $self->println_to('feature_relationships', "<rank>" . xml_escape($feature_relationship->get_rank()) . "</rank>") if length($feature_relationship->get_rank());
+    $self->println_to('feature_relationships', "<subject_id>" . $self->write_feature($feature_relationship->get_subject(1)) . "</subject_id>");
+    $self->println_to('feature_relationships', "<object_id>" . $self->write_feature($feature_relationship->get_object(1)) . "</object_id>");
     if ($feature_relationship->get_type()) {
-      $self->println("<type_id>" . $feature_relationship->get_type()->get_chadoxml_id() . "</type_id>");
+      $self->println_to('feature_relationships', "<type_id>" . $self->write_cvterm($feature_relationship->get_type(1)) . "</type_id>");
     }
-        $self->println("<subject_id>" . $subject->get_chadoxml_id() . "</subject_id>");
-        $self->println("<object_id>" . $object->get_chadoxml_id() . "</object_id>");
-
-    $self->println("</feature_relationship>");
-
+    $self->println_to('feature_relationships', "</feature_relationship>");
   }
 }
 
 sub write_analysisfeature : PRIVATE {
-  my ($self, $analysisfeature) = @_;
-  $self->println("<analysisfeature>");
-  $self->println("<rawscore>" . xml_escape($analysisfeature->get_rawscore()) . "</rawscore>") if length($analysisfeature->get_rawscore());
-  $self->println("<normscore>" . xml_escape($analysisfeature->get_normscore()) . "</normscore>") if length($analysisfeature->get_normscore());
-  $self->println("<significance>" . xml_escape($analysisfeature->get_significance()) . "</significance>") if length($analysisfeature->get_significance());
-  $self->println("<identity>" . xml_escape($analysisfeature->get_identity()) . "</identity>") if length($analysisfeature->get_identity());
-  if ($analysisfeature->get_feature()) {
-      $self->println("<feature_id>" . $analysisfeature->get_feature()->get_chadoxml_id() . "</feature_id>");
-  }
-  if ($analysisfeature->get_analysis()) {
-    if ($analysisfeature->get_analysis()->get_chadoxml_id() && $analysisfeature->get_analysis()->get_chadoxml_id() !~ /^\d+$/) {
-      $self->println("<analysis_id>" . $analysisfeature->get_analysis()->get_chadoxml_id() . "</analysis_id>");
-    } else {
-      $analysisfeature->get_analysis()->set_chadoxml_id($self->generate_uniqid("Analysis"));
-      $self->println("<analysis_id>");
-      $self->write_analysis($analysisfeature->get_analysis());
-      $self->println("</analysis_id>");
-    }
-  }
-  $self->println("</analysisfeature>");
-}
-
-sub write_analysisfeature_later_for_feature : PRIVATE {
-  my ($self, $analysisfeature, $feature) = @_;
-  push @{$delayed_writes{ident $self}}, sub { 
-    if (!$analysisfeature->get_chadoxml_id() || $analysisfeature->get_chadoxml_id() =~ /^\d+$/) {
-      $analysisfeature->set_chadoxml_id($self->generate_uniqid("AnalysisFeature"));
-      $self->write_analysisfeature($analysisfeature, $feature); 
-    }
-  };
-}
-
-sub write_featureloc_later_for_feature : PRIVATE {
-  my ($self, $featureloc, $feature) = @_;
-  push @{$delayed_writes{ident $self}}, sub { 
-    if (!$featureloc->get_chadoxml_id() || $featureloc->get_chadoxml_id() =~ /^\d+$/) {
-      $featureloc->set_chadoxml_id($self->generate_uniqid("FeatureLoc"));
-      $self->write_featureloc($featureloc, $feature); 
-    }
-  };
+  my ($self, $analysisfeature, $feature_id) = @_;
+  $self->println_to('analysisfeatures', "<analysisfeature>");
+  $self->println_to('analysisfeatures', "<feature_id>$feature_id</feature_id>");
+  $self->println_to('analysisfeatures', "<rawscore>" . xml_escape($analysisfeature->get_rawscore()) . "</rawscore>") if length($analysisfeature->get_rawscore());
+  $self->println_to('analysisfeatures', "<normscore>" . xml_escape($analysisfeature->get_normscore()) . "</normscore>") if length($analysisfeature->get_normscore());
+  $self->println_to('analysisfeatures', "<significance>" . xml_escape($analysisfeature->get_significance()) . "</significance>") if length($analysisfeature->get_significance());
+  $self->println_to('analysisfeatures', "<identity>" . xml_escape($analysisfeature->get_identity()) . "</identity>") if length($analysisfeature->get_identity());
+  $self->println_to('analysisfeatures', "<analysis_id>" . $self->write_analysis($analysisfeature->get_analysis(1)) . "</analysis_id>");
+  $self->println_to('analysisfeatures', "</analysisfeature>");
 }
 
 sub write_featureloc : PRIVATE {
-  my ($self, $featureloc, $feature) = @_;
-  $self->println("<featureloc>");
-  if ($feature) {
-    croak "Cannot write featureloc feature with no chadoxml_id with feature " . $feature->_DUMP() unless $feature->get_chadoxml_id();
-    $self->println("<feature_id>" . $feature->get_chadoxml_id() . "</feature_id>");
-  }
-  $self->println("<fmin>" . xml_escape($featureloc->get_fmin()) . "</fmin>") if length($featureloc->get_fmin());
-  $self->println("<fmax>" . xml_escape($featureloc->get_fmax()) . "</fmax>") if length($featureloc->get_fmax());
-  $self->println("<rank>" . xml_escape($featureloc->get_rank()) . "</rank>") if length($featureloc->get_rank());
-  $self->println("<strand>" . xml_escape($featureloc->get_strand()) . "</strand>") if length($featureloc->get_strand());
+  my ($self, $featureloc, $feature_id) = @_;
   if ($featureloc->get_srcfeature()) {
-      $self->println("<srcfeature_id>" . $featureloc->get_srcfeature()->get_chadoxml_id() . "</srcfeature_id>");
+    # Make sure this feature is written before we start recursing featureloc->srcfeature->featureloc
+    $self->write_feature($featureloc->get_srcfeature(1));
   }
-  $self->println("</featureloc>");
+
+  $self->println_to('featurelocs', "<featureloc>");
+  $self->println_to('featurelocs', "<feature_id>$feature_id</feature_id>");
+  $self->println_to('featurelocs', "<fmin>" . xml_escape($featureloc->get_fmin()) . "</fmin>") if length($featureloc->get_fmin());
+  $self->println_to('featurelocs', "<fmax>" . xml_escape($featureloc->get_fmax()) . "</fmax>") if length($featureloc->get_fmax());
+  $self->println_to('featurelocs', "<rank>" . xml_escape($featureloc->get_rank()) . "</rank>") if length($featureloc->get_rank());
+  $self->println_to('featurelocs', "<strand>" . xml_escape($featureloc->get_strand()) . "</strand>") if length($featureloc->get_strand());
+  if ($featureloc->get_srcfeature()) {
+    $self->println_to('featurelocs', "<srcfeature_id>" . $self->write_feature($featureloc->get_srcfeature(1)) . "</srcfeature_id>");
+  }
+  $self->println_to('featurelocs', "</featureloc>");
 }
 
 sub write_analysis : PRIVATE {
   my ($self, $analysis) = @_;
-  $self->println("<analysis id=\"" . $analysis->get_chadoxml_id() . "\">");
-  $self->println("<name>" . xml_escape($analysis->get_name()) . "</name>");
-  $self->println("<description>" . xml_escape($analysis->get_description()) . "</description>");
-  $self->println("<program>" . xml_escape($analysis->get_program()) . "</program>");
-  $self->println("<programversion>" . xml_escape($analysis->get_programversion()) . "</programversion>");
-  $self->println("<algorithm>" . xml_escape($analysis->get_algorithm()) . "</algorithm>");
-  $self->println("<sourcename>" . xml_escape($analysis->get_sourcename()) . "</sourcename>");
-  $self->println("<sourceversion>" . xml_escape($analysis->get_sourceversion()) . "</sourceversion>");
-  $self->println("<sourceuri>" . xml_escape($analysis->get_sourceuri()) . "</sourceuri>");
-  $self->println("<timeexecuted>" . xml_escape($analysis->get_timeexecuted()) . "</timeexecuted>") if length($analysis->get_timeexecuted());
-  $self->println("</analysis>");
+  my $id = "analysis_" . $analysis->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('analyses', "<analysis id=\"$id\">");
+    $self->println_to('analyses', "<name>" . xml_escape($analysis->get_name()) . "</name>");
+    $self->println_to('analyses', "<description>" . xml_escape($analysis->get_description()) . "</description>");
+    $self->println_to('analyses', "<program>" . xml_escape($analysis->get_program()) . "</program>");
+    $self->println_to('analyses', "<programversion>" . xml_escape($analysis->get_programversion()) . "</programversion>");
+    $self->println_to('analyses', "<algorithm>" . xml_escape($analysis->get_algorithm()) . "</algorithm>");
+    $self->println_to('analyses', "<sourcename>" . xml_escape($analysis->get_sourcename()) . "</sourcename>");
+    $self->println_to('analyses', "<sourceversion>" . xml_escape($analysis->get_sourceversion()) . "</sourceversion>");
+    $self->println_to('analyses', "<sourceuri>" . xml_escape($analysis->get_sourceuri()) . "</sourceuri>");
+    $self->println_to('analyses', "<timeexecuted>" . xml_escape($analysis->get_timeexecuted()) . "</timeexecuted>") if length($analysis->get_timeexecuted());
+    $self->println_to('analyses', "</analysis>");
+  }
+  return $id;
 }
 
 
 sub write_organism : PRIVATE {
   my ($self, $organism) = @_;
-  $self->println("<organism>");
-  $self->println("<genus>" . xml_escape($organism->get_genus()) . "</genus>");
-  $self->println("<species>" . xml_escape($organism->get_species()) . "</species>");
-  $self->println("</organism>");
+  my $id = "organism_" . $organism->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('organisms', "<organism id=\"$id\">");
+    $self->println_to('organisms', "<genus>" . xml_escape($organism->get_genus()) . "</genus>");
+    $self->println_to('organisms', "<species>" . xml_escape($organism->get_species()) . "</species>");
+    $self->println_to('organisms', "</organism>");
+  }
+  return $id;
 }
 
 sub write_wiggle_data : PRIVATE {
   my ($self, $wiggle_data) = @_;
-  $self->println("<wiggle_data id=\"" . $wiggle_data->get_chadoxml_id() . "\">");
-  $self->println("<type>" . $wiggle_data->get_type() . "</type>");
-  $self->println("<name>" . $wiggle_data->get_name() . "</name>");
-  $self->println("<visibility>" . $wiggle_data->get_visibility() . "</visibility>");
-  $self->println("<color>(" . join(", ", @{$wiggle_data->get_color()}) . ")</color>");
-  $self->println("<altColor>(" . join(", ", @{$wiggle_data->get_altColor()}) . ")</altColor>");
-  $self->println("<priority>" . $wiggle_data->get_priority() . "</priority>");
-  $self->println("<autoscale>" . $wiggle_data->get_autoscale() . "</autoscale>");
-  $self->println("<gridDefault>" . $wiggle_data->get_gridDefault() . "</gridDefault>");
-  $self->println("<maxHeightPixels>(" . join(", ", @{$wiggle_data->get_maxHeightPixels()}) . ")</maxHeightPixels>");
-  $self->println("<graphType>" . $wiggle_data->get_graphType() . "</graphType>");
-  $self->println("<viewLimits>(" . join(", ", @{$wiggle_data->get_viewLimits()}) . ")</viewLimits>");
-  $self->println("<yLineMark>" . $wiggle_data->get_yLineMark() . "</yLineMark>");
-  $self->println("<yLineOnOff>" . $wiggle_data->get_yLineOnOff() . "</yLineOnOff>");
-  $self->println("<windowingFunction>" . $wiggle_data->get_windowingFunction() . "</windowingFunction>");
-  $self->println("<smoothingWindow>" . $wiggle_data->get_smoothingWindow() . "</smoothingWindow>");
-  $self->println("<data>" . $wiggle_data->get_data() . "</data>");
-  $self->println("</wiggle_data>");
+  my $id = "wiggle_data_" . $wiggle_data->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('wiggle_data', "<wiggle_data id=\"$id\">");
+    $self->println_to('wiggle_data', "<type>" . $wiggle_data->get_type() . "</type>");
+    $self->println_to('wiggle_data', "<name>" . $wiggle_data->get_name() . "</name>");
+    $self->println_to('wiggle_data', "<visibility>" . $wiggle_data->get_visibility() . "</visibility>");
+    $self->println_to('wiggle_data', "<color>(" . join(", ", @{$wiggle_data->get_color()}) . ")</color>");
+    $self->println_to('wiggle_data', "<altColor>(" . join(", ", @{$wiggle_data->get_altColor()}) . ")</altColor>");
+    $self->println_to('wiggle_data', "<priority>" . $wiggle_data->get_priority() . "</priority>");
+    $self->println_to('wiggle_data', "<autoscale>" . $wiggle_data->get_autoscale() . "</autoscale>");
+    $self->println_to('wiggle_data', "<gridDefault>" . $wiggle_data->get_gridDefault() . "</gridDefault>");
+    $self->println_to('wiggle_data', "<maxHeightPixels>(" . join(", ", @{$wiggle_data->get_maxHeightPixels()}) . ")</maxHeightPixels>");
+    $self->println_to('wiggle_data', "<graphType>" . $wiggle_data->get_graphType() . "</graphType>");
+    $self->println_to('wiggle_data', "<viewLimits>(" . join(", ", @{$wiggle_data->get_viewLimits()}) . ")</viewLimits>");
+    $self->println_to('wiggle_data', "<yLineMark>" . $wiggle_data->get_yLineMark() . "</yLineMark>");
+    $self->println_to('wiggle_data', "<yLineOnOff>" . $wiggle_data->get_yLineOnOff() . "</yLineOnOff>");
+    $self->println_to('wiggle_data', "<windowingFunction>" . $wiggle_data->get_windowingFunction() . "</windowingFunction>");
+    $self->println_to('wiggle_data', "<smoothingWindow>" . $wiggle_data->get_smoothingWindow() . "</smoothingWindow>");
+    $self->println_to('wiggle_data', "<data>" . $wiggle_data->get_data() . "</data>");
+    $self->println_to('wiggle_data', "</wiggle_data>");
+  }
+  return $id;
 }
 
 sub write_attribute : PRIVATE {
   my ($self, $attribute) = @_;
-  $self->println("<attribute>");
-  $self->println("<name>" . xml_escape($attribute->get_name()) . "</name>");
-  $self->println("<heading>" . xml_escape($attribute->get_heading()) . "</heading>");
-  $self->println("<value>" . xml_escape($attribute->get_value()) . "</value>");
-  $self->println("<rank>" . xml_escape($attribute->get_rank()) . "</rank>");
+  my $id = "attribute_" . $attribute->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('attributes', "<attribute id=\"$id\">");
+    $self->println_to('attributes', "<name>" . xml_escape($attribute->get_name()) . "</name>");
+    $self->println_to('attributes', "<heading>" . xml_escape($attribute->get_heading()) . "</heading>");
+    $self->println_to('attributes', "<value>" . xml_escape($attribute->get_value()) . "</value>");
+    $self->println_to('attributes', "<rank>" . xml_escape($attribute->get_rank()) . "</rank>");
 
-  if ($attribute->get_termsource()) {
-    $self->println("<dbxref_id>" . $attribute->get_termsource()->get_chadoxml_id() . "</dbxref_id>");
+    if ($attribute->get_termsource()) {
+      $self->println_to('attributes', "<dbxref_id>" . $self->write_dbxref($attribute->get_termsource(1)) .  "</dbxref_id>");
+    }
+    if ($attribute->get_type()) {
+      $self->println_to('attributes', "<type_id>" . $self->write_cvterm($attribute->get_type(1)) .  "</type_id>");
+    }
+
+    foreach my $organism ($attribute->get_organisms(1)) {
+      $self->println_to('attributes', "<attribute_organism>");
+      $self->println_to('attributes', "<organism_id>" . $self->write_organism($organism) . "</organism_id>");
+      $self->println_to('attributes', "</attribute_organism>");
+    }
+
+    $self->println_to('attributes', "</attribute>");
   }
-
-  if ($attribute->get_type()) {
-    $self->println("<type_id>" . $attribute->get_type()->get_chadoxml_id() . "</type_id>");
-  }
-
-  foreach my $organism (@{$attribute->get_organisms()}) {
-    $self->println("<attribute_organism>");
-    $self->println("<organism_id>");
-    $self->write_organism($organism);
-    $self->println("</organism_id>");
-    $self->println("</attribute_organism>");
-  }
-
-  $self->println("</attribute>");
+  return $id;
 }
 
 sub write_cvterm : PRIVATE {
   my ($self, $cvterm) = @_;
-  $self->println("<cvterm id=\"" . $cvterm->get_chadoxml_id() . "\">");
-  $self->println("<name>" . xml_escape($cvterm->get_name()) . "</name>");
-  $self->println("<definition>" . xml_escape($cvterm->get_definition()) . "</definition>");
-  $self->println("<is_obsolete>" . xml_escape($cvterm->get_is_obsolete()) . "</is_obsolete>");
+  my $id = "cvterm_" . $cvterm->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('cvterms', "<cvterm id=\"$id\">");
+    $self->println_to('cvterms', "<name>" . xml_escape($cvterm->get_name()) . "</name>");
+    $self->println_to('cvterms', "<definition>" . xml_escape($cvterm->get_definition()) . "</definition>");
+    $self->println_to('cvterms', "<is_obsolete>" . xml_escape($cvterm->get_is_obsolete()) . "</is_obsolete>");
   
-  if ($cvterm->get_cv()) {
-    $self->println("<cv_id>");
-    $self->write_cv($cvterm->get_cv());
-    $self->println("</cv_id>");
-  }
+    if ($cvterm->get_cv()) {
+      $self->write_cv($cvterm->get_cv(1));
+    }
 
-  if ($cvterm->get_dbxref()) {
-    $self->println("<dbxref_id>" . $cvterm->get_dbxref()->get_chadoxml_id() . "</dbxref_id>");
-  }
+    if ($cvterm->get_dbxref()) {
+      $self->println_to('cvterms', "<dbxref_id>" . $self->write_dbxref($cvterm->get_dbxref(1)) . "</dbxref_id>");
+    }
 
-  $self->println("</cvterm>");
+    $self->println_to('cvterms', "</cvterm>");
+  }
+  return $id;
 }
 
 sub write_cv : PRIVATE {
   my ($self, $cv) = @_;
-  $self->println("<cv>");
-  $self->println("<name>" . xml_escape($cv->get_name()) . "</name>");
-  $self->println("<definition>" . xml_escape($cv->get_definition()) . "</definition>");
-  $self->println("</cv>");
+  my $id = "cv_" . $cv->get_id();
+  if ($seen_ids{ident $self}->{$id}++) {
+    $self->println_to('cvterms', "<cv_id>$id</cv_id>");
+  } else {
+    $self->println_to('cvterms', "<cv_id>");
+    $self->println_to('cvterms', "<cv id=\"$id\">");
+    $self->println_to('cvterms', "<name>" . xml_escape($cv->get_name()) . "</name>");
+    $self->println_to('cvterms', "<definition>" . xml_escape($cv->get_definition()) . "</definition>");
+    $self->println_to('cvterms', "</cv>");
+    $self->println_to('cvterms', "</cv_id>");
+  }
 }
 
 sub write_dbxref : PRIVATE {
   my ($self, $dbxref) = @_;
-  $self->println("<dbxref id=\"" . $dbxref->get_chadoxml_id() . "\">");
-  $self->println("<accession>" . xml_escape($dbxref->get_accession()) . "</accession>");
-  $self->println("<version>" . xml_escape($dbxref->get_version()) . "</version>");
-  $self->println("<db_id>");
-  $self->write_db($dbxref->get_db());
-  $self->println("</db_id>");
-  $self->println("</dbxref>");
+  my $id = "dbxref_" . $dbxref->get_id();
+  if (!$seen_ids{ident $self}->{$id}++) {
+    $self->println_to('dbxrefs', "<dbxref id=\"$id\">");
+    $self->println_to('dbxrefs', "<accession>" . xml_escape($dbxref->get_accession()) . "</accession>");
+    $self->println_to('dbxrefs', "<version>" . xml_escape($dbxref->get_version()) . "</version>");
+    $self->write_db($dbxref->get_db(1));
+    $self->println_to('dbxrefs', "</dbxref>");
+  }
+  return $id;
 }
 
 sub write_db : PRIVATE {
   my ($self, $db) = @_;
-  $self->println("<db>");
-  $self->println("<name>" . xml_escape($db->get_name()) . "</name>");
-  $self->println("<url>" . xml_escape($db->get_url()) . "</url>");
-  $self->println("<description>" . xml_escape($db->get_description()) . "</description>");
-  $self->println("</db>");
+  my $id = "db_" . $db->get_id();
+  if ($seen_ids{ident $self}->{$id}++) {
+    $self->println_to('dbxrefs', "<db_id>$id</db_id>");
+  } else {
+    $self->println_to('dbxrefs', "<db_id>");
+    $self->println_to('dbxrefs', "<db id=\"$id\">");
+    $self->println_to('dbxrefs', "<name>" . xml_escape($db->get_name()) . "</name>");
+    $self->println_to('dbxrefs', "<url>" . xml_escape($db->get_url()) . "</url>");
+    $self->println_to('dbxrefs', "<description>" . xml_escape($db->get_description()) . "</description>");
+    $self->println_to('dbxrefs', "</db>");
+    $self->println_to('dbxrefs', "</db_id>");
+  }
 }
 
 sub println {
   my ($self, $text) = @_;
-  print {$output_handle{ident $self}} $text . "\n";
+  $self->println_to('default', $text);
 }
 
-sub println_2 {
-  my ($self, $text) = @_;
+sub println_to {
+  my ($self, $tempfile, $text) = @_;
   my @numincs = ($text =~ m/(<[a-zA-Z])/g);
   my @numdecs = ($text =~ m/(<\/)/g);
   my $diffincs = scalar(@numincs) - scalar(@numdecs);
   for (my $i = 0; $i > $diffincs; $i--) {
     $self->dec_indent();
   }
-  print {$output_handle{ident $self}} $self->indent_txt() . $text . "\n";
+  my $tmpfh = $self->get_tempfiles()->{$tempfile};
+  print $tmpfh $self->indent_txt() . $text . "\n";
   for (my $i = 0; $i < $diffincs; $i++) {
     $self->inc_indent();
   }
@@ -793,53 +678,6 @@ sub inc_indent : PRIVATE {
 sub get_indent : PRIVATE {
   my ($self) = @_;
   return $indent{ident $self};
-}
-
-sub generate_uniqid : PRIVATE {
-  my ($self, $prefix) = @_;
-  $current_uniqid++;
-  return $prefix . "_" . $current_uniqid;
-}
-
-sub clear_seen_data : PRIVATE {
-  my ($self) = @_;
-  $data_this_proto{ident $self} = { 'input' => [], 'output' => [] };
-}
-
-sub shift_seen_data : PRIVATE {
-  my ($self) = @_;
-  $data_this_proto{ident $self}->{'input'} = $data_this_proto{ident $self}->{'output'};
-  $data_this_proto{ident $self}->{'output'} = [];
-}
-
-sub seen_datum : PRIVATE {
-  my ($self, $datum, $direction) = @_;
-  my ($seen_datum) = grep { $_->equals($datum) } @{$data_this_proto{ident $self}->{$direction}};
-  return $seen_datum;
-}
-
-sub add_seen_datum : PRIVATE {
-  my ($self, $datum, $direction) = @_;
-  push @{$data_this_proto{ident $self}->{$direction}}, $datum;
-}
-
-sub add_seen_relationship : PRIVATE {
-  my ($self, $subject, $object, $reltype) = @_;
-
-  $seen_relationships{ident $self}->{$subject->get_chadoxml_id()} = {} unless defined($seen_relationships{ident $self}->{$subject->get_chadoxml_id()});
-  $seen_relationships{ident $self}->{$subject->get_chadoxml_id()}->{$reltype->get_chadoxml_id()} = {} unless defined($seen_relationships{ident $self}->{$subject->get_chadoxml_id()}->{$reltype->get_chadoxml_id()});
-  $seen_relationships{ident $self}->{$subject->get_chadoxml_id()}->{$reltype->get_chadoxml_id()}->{$object->get_chadoxml_id()} = 1;
-  #push @{$seen_relationships{ident $self}}, [ $subject->get_chadoxml_id(), $object->get_chadoxml_id() ];
-}
-
-sub seen_relationship : PRIVATE {
-  my ($self, $subject, $object, $reltype) = @_;
-  return defined(
-    $seen_relationships{ident $self}->
-      {$subject->get_chadoxml_id()}->
-        {$reltype->get_chadoxml_id()}->
-          {$object->get_chadoxml_id()}
-  );
 }
 
 sub xml_escape {

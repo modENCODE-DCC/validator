@@ -103,26 +103,40 @@ L<http://www.modencode.org>.
 
 use strict;
 use Class::Std;
+use ModENCODE::Cache;
 use Carp qw(croak);
 
-my %all_dbs;
-
 # Attributes
-my %name             :ATTR( :name<name>,                :default<''> );
+my %db_id            :ATTR( :name<id>,                  :default<undef> );
+my %name             :ATTR( :get<name>,                 :init_arg<name> );
 my %url              :ATTR( :name<url>,                 :default<undef> );
 my %description      :ATTR( :name<description>,         :default<undef> );
 
+sub new_no_cache {
+  return Class::Std::new(@_);
+}
+
 sub new {
-  my $self = Class::Std::new(@_);
-  # Caching CVs
-  my $cached_db = $all_dbs{$self->get_name()};
+  my $temp = Class::Std::new(@_);
+  my $cached_db = ModENCODE::Cache::get_cached_db($temp);
   if ($cached_db) {
-    $cached_db->set_url($self->get_url()) if ($self->get_url() && !($cached_db->get_url));
-    $cached_db->set_description($self->get_description()) if ($self->get_description() && !($cached_db->get_description));
+    # Update any cached DB
+    my $need_save = 0;
+    if ($temp->get_url && !($cached_db->get_object->get_url)) {
+      $cached_db->get_object->set_url($temp->get_url);
+      $need_save = 1;
+    }
+    if ($temp->get_description && !($cached_db->get_object->get_description)) {
+      $cached_db->get_object->set_description($temp->get_description);
+      $need_save = 1;
+    }
+    ModENCODE::Cache::save_db($cached_db->get_object) if $need_save;
     return $cached_db;
   }
-  $all_dbs{$self->get_name()} = $self;
-  return $self;
+
+  # This is a new DB
+  my $self = $temp;
+  return ModENCODE::Cache::add_db_to_cache($self);
 }
 
 sub to_string {
@@ -144,14 +158,10 @@ sub equals {
   return 1;
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::DB({
-      'name' => $self->get_name(),
-      'url' => $self->get_url(),
-      'description' => $self->get_description(),
-    });
-  return $clone;
+sub save {
+  ModENCODE::Cache::save_db(shift);
 }
 
+
 1;
+

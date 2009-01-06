@@ -129,15 +129,23 @@ L<http://www.modencode.org>.
 
 use strict;
 use Class::Std;
-use Carp qw(croak);
+use Carp qw(confess croak);
 
 # Attributes
-my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
+my %applied_protocol_id :ATTR( :name<id>,               :default<undef> );
 
 # Relationships
-my %input_data       :ATTR( :get<input_data>,           :default<[]> );
-my %output_data      :ATTR( :get<output_data>,          :default<[]> );
-my %protocol         :ATTR( :get<protocol>,             :default<undef> );
+my %protocol            :ATTR(           :init_arg<protocol> );
+my %input_data          :ATTR( :init_arg<input_data>,   :default<[]> );
+my %output_data         :ATTR( :init_arg<output_data>,  :default<[]> );
+
+# Don't cache applied protocols, since there's really nothing to make them uniquely hashable
+
+sub set_protocol {
+  my ($self, $protocol) = @_;
+  ($protocol->isa('ModENCODE::Cache::Protocol')) or confess("'" . ref($protocol) . "' is not an protocol to be added to protocol_slots");
+  $protocol{ident $self} = $protocol;
+}
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -167,13 +175,13 @@ sub BUILD {
 
 sub add_input_datum {
   my ($self, $input_datum) = @_;
-  ($input_datum->isa('ModENCODE::Chado::Data')) or croak("Can't add a " . ref($input_datum) . " as a input_datum.");
+  ($input_datum->isa('ModENCODE::Cache::Data')) or croak("Can't add a " . ref($input_datum) . " as a input_datum.");
   push @{$input_data{ident $self}}, $input_datum;
 }
 
 sub add_output_datum {
   my ($self, $output_datum) = @_;
-  ($output_datum->isa('ModENCODE::Chado::Data')) or croak("Can't add a " . ref($output_datum) . " as a output_datum.");
+  ($output_datum->isa('ModENCODE::Cache::Data')) or croak("Can't add a " . ref($output_datum) . " as a output_datum.");
   push @{$output_data{ident $self}}, $output_datum;
 }
 
@@ -181,34 +189,65 @@ sub remove_output_datum {
   my ($self, $output_datum) = @_;
   for (my $i = 0; $i < scalar(@{$output_data{ident $self}}); $i++) {
     my $existing_datum = $output_data{ident $self}->[$i];
-    if ($existing_datum->equals($output_datum)) {
+    if ($existing_datum->get_id == $output_datum->get_id) {
       splice(@{$output_data{ident $self}}, $i, 1);
     }
   }
+}
+
+sub get_input_data {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $input_data = $input_data{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$input_data : @$input_data;
+}
+
+sub get_input_data_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$input_data{ident $self}};
+}
+
+sub get_output_data_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$output_data{ident $self}};
+}
+
+sub get_output_data {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $output_data = $output_data{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$output_data : @$output_data;
 }
 
 sub remove_input_datum {
   my ($self, $input_datum) = @_;
   for (my $i = 0; $i < scalar(@{$input_data{ident $self}}); $i++) {
     my $existing_datum = $input_data{ident $self}->[$i];
-    if ($existing_datum->equals($input_datum)) {
+    if ($existing_datum->get_id == $input_datum->get_id) {
       splice(@{$input_data{ident $self}}, $i, 1);
     }
   }
 }
 
-sub set_protocol {
-  my ($self, $protocol) = @_;
-  ($protocol->isa('ModENCODE::Chado::Protocol')) or croak("Can't add a " . ref($protocol) . " as a protocol.");
-  $protocol{ident $self} = $protocol;
+sub get_protocol_id {
+  my $self = shift;
+  return $protocol{ident $self} ? $protocol{ident $self}->get_id : undef;
+}
+
+sub get_protocol {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $protocol = $protocol{ident $self};
+  return undef unless defined $protocol;
+  return $get_cached_object ? $protocol{ident $self}->get_object : $protocol{ident $self};
 }
 
 sub to_string {
   my ($self) = @_;
-  my $string = "Applied Protocol \"" . $self->get_protocol()->get_name() . "\"->";
-  $string .= "(" . join(", ", sort map { $_->to_string() } @{$self->get_input_data()}) . ")";
-  $string .= " = (" . join(", ", sort map { $_->to_string() } @{$self->get_output_data()}) . ")";
-  $string .= "\n    with protocol: " . $self->get_protocol->to_string();
+  my $string = "Applied Protocol \"" . $self->get_protocol()->get_object->get_name() . "\"->";
+  $string .= "(" . join(", ", sort map { $_->get_object->to_string() } $self->get_input_data) . ")";
+  $string .= " = (" . join(", ", sort map { $_->get_object->to_string() } $self->get_output_data) . ")";
+  $string .= "\n    with protocol: " . $self->get_protocol->get_object->to_string();
   return $string;
 }
 
@@ -216,42 +255,27 @@ sub equals {
   my ($self, $other) = @_;
   return 0 unless ref($self) eq ref($other);
 
-  my @input_data = @{$self->get_input_data()};
-  return 0 unless scalar(@input_data) == scalar(@{$other->get_input_data()});
+  my @input_data = $self->get_input_data;
+  return 0 unless scalar(@input_data) == scalar($other->get_input_data);
   foreach my $datum (@input_data) {
-    return 0 unless scalar(grep { $_->equals($datum) } @{$other->get_input_data()});
+    return 0 unless scalar(grep { $_->get_id == $datum->get_id } $other->get_input_data);
   }
 
-  my @output_data = @{$self->get_output_data()};
-  return 0 unless scalar(@output_data) == scalar(@{$other->get_output_data()});
+  my @output_data = $self->get_output_data;
+  return 0 unless scalar(@output_data) == scalar($other->get_output_data);
   foreach my $datum (@output_data) {
-    return 0 unless scalar(grep { $_->equals($datum) } @{$other->get_output_data()});
+    return 0 unless scalar(grep { $_->get_id == $datum->get_id } $other->get_output_data);
   }
 
   if ($self->get_protocol()) {
     return 0 unless $other->get_protocol();
-    return 0 unless $self->get_protocol()->equals($other->get_protocol());
+    return 0 unless $self->get_protocol->get_id == $other->get_protocol->get_id;
   } else {
     return 0 if $other->get_protocol();
   }
 
 
   return 1;
-}
-
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::AppliedProtocol({
-      'chadoxml_id' => $self->get_chadoxml_id(),
-    });
-  foreach my $input_datum (@{$self->get_input_data()}) {
-    $clone->add_input_datum($input_datum->clone());
-  }
-  foreach my $output_datum (@{$self->get_output_data()}) {
-    $clone->add_output_datum($output_datum->clone());
-  }
-  $clone->set_protocol($self->get_protocol()->clone());
-  return $clone;
 }
 
 1;

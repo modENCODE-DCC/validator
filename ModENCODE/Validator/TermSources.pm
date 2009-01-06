@@ -64,13 +64,6 @@ To run the validator:
 
 =over
 
-=item check_and_update_features($features)
-
-Given an arrayref of L<Features|ModENCODE::Chado::Feature> in C<$feature>,
-validate any L<DBXrefs|ModENCODE::Chado::DBXref> linked to them or any related
-features, L<CVTerms|ModENCODE::Chado::CVTerm>, etc., then merge in any changes.
-Return 1 on success or 0 on failure. (The features are merged in-place.)
-
 =item validate($experiment)
 
 Ensures that the L<Experiment|ModENCODE::Chado::Experiment> specified in
@@ -114,109 +107,121 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::DB;
 use ModENCODE::ErrorHandler qw(log_error);
 
-sub check_and_update_features {
-  my ($self, $features) = @_;
-  foreach my $feature (@$features) {
-    if ($self->validate_chado_feature($feature)) {
-      $self->merge_chado_feature($feature);
+my %experiment                  :ATTR( :name<experiment> );
+
+sub validate {
+  my $self = shift;
+  my $success = 1;
+  my $experiment = $self->get_experiment;
+
+  my @all_cvterms = ModENCODE::Cache::get_all_objects('cvterm');
+
+  foreach my $cvterm (@all_cvterms) {
+    my $cvterm_obj = $cvterm->get_object;
+    my $cv = $cvterm_obj->get_cv;
+    my $cv_obj = $cv->get_object;
+
+    # Check that CV names are consistent
+    my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv_obj->get_name)->{'names'}->[0];
+    if ($cv_obj->get_name ne $canonical_cvname) {
+      # Update CV with new CV name
+      my $new_cv = new ModENCODE::Chado::CV({
+          'name' => $canonical_cvname || undef,
+          'definition' => $cv_obj->get_definition || undef,
+        });
+      $cv = ModENCODE::Cache::update_cv($cv_obj, $new_cv->get_object);
+      log_error "Updated CV " . $cv_obj->get_name . " with canonical name $canonical_cvname.", "debug";
+      $cv_obj = $cv->get_object;
+    }
+
+    # Check that this CVTerm has a DBXref
+    if ($cvterm_obj->get_dbxref()) {
+      # Check that there's an appropriate accession for the given term
+      my $current_accession = $cvterm_obj->get_dbxref(1)->get_accession;
+      log_error "Getting expected accession for " . $cv_obj->get_name . ":" . $cvterm_obj->get_name . ".", "debug";
+      my $expected_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cv_obj->get_name, $cvterm_obj->get_name);
+      if ($expected_accession && $current_accession ne $expected_accession) {
+        my $new_dbxref = new ModENCODE::Chado::DBXref({
+            'accession' => $expected_accession || undef,
+            'version' => $cvterm_obj->get_dbxref(1)->get_version || undef,
+            'db' => $cvterm_obj->get_dbxref(1)->get_db || undef,
+          });
+        $new_dbxref = ModENCODE::Cache::update_dbxref($cvterm_obj->get_dbxref(1), $new_dbxref->get_object);
+        log_error "Updated DBXref $current_accession with real accession $expected_accession.", "debug";
+        $cvterm->get_object->set_dbxref($new_dbxref);
+      }
     } else {
-      return 0;
+      # Create a DBXref for this CVTerm since it doesn't have one yet
+      log_error "Getting new accession for " . $cv_obj->get_name . ":" . $cvterm_obj->get_name . ".", "debug";
+      my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cv_obj->get_name, $cvterm_obj->get_name);
+      my $db = new ModENCODE::Chado::DB({ 'name' => $canonical_cvname });
+      my $dbxref = new ModENCODE::Chado::DBXref({
+          'accession' => $accession,
+          'db' => $db,
+        });
+      log_error "Adding DBXref " . $dbxref->get_object->to_string . " to CVTerm " . $cvterm->get_object->to_string . ".", "debug";
+      $cvterm->get_object->set_dbxref($dbxref);
     }
   }
-  return 1;
-}
 
-sub merge {
-  my ($self, $experiment) = @_;
-  log_error "Removing temporary definitions for term sources that were referenced in the SDRF.", "notice", ">";
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      my $protocol = $applied_protocol->get_protocol();
-      # Protocol
-      if ($protocol->get_termsource()) {
-        my ($term, $accession) = $self->get_term_and_accession($protocol->get_termsource(), $protocol->get_name());
-        $protocol->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
-        $protocol->get_termsource()->set_accession($accession);
+
+  my @all_dbxrefs = ModENCODE::Cache::get_all_objects('dbxref');
+
+  foreach my $dbxref (@all_dbxrefs) {
+    my $dbxref_obj = $dbxref->get_object;
+    next if $dbxref_obj->get_accession eq "__ignore"; # Leftovers from SDRF parsing
+
+    my $db = $dbxref_obj->get_db;
+    my $db_obj = $db->get_object;
+
+    # Attempt to canonicalize DB name (may fail, but that's okay)
+    my $canonical_db = 
+      ModENCODE::Config::get_cvhandler()->get_cv_by_name($db_obj->get_name) ||
+      ModENCODE::Config::get_cvhandler()->get_cv_by_url($db_obj->get_url);
+
+    if ($canonical_db) {
+      my $canonical_dbname = $canonical_db->{'names'}->[0];
+      if ($db_obj->get_name ne $canonical_dbname) {
+        # Update DB with new DB name
+        my $new_db = new ModENCODE::Chado::DB({
+            'name' => $canonical_dbname || undef,
+            'url' => $db_obj->get_url || undef,
+            'description' => $db_obj->get_description || undef,
+          });
+        $db = ModENCODE::Cache::update_db($db_obj, $new_db->get_object);
+        log_error "Updated DB " . $db_obj->get_name . " with canonical name $canonical_dbname.", "debug";
+        $db_obj = $db->get_object;
       }
-      # Protocol attributes
-      foreach my $attribute (@{$protocol->get_attributes()}) {
-        if ($attribute->get_termsource()) {
-          my ($term, $accession) = $self->get_term_and_accession($attribute->get_termsource(), $attribute->get_value());
-          $attribute->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
-          $attribute->get_termsource()->set_accession($accession);
-        }
-      }
-      # Data
-      my @data = (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()});
-      foreach my $datum (@data) {
-        if ($datum->get_termsource()) {
-          my ($term, $accession) = $self->get_term_and_accession($datum->get_termsource, $datum->get_value());
-          $datum->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
-          $datum->get_termsource()->set_accession($accession);
-        }
-        foreach my $attribute (@{$datum->get_attributes()}) {
-          if ($attribute->get_termsource()) {
-            my ($term, $accession) = $self->get_term_and_accession($attribute->get_termsource(), $attribute->get_value());
-            $attribute->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
-            $attribute->get_termsource()->set_accession($accession);
-          }
-        }
-        
-      }
-    }
-  }
-  log_error "Done", "notice", "<";
 
-  log_error "Making sure that all CV and DB names are consistent.", "notice", ">";
-  # First, run through all the CVTerms to catch cases where we have a CVTerm with no DBXref
-  my $all_cvterms = ModENCODE::Chado::CVTerm::get_all_cvterms();
-  foreach my $cv (keys(%$all_cvterms)) {
-    foreach my $term (keys(%{$all_cvterms->{$cv}})) {
-      foreach my $is_obsolete (keys(%{$all_cvterms->{$cv}->{$term}})) {
-        my $cvterm = $all_cvterms->{$cv}->{$term}->{$is_obsolete};
-        my $dbxref = $cvterm->get_dbxref();
-        if ($dbxref) {
-          # If there's a dbxref for the cvterm, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
-          # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
-
-          if (!$dbxref->get_db()) {
-            $dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($cvterm->get_cv()->get_name()));
-          }
-
-          if ($dbxref->get_accession() eq $cvterm->get_name() && $dbxref->get_db()) {
-            # If there's no accession or the accession is the same as the term, then try to fetch an accession
-            my $new_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cvterm->get_cv()->get_name(), $cvterm->get_name());
-            $dbxref->set_accession($new_accession) if length($new_accession);
+      # Verify accessions (can only do if DB name = CV name)
+      if (!ModENCODE::Config::get_cvhandler()->is_valid_accession($canonical_dbname, $dbxref_obj->get_accession)) {
+        # Not currently an accession, do we actually have a term instead of an accession,
+        # and if so, can we find the actual accession?
+        my $new_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($canonical_dbname, $dbxref_obj->get_accession);
+        if ($new_accession) {
+          if ($new_accession ne $dbxref_obj->get_accession) {
+            my $new_dbxref = new ModENCODE::Chado::DBXref({
+                'accession' => $new_accession,
+                'version' => $dbxref_obj->get_version,
+                'db' => $dbxref_obj->get_db,
+              });
+            $dbxref = ModENCODE::Cache::update_dbxref($dbxref_obj, $new_dbxref->get_object);
+            log_error "Updated DBXref " . $dbxref_obj->get_accession . " with real accession $new_accession.", "debug";
+            $dbxref_obj = $dbxref->get_object;
           }
         } else {
-          # If there's not a dbxref for the cvterm, try to find one
-          # First, get a DB based on the CV name
-          my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($cvterm->get_cv()->get_name());
-          my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cvterm->get_cv()->get_name(), $cvterm->get_name()) if $db;
-          if ($db && $accession) {
-            # If there's a DB and accession, create a new DBXref and add it to the cvterm
-            $cvterm->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
-          }
+          # Couldn't find a valid accession
+          log_error $dbxref_obj->get_accession . " is not a valid accession in the database $canonical_dbname.", "error";
+          $success = 0;
         }
       }
+    } else {
+      log_error "Didn't canonicalize DB " . $db_obj->get_name . "; no CV with the same name.", "notice";
     }
   }
-  # Now run through all of the DBXrefs and make sure their DB names are consistent
-  my $all_dbxrefs = ModENCODE::Chado::DBXref::get_all_dbxrefs();
-  foreach my $db (keys(%$all_dbxrefs)) {
-    foreach my $accession (keys(%{$all_dbxrefs->{$db}})) {
-      foreach my $version (keys(%{$all_dbxrefs->{$db}->{$accession}})) {
-        my $dbxref = $all_dbxrefs->{$db}->{$accession}->{$version};
-        next if $dbxref->get_accession() eq "__ignore";
-        my $db_name = $dbxref->get_db()->get_name();
-        my $new_db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name);
-        $dbxref->set_db($new_db) if $new_db;
-      }
-    }
-  }
-  log_error "Done.", "notice", "<";
 
-  return $experiment;
+
+  return $success;
 }
 
 sub merge_chado_feature : PRIVATE {
@@ -331,183 +336,6 @@ sub validate_chado_feature : PRIVATE {
   return $success;
 }
 
-sub validate {
-  my ($self, $experiment) = @_;
-  my $success = 1;
-  log_error "Validating types and controlled vocabularies.", "notice", ">";
-  # First, run through all the CVTerms to catch cases where we have a CVTerm with no DBXref
-  my $all_cvterms = ModENCODE::Chado::CVTerm::get_all_cvterms();
-  foreach my $cv (keys(%$all_cvterms)) {
-    foreach my $term (keys(%{$all_cvterms->{$cv}})) {
-      foreach my $is_obsolete (keys(%{$all_cvterms->{$cv}->{$term}})) {
-        my $cvterm = $all_cvterms->{$cv}->{$term}->{$is_obsolete};
-        if (!ModENCODE::Config::get_cvhandler()->is_valid_term($cvterm->get_cv()->get_name(), $cvterm->get_name())) {
-          log_error "Type '" . $cvterm->get_cv()->get_name() . ":" . $cvterm->get_name() . "' is not a valid CVTerm.";
-          $success = 0;
-        }
-        my $dbxref = $cvterm->get_dbxref();
-        if (!$dbxref) {
-          # If there's not a dbxref for the cvterm, try to find one
-          # First, get a DB based on the CV name
-          my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($cvterm->get_cv()->get_name());
-          my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cvterm->get_cv()->get_name(), $cvterm->get_name()) if $db;
-          if ($db && $accession) {
-            # If there's a DB and accession, create a new DBXref and add it to the cvterm
-            $cvterm->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
-          } else {
-            log_error "Can't find accession for " . $cvterm->get_cv()->get_name . ":" . $cvterm->get_name(), "error";
-            $success = 0;
-          }
-        }
-      }
-    }
-  }
-  log_error "Done.", "notice", "<";
-  # Now run through all of the DBXrefs and make sure their DB names are consistent
-  log_error "Validating term sources and term source references.", "notice", ">";
-  my $all_dbxrefs = ModENCODE::Chado::DBXref::get_all_dbxrefs();
-  foreach my $db (keys(%$all_dbxrefs)) {
-    foreach my $accession (keys(%{$all_dbxrefs->{$db}})) {
-      foreach my $version (keys(%{$all_dbxrefs->{$db}->{$accession}})) {
-        my $dbxref = $all_dbxrefs->{$db}->{$accession}->{$version};
-        next if $dbxref->get_accession() eq "__ignore";
-        if (!$self->is_valid($dbxref, $dbxref->get_accession())) {
-          log_error "Termsource '" . $dbxref->get_db()->get_name() . "' (" . $dbxref->get_db()->get_url() . ") is not a valid DB.";
-          $success = 0;
-        }
-      }
-    }
-  }
-  log_error "Done.", "notice", "<";
-
-  return $success;
-}
-#sub validate {
-#  my ($self, $experiment) = @_;
-#  my $success = 1;
-#  $experiment = $experiment->clone(); # Don't do anything to change the experiment passed in
-#  log_error "Verifying term sources referenced in the SDRF against the terms they constrain.", "notice", ">";
-#  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-#    foreach my $applied_protocol (@$applied_protocol_slots) {
-#      my $protocol = $applied_protocol->get_protocol();
-#      # TERM SOURCES
-#      # Term sources can apply to protocols, data, and attributes (which is to say pretty much everything)
-#      # Protocol
-#      if ($protocol->get_termsource() && !($self->is_valid($protocol->get_termsource(), $protocol->get_name()))) {
-#        log_error "Term source '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") does not contain a definition for protocol '" . $protocol->get_name() . "'.";
-#        $success = 0;
-#      }
-#      # Protocol attributes
-#      foreach my $attribute (@{$protocol->get_attributes()}) {
-#        if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-#          log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
-#          $success = 0;
-#        }
-#      }
-#      # Data
-#      my @data = (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()});
-#      foreach my $datum (@data) {
-#        if ($datum->get_termsource() && !($self->is_valid($datum->get_termsource(), $datum->get_value()))) {
-#          log_error "Term source '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") does not contain a definition for datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
-#          $success = 0;
-#        }
-#        # Data attributes
-#        foreach my $attribute (@{$datum->get_attributes()}) {
-#          if ($attribute->get_termsource() && !($self->is_valid($attribute->get_termsource(), $attribute->get_value()))) {
-#            log_error "Term source '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") does not contain a definition for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "' of datum '" . $datum->get_heading() . " [" . $datum->get_name() . "]=" . $datum->get_value() . "' of protocol '" . $protocol->get_name() . "'.";
-#            $success = 0;
-#          }
-#        }
-#        # Features
-#        if (scalar(@{$datum->get_features()})) {
-#          foreach my $feature (@{$datum->get_features()}) {
-#            $success = 0 unless $self->validate_chado_feature($feature);
-#          }
-#        }
-#      }
-#    }
-#  }
-#  log_error "Done.", "notice", "<";
-#  log_error "Make sure all types and term sources are valid.", "notice", ">";
-#  # One last run through all CVTerms and DBXrefs to make we know all of them
-#  # There is some redundancy here, but it should be plenty fast
-#  # experiment_prop (dbxref, type)
-#  foreach my $experiment_prop (@{$experiment->get_properties()}) {
-#    if ($experiment_prop->get_type()) {
-#      if (!ModENCODE::Config::get_cvhandler()->is_valid_term($experiment_prop->get_type()->get_cv()->get_name(), $experiment_prop->get_type()->get_name())) {
-#        log_error "Type '" . $experiment_prop->get_type()->get_cv()->get_name() . ":" . $experiment_prop->get_type()->get_name() . "' is not a valid CVTerm for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
-#        $success = 0;
-#      }
-#    }
-#    if ($experiment_prop->get_termsource()) {
-#      if (!$self->is_valid($experiment_prop->get_termsource(), $experiment_prop->get_value())) {
-#        log_error "Termsource '" . $experiment_prop->get_termsource()->get_db()->get_name() . "' (" . $experiment_prop->get_termsource()->get_db()->get_url() . ") is not a valid term source/DBXref for experiment_prop '" . $experiment_prop->get_name() . "=" . $experiment_prop->get_value() . "'.";
-#        $success = 0;
-#      }
-#    }
-#  }
-#  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-#    foreach my $applied_protocol (@$applied_protocol_slots) {
-#      my $protocol = $applied_protocol->get_protocol();
-#      # protocol (dbxref)
-#      if ($protocol->get_termsource()) {
-#        if (!$self->is_valid($protocol->get_termsource(), $protocol->get_name())) {
-#          log_error "Termsource '" . $protocol->get_termsource()->get_db()->get_name() . "' (" . $protocol->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for protocol '" . $protocol->get_name() . "'.";
-#          $success = 0;
-#        }
-#      }
-#      # protocol attributes (dbxref, type)
-#      foreach my $attribute (@{$protocol->get_attributes()}) {
-#        if ($attribute->get_type()) {
-#          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
-#            log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-#            $success = 0;
-#          }
-#        }
-#        if ($attribute->get_termsource()) {
-#          if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
-#            log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-#            $success = 0;
-#          }
-#        }
-#      }
-#      # data (dbxref, type)
-#      foreach my $datum (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()}) {
-#        if ($datum->get_type()) {
-#          if (!ModENCODE::Config::get_cvhandler()->is_valid_term($datum->get_type()->get_cv()->get_name(), $datum->get_type()->get_name())) {
-#            log_error "Type '" . $datum->get_type()->get_cv()->get_name() . ":" . $datum->get_type()->get_name() . "' is not a valid CVTerm for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'.";
-#            $success = 0;
-#          }
-#        }
-#        if ($datum->get_termsource()) {
-#          if (!$self->is_valid($datum->get_termsource(), $datum->get_value())) {
-#            log_error "Termsource '" . $datum->get_termsource()->get_db()->get_name() . "' (" . $datum->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for datum '" . $datum->get_heading() . "[" . $datum->get_name() . "]=" . $datum->get_value() . "'";
-#            $success = 0;
-#          }
-#        }
-#        # data attributes (dbxref, type)
-#        foreach my $attribute (@{$datum->get_attributes()}) {
-#          if ($attribute->get_type()) {
-#            if (!ModENCODE::Config::get_cvhandler()->is_valid_term($attribute->get_type()->get_cv()->get_name(), $attribute->get_type()->get_name())) {
-#              log_error "Type '" . $attribute->get_type()->get_cv()->get_name() . ":" . $attribute->get_type()->get_name() . "' is not a valid CVTerm for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-#              $success = 0;
-#            }
-#          }
-#          if ($attribute->get_termsource()) {
-#            if (!$self->is_valid($attribute->get_termsource(), $attribute->get_value())) {
-#              log_error "Termsource '" . $attribute->get_termsource()->get_db()->get_name() . "' (" . $attribute->get_termsource()->get_db()->get_url() . ") is not a valid DBXref for attribute '" . $attribute->get_heading() . "[" . $attribute->get_name() . "]=" . $attribute->get_value() . "'";
-#              $success = 0;
-#            }
-#          }
-#        }
-#      }
-#    }
-#  }
-#
-#  log_error "Done.", "notice", "<";
-#  return $success;
-#}
-
 sub get_term_and_accession : PRIVATE {
   my ($self, $termsource, $term, $accession) = @_;
   if (!$term && !$accession) {
@@ -557,5 +385,96 @@ sub is_valid : PRIVATE {
   }
   return $valid;
 }
+
+sub merge {
+  my ($self, $experiment) = @_;
+  log_error "Removing temporary definitions for term sources that were referenced in the SDRF.", "notice", ">";
+  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
+    foreach my $applied_protocol (@$applied_protocol_slots) {
+      my $protocol = $applied_protocol->get_protocol();
+      # Protocol
+      if ($protocol->get_termsource()) {
+        my ($term, $accession) = $self->get_term_and_accession($protocol->get_termsource(), $protocol->get_name());
+        $protocol->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
+        $protocol->get_termsource()->set_accession($accession);
+      }
+      # Protocol attributes
+      foreach my $attribute (@{$protocol->get_attributes()}) {
+        if ($attribute->get_termsource()) {
+          my ($term, $accession) = $self->get_term_and_accession($attribute->get_termsource(), $attribute->get_value());
+          $attribute->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
+          $attribute->get_termsource()->set_accession($accession);
+        }
+      }
+      # Data
+      my @data = (@{$applied_protocol->get_input_data()}, @{$applied_protocol->get_output_data()});
+      foreach my $datum (@data) {
+        if ($datum->get_termsource()) {
+          my ($term, $accession) = $self->get_term_and_accession($datum->get_termsource, $datum->get_value());
+          $datum->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
+          $datum->get_termsource()->set_accession($accession);
+        }
+        foreach my $attribute (@{$datum->get_attributes()}) {
+          if ($attribute->get_termsource()) {
+            my ($term, $accession) = $self->get_term_and_accession($attribute->get_termsource(), $attribute->get_value());
+            $attribute->get_termsource()->get_db()->set_description(undef); # Remove description as it was just holding the type of ontology file
+            $attribute->get_termsource()->set_accession($accession);
+          }
+        }
+        
+      }
+    }
+  }
+  log_error "Done", "notice", "<";
+
+  log_error "Making sure that all CV and DB names are consistent.", "notice", ">";
+  # First, run through all the CVTerms to catch cases where we have a CVTerm with no DBXref
+  my $all_cvterms = ModENCODE::Chado::CVTerm::get_all_cvterms();
+  foreach my $cv (keys(%$all_cvterms)) {
+    foreach my $term (keys(%{$all_cvterms->{$cv}})) {
+      foreach my $is_obsolete (keys(%{$all_cvterms->{$cv}->{$term}})) {
+        my $cvterm = $all_cvterms->{$cv}->{$term}->{$is_obsolete};
+        my $dbxref = $cvterm->get_dbxref();
+        if ($dbxref) {
+          # If there's a dbxref for the cvterm, update the dbxref's DB and accession to match the cached copy in CVHandler (so URLs, names, etc, all match)
+          # The name of the DB gets looked up by the existing DB object (if any), or the CV name (if no DB object is set for the dbxref)
+          my $db_name = ($dbxref->get_db() ? $dbxref->get_db()->get_name() : $cvterm->get_cv()->get_name());
+          $dbxref->set_db(ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name));
+          if ($dbxref->get_accession() eq $cvterm->get_name() && $dbxref->get_db()) {
+            # If there's no accession or the accession is the same as the term, then try to fetch an accession
+            my $new_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cvterm->get_cv()->get_name(), $cvterm->get_name());
+            $dbxref->set_accession($new_accession) if length($new_accession);
+          }
+        } else {
+          # If there's not a dbxref for the cvterm, try to find one
+          # First, get a DB based on the CV name
+          my $db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($cvterm->get_cv()->get_name());
+          my $accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($cvterm->get_cv()->get_name(), $cvterm->get_name()) if $db;
+          if ($db && $accession) {
+            # If there's a DB and accession, create a new DBXref and add it to the cvterm
+            $cvterm->set_dbxref(new ModENCODE::Chado::DBXref({ 'accession' => $accession, 'db' => $db }));
+          }
+        }
+      }
+    }
+  }
+  # Now run through all of the DBXrefs and make sure their DB names are consistent
+  my $all_dbxrefs = ModENCODE::Chado::DBXref::get_all_dbxrefs();
+  foreach my $db (keys(%$all_dbxrefs)) {
+    foreach my $accession (keys(%{$all_dbxrefs->{$db}})) {
+      foreach my $version (keys(%{$all_dbxrefs->{$db}->{$accession}})) {
+        my $dbxref = $all_dbxrefs->{$db}->{$accession}->{$version};
+        next if $dbxref->get_accession() eq "__ignore";
+        my $db_name = $dbxref->get_db()->get_name();
+        my $new_db = ModENCODE::Config::get_cvhandler()->get_db_object_by_cv_name($db_name);
+        $dbxref->set_db($new_db) if $new_db;
+      }
+    }
+  }
+  log_error "Done.", "notice", "<";
+
+  return $experiment;
+}
+
 
 1;

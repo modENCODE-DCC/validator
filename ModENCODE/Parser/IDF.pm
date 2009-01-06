@@ -1,127 +1,26 @@
 package ModENCODE::Parser::IDF;
-=pod
-
-=head1 NAME
-
-ModENCODE::Parser::IDF - Parser and grammar validator for the IDF file for a
-BIR-TAB data package.
-
-=head1 SYNOPSIS
-
-This module applies a L<Parse::RecDescent> grammar to a BIR-TAB IDF document and
-converts it into a barebones L<ModENCODE::Chado::Experiment> representing the
-metadata in the IDF, plus a set of L<ModENCODE::Chado::Protocol>s and
-L<ModENCODE::Chado::DBXref> controlled vocabulary sources. It also reads the
-SDRF document(s) listed in the IDF, passing them to L<ModENCODE::Parser::SDRF>
-to convert into L<Experiment|ModENCODE::Chado::Experiment> objects.
-
-For more information on the BIR-TAB file formats, please see:
-L<http://wiki.modencode.org/project/index.php/BIR-TAB_specification>.
-
-=head1 USAGE
-
-  my $parser = new ModENCODE::Parser::IDF();
-  my $result = $parser->parse("/path/to/idf_file.tsv");
-  my ($experiment, $protocols, $sdrfs, $termsources) = @$result;
-  print $experiment->to_string();
-
-The format for a valid BIR-TAB IDF document is more thoroughly covered in the
-BIR-TAB specification, but you may be able to glean some additional information
-from examining the grammar defined in this module. Some coverage of the
-conventions used in this module's L<Parse::RecDescent> grammar is therefore
-worthwhile.
-
-L<Parse::RecDescent> is a top-down recursive-descent text parser. The basic
-style is:
-
-  Atom_Name: atom_definition { $return = "Result: " . $item[1]; }
-
-Where atom_definition can any number of other atom names or regular expressions,
-among other things. (See the full L<RecDescent|Parse::RecDescent> documentation
-for more information.)
-
-The top-level feature in this IDF parser is the C<IDF> element, which is made up
-of each of the sections of an IDF document: an C<experiment> followed by various
-C<optional_metadata>, followed by C<contact> infromation, then another chance
-for C<optional_metadata>, and so forth. Within the braces (C<{ }>), the return
-values of each atom are stored as L<ModENCODE::Chado|index> objects.
-
-Each atom defining an IDF section group (such as C<experiment>) allows any
-number of the row headings for that section. A C<experiment> section, for
-instance, consists of one-or-more C<experiment_part>s, where an
-C<experiment_part> can be an C<investigation_title>, C<experimental_design>, or
-C<experimental_factor>. A global hash called C<$experiment> defined at the
-beginning of the grammar is used to store each C<experiment_part> as it is
-parsed.  Once a full C<experiment> section has been processed, a set of
-L<experiment properties|ModENCODE::Chado::ExperimentProp> is created using the
-values of C<$experiment>. The properties are then returned to the top-level
-C<IDF> element, which adds them to a global
-L<Experiment|ModENCODE::Chado::Experiment> object. This style of processing -
-populate a hash with all the values from a section, then return to the parent
-atom - is used throughout the grammar.
-
-Failure to process the IDF file (due to missing sections, misspelled row
-headings, etc.) generally causes the L<RecDescent|Parse::RecDescent> parser to
-fail (in which case it outputs some potentially useful debugging information),
-logs an error, and causes the parser to return 0.
-
-When the C<sdrf_file> atom is encountered, a new L<ModENCODE::Parser::SDRF>
-parser is created and given the SDRF file(s) listed in the IDF document. Failure
-to parse the SDRF file(s) similary results in the IDF parser returning 0.
-
-Furthermore, passing in a missing or unreadable filename to the parser also
-leads to an 0 response and an error.
-
-=head1 FUNCTIONS
-
-=over
-
-=item parse($document)
-
-Attempt to parse the IDF file referenced by the filename passed in as
-C<$document>. Returns 0 on failure, otherwise returns an arrayref containing (in
-order) a barebones L<ModENCODE::Chado::Experiment> object for the IDF, the set
-of L<ModENCODE::Chado::Protocol>s defined in the IDF, the
-L<Experiment|ModENCODE::Chado::Experiment> object(s) associated with the SDRF
-files referenced, and the L<ModENCODE::Chado::DBXref> term sources listed in the
-IDF.
-
-  [ $experiment, \@protocols, \@sdrfs, \@termsources ]
-
-=back
-
-=head1 SEE ALSO
-
-L<Class::Std>, L<Parse::RecDescent>, L<ModENCODE::Validator::IDF_SDRF>,
-L<ModENCODE::Parser::SDRF>, L<ModENCODE::Chado::Experiment>,
-L<ModENCODE::Chado::Protocol>, L<ModENCODE::Chado::DBXref>,
-L<http://wiki.modencode.org/project/index.php/BIR-TAB_specification>
-
-=head1 AUTHOR
-
-E.O. Stinson L<mailto:yostinso@berkeleybop.org>, ModENCODE DCC
-L<http://www.modencode.org>.
-
-=cut
-use strict;
 
 use Class::Std;
 use Parse::RecDescent;
 use Carp qw(croak carp);
-use Data::Dumper;
-
-use ModENCODE::Parser::SDRF;
-use ModENCODE::Chado::Experiment;
-use ModENCODE::Chado::ExperimentProp;
-use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
-use ModENCODE::Chado::Protocol;
-use ModENCODE::Chado::Attribute;
-use ModENCODE::Chado::DBXref;
-use ModENCODE::Chado::DB;
+use ModENCODE::Chado::CVTerm;
+use ModENCODE::Parser::SDRF;
+use ModENCODE::Chado::ProtocolAttribute;
+use ModENCODE::Cache::Protocol;
+
 use ModENCODE::ErrorHandler qw(log_error);
 
 my %grammar     :ATTR;
+my %idf_file    :ATTR( :init_arg<idf_file> );
+
+sub new {
+  my ($class, $idf_file) = @_;
+
+  croak "Need an idf_file as the first argument to ModENCODE::Parser::IDF()" unless $idf_file;
+
+  Class::Std::new($class, { 'idf_file' => $idf_file })
+}
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -130,6 +29,7 @@ sub BUILD {
     {
       use Time::HiRes qw();
       use ModENCODE::ErrorHandler qw(log_error);
+      use ModENCODE::Chado::Experiment;
       my $experiment = {};
       my $persons = {};
       my $instance = {};
@@ -137,6 +37,7 @@ sub BUILD {
       my $protocols = {};
       my $term_sources = {};
       my $success = 1;
+      my $experiment_obj = new ModENCODE::Chado::Experiment();
     }
     IDF:                                experiment
                                         optional_metadata(?)
@@ -149,10 +50,9 @@ sub BUILD {
                                         term_source
                                         end_of_file
                                         {
-                                          my $experiment_obj = new ModENCODE::Chado::Experiment();
                                           $experiment_obj->add_properties($item[1]);
-                                          my ($investigation_title_prop) = grep { $_->get_name() eq "Investigation Title" } @{$item[1]};
-                                          $experiment_obj->set_uniquename(substr($investigation_title_prop->get_value(), 0, 235) . ":" . Time::HiRes::gettimeofday());
+                                          my ($investigation_title_prop) = grep { $_->get_object->get_name() eq "Investigation Title" } @{$item[1]};
+                                          $experiment_obj->set_uniquename(substr($investigation_title_prop->get_object->get_value(), 0, 235) . ":" . Time::HiRes::gettimeofday());
                                           if (defined($item[2])) { $experiment_obj->add_properties($item[2]->[0]); }
                                           $experiment_obj->add_properties($item[3]);
                                           if (defined($item[4])) { $experiment_obj->add_properties($item[4]->[0]); }
@@ -175,6 +75,7 @@ sub BUILD {
                                             return;
                                           }
                                           push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                              'experiment' => $experiment_obj,
                                               'value' => $experiment->{'Investigation Title'}->[0],
                                               'name' => 'Investigation Title',
                                               'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
@@ -194,6 +95,7 @@ sub BUILD {
                                                   });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'experiment' => $experiment_obj,
                                                     'value' => $design_name,
                                                     'name' => 'Experimental Design',
                                                     'termsource' => $design_name_dbxref,
@@ -209,6 +111,7 @@ sub BUILD {
                                               my $factor_type_termsource = $experiment->{'Experimental Factor Term Source REF'}->[$i];
                                               if (length($factor_name)) {
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'experiment' => $experiment_obj,
                                                     'value' => $factor_name,
                                                     'name' => 'Experimental Factor Name',
                                                     'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
@@ -226,6 +129,7 @@ sub BUILD {
                                                   });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'experiment' => $experiment_obj,
                                                     'value' => $factor_type,
                                                     'name' => 'Experimental Factor Type',
                                                     'termsource' => $factor_type_dbxref,
@@ -302,6 +206,7 @@ sub BUILD {
                                                 my $person_attrib_value = $persons->{$person_attrib_name}->[$i];
                                                 if (length($person_attrib_value)) {
                                                   push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                      'experiment' => $experiment_obj,
                                                       'value' => $person_attrib_value,
                                                       'name' => $person_attrib_name,
                                                       'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
@@ -322,6 +227,7 @@ sub BUILD {
                                                     });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'experiment' => $experiment_obj,
                                                     'value' => $person_roles,
                                                     'name' => 'Person Roles',
                                                     'termsource' => $person_roles_dbxref,
@@ -426,6 +332,7 @@ sub BUILD {
                                                     });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'experiment' => $experiment_obj,
                                                     'value' => $qc_type,
                                                     'name' => 'Quality Control Type',
                                                     'termsource' => $qc_type_dbxref,
@@ -450,6 +357,7 @@ sub BUILD {
                                                     });
                                                 }
                                                 push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                    'experiment' => $experiment_obj,
                                                     'value' => $replicate_type,
                                                     'name' => 'Replicate Type',
                                                     'termsource' => $replicate_type_dbxref,
@@ -503,6 +411,7 @@ sub BUILD {
                                           my @experiment_properties;
                                           if (defined($optional_metadata->{'Date of Experiment'}) && length($optional_metadata->{'Date of Experiment'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                'experiment' => $experiment_obj,
                                                 'value' => $optional_metadata->{'Date of Experiment'}->[0],
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'date', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                 'name' => 'Date of Experiment',
@@ -510,6 +419,7 @@ sub BUILD {
                                           }
                                           if (defined($optional_metadata->{'Public Release Date'}) && length($optional_metadata->{'Public Release Date'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                'experiment' => $experiment_obj,
                                                 'value' => $optional_metadata->{'Public Release Date'}->[0],
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                 'name' => 'Public Release Date',
@@ -517,6 +427,7 @@ sub BUILD {
                                           }
                                           if (defined($optional_metadata->{'PubMed ID'}) && length($optional_metadata->{'PubMed ID'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                'experiment' => $experiment_obj,
                                                 'value' => $optional_metadata->{'PubMed ID'}->[0],
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                 'name' => 'PubMed ID',
@@ -524,6 +435,7 @@ sub BUILD {
                                           }
                                           if (defined($optional_metadata->{'Project'}) && length($optional_metadata->{'Project'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                'experiment' => $experiment_obj,
                                                 'value' => $optional_metadata->{'Project'}->[0],
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                 'name' => 'Project',
@@ -531,14 +443,20 @@ sub BUILD {
                                           }
                                           if (defined($optional_metadata->{'Lab'}) && length($optional_metadata->{'Lab'}->[0])) {
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
+                                                'experiment' => $experiment_obj,
                                                 'value' => $optional_metadata->{'Lab'}->[0],
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                 'name' => 'Lab',
                                               });
                                           }
                                           if (defined($optional_metadata->{'Experiment Description'}) && length($optional_metadata->{'Experiment Description'}->[0])) {
+                                            my $description = $optional_metadata->{'Experiment Description'}->[0];
+                                            if ($description !~ m,^http://,) {
+                                              $description = "http://wiki.modencode.org/project/index.php?title=" . $description;
+                                            }
                                             push @experiment_properties, new ModENCODE::Chado::ExperimentProp({
-                                                'value' => $optional_metadata->{'Experiment Description'}->[0],
+                                                'experiment' => $experiment_obj,
+                                                'value' => $description,
                                                 'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                                 'name' => 'Experiment Description',
                                               });
@@ -599,11 +517,13 @@ sub BUILD {
                                             for (my $i = 0; $i < scalar(@{$protocols->{'Protocol Name'}}); $i++) {
                                               my $protocol_name = $protocols->{'Protocol Name'}->[$i];
                                               next unless length($protocol_name);
+                                              # Manually create a CachedObject here because we're going to be using the SDRF
+                                              # protocol as the "official" cached protocol
                                               my $protocol_obj = new ModENCODE::Chado::Protocol({'name' => $protocol_name});
 
                                               my $protocol_description = $protocols->{'Protocol Description'}->[$i];
                                               if (length($protocol_description)) {
-                                                $protocol_obj->set_description($protocol_description);
+                                                $protocol_obj->get_object->set_description($protocol_description);
                                               }
 
                                               ####################################################
@@ -651,14 +571,15 @@ sub BUILD {
                                                         'db' => new ModENCODE::Chado::DB({'name' => $cv}),
                                                         'accession' => $name,
                                                       });
-                                                    my $protocol_type_obj = new ModENCODE::Chado::Attribute({
+                                                    my $protocol_type_obj = new ModENCODE::Chado::ProtocolAttribute({
                                                         'heading' => 'Protocol Type',
                                                         'value' => $name,
                                                         'termsource' => $protocol_type_dbxref,
                                                         'type' => $protocol_type_type,
                                                         'rank' => $rank,
+                                                        'protocol' => $protocol_obj,
                                                       });
-                                                    $protocol_obj->add_attribute($protocol_type_obj);
+                                                    $protocol_obj->get_object->add_attribute($protocol_type_obj);
                                                   }
                                                   $rank++;
                                                 }
@@ -667,7 +588,7 @@ sub BUILD {
 
                                               my $protocol_parameters = $protocols->{'Protocol Parameters'}->[$i];
                                               if (length($protocol_parameters)) {
-                                                my $protocol_parameters_obj = new ModENCODE::Chado::Attribute({
+                                                my $protocol_parameters_obj = new ModENCODE::Chado::ProtocolAttribute({
                                                     'heading' => 'Protocol Parameters',
                                                     'value' => $protocol_parameters,
                                                     'type' => new ModENCODE::Chado::CVTerm({
@@ -676,8 +597,9 @@ sub BUILD {
                                                             'name' => 'xsd',
                                                           }),
                                                       }),
+                                                    'protocol' => $protocol_obj,
                                                   });
-                                                $protocol_obj->add_attribute($protocol_parameters_obj);
+                                                $protocol_obj->get_object->add_attribute($protocol_parameters_obj);
                                               }
 
                                               push @protocols, $protocol_obj;
@@ -760,22 +682,20 @@ sub BUILD {
 
                                               my $term_source_file = $term_sources->{'Term Source File'}->[$i];
                                               if (length($term_source_file)) {
-                                                $term_source_obj->set_url($term_source_file);
+                                                $term_source_obj->get_object->set_url($term_source_file);
                                               }
                                               my $term_source_type = $term_sources->{'Term Source Type'}->[$i];
                                               if (length($term_source_type)) {
-                                                $term_source_obj->set_description($term_source_type);
+                                                $term_source_obj->get_object->set_description($term_source_type);
                                               }
 
                                               my $term_source_version = $term_sources->{'Term Source Version'}->[$i];
-                                              my $term_source_db = 
+                                              $term_source_version = undef if (!length($term_source_version));
                                               my $term_obj = new ModENCODE::Chado::DBXref({
                                                 'db' => $term_source_obj,
                                                 'accession' => '__ignore',
+#                                                'version' => $term_source_version,
                                               });
-                                              if (length($term_source_version)) {
-                                                $term_obj->set_version($term_source_version);
-                                              }
 
                                               push @dbxrefs, $term_obj;
                                             }
@@ -802,7 +722,7 @@ sub BUILD {
   term_source_version:                  <skip:'[\r\n \t]*'> term_source_version_heading <skip:'[ "]*\t[ "]*'> field_value(s?) <skip:'[ "]*\t[ "\n\r]*'>
                                         { 
                                           $term_sources->{'Term Source Version'} = [] if (!defined($term_sources->{'Term Source Version'}));
-                                          #push @{$term_sources->{'Term Source Version'}}, @{$item[4]};
+                                          push @{$term_sources->{'Term Source Version'}}, @{$item[4]};
                                         }
   term_source_type_heading:             /Term *Source *Type/i
   term_source_type:                     <skip:'[\r\n \t]*'> term_source_type_heading <skip:'[ "]*\t[ "]*'> field_value(s)
@@ -827,30 +747,36 @@ sub BUILD {
 
 }
 sub parse {
-  my ($self, $document) = @_;
+  my ($self) = @_;
      
-  if ( -r $document ) {
+  my $idf_file = $idf_file{ident $self};
+  log_error "Reading IDF file from $idf_file.", "notice", ">";
+  my $document;
+  if ( -r $idf_file ) {
     local $/;
-    if (!open(FH, "<$document")) {
-      log_error "Couldn't read file $document";
+    if (!open(FH, "<$idf_file")) {
+      log_error "Couldn't read file $idf_file";
       return 0;
     }
     $document = <FH>;
     close FH;
   } else {
-    if (!open(FH, "<$document")) {
-      log_error "Can't find file '$document'";
-      return 0;
-    }
+    log_error "Can't find file '$idf_file'";
+    return 0;
   }
+
+  # Clean up some cross-platform issues in the IDF
   $document =~ s/\A [" ]*/\t/gxms;
   $document =~ s/\t"/\t/gxms;
   $document =~ s/"\t/\t/gxms;
   $document =~ s/^"|"$//gxms;
   my $parser = $self->_get_parser();
+  log_error "Done.", "notice", "<";
   
+  log_error "Parsing IDF file $idf_file.", "notice", ">";
   my $result = $parser->IDF($document);
   my $success = pop(@$result);
+  log_error "Done.", "notice", "<";
   return 0 unless $success;
   return $result;
 }
@@ -860,10 +786,11 @@ sub _get_parser : RESTRICTED {
   $::RD_ERRORS = 1;
   $::RD_WARN = undef;
   $::RD_TRACE = undef;
-  $::RD_HINT = undef;
+  $::RD_HINT = 1;
   $::RD_AUTOSTUB = undef;
   $Parse::RecDescent::skip = '[ "]*\t[ "]*';
   my $parser = new Parse::RecDescent($grammar{ident $self});
 }
+
 
 1;

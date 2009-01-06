@@ -238,97 +238,221 @@ use Class::Std;
 use Carp qw(carp croak);
 use ModENCODE::ErrorHandler qw(log_error);
 
-my @all_features;
-
 # Attributes
-my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
-my %name             :ATTR( :name<name>,                :default<undef> );
-my %uniquename       :ATTR( :name<uniquename>,          :default<undef> );
-my %residues         :ATTR( :name<residues>,            :default<undef> );
-my %seqlen           :ATTR( :name<seqlen>,              :default<undef> );
-my %timeaccessioned  :ATTR( :name<timeaccessioned>,     :default<undef> );
-my %timelastmodified :ATTR( :name<timelastmodified>,    :default<undef> );
-my %is_analysis      :ATTR( :name<is_analysis>,         :default<0> );
+my %feature_id       :ATTR( :name<id>,                                                  :default<undef> );
+my %dirty            :ATTR( :default<1> );
+my %name             :ATTR( :get<name>,                 :init_arg<name>,                :default<undef> );
+my %uniquename       :ATTR( :get<uniquename>,           :init_arg<uniquename>,          :default<undef> );
+my %residues         :ATTR( :get<residues>,             :init_arg<residues>,            :default<undef> );
+my %seqlen           :ATTR( :get<seqlen>,               :init_arg<seqlen>,              :default<undef> );
+my %timeaccessioned  :ATTR( :get<timeaccessioned>,      :init_arg<timeaccessioned>,     :default<undef> );
+my %timelastmodified :ATTR( :get<timelastmodified>,     :init_arg<timelastmodified>,    :default<undef> );
+my %is_analysis      :ATTR( :get<is_analysis>,          :init_arg<is_analysis>,         :default<0> );
 
 # Relationships
-my %organism         :ATTR( :get<organism>,             :default<undef> );
-my %type             :ATTR( :get<type>,                 :default<undef> );
-my %analysisfeatures :ATTR( :get<analysisfeatures>,     :default<[]> );
-my %locations        :ATTR( :get<locations>,            :default<[]> );
-my %relationships    :ATTR( :get<relationships>,        :default<[]> );
-my %dbxrefs          :ATTR( :get<dbxrefs>,              :default<[]> );
-my %primary_dbxref   :ATTR( :get<primary_dbxref>,       :default<undef> );
+my %organism         :ATTR(                             :init_arg<organism>,            :default<undef> );
+my %type             :ATTR(                             :init_arg<type>,                :default<undef> );
+my %analysisfeatures :ATTR( :get<analysisfeatures>,     :init_arg<analysisfeatures>,    :default<[]> );
+my %locations        :ATTR( :get<locations>,            :init_arg<locations>,           :default<[]> );
+my %relationships    :ATTR( :set<relationships>,        :init_arg<relationships>,       :default<[]> );
+my %dbxrefs          :ATTR(                             :init_arg<dbxrefs>,             :default<[]> );
+my %primary_dbxref   :ATTR(                             :init_arg<primary_dbxref>,      :default<undef> );
 
-sub new {
-  my $self = Class::Std::new(@_);
-  # Cache features
-  push @all_features, $self;
-  return $self;
+sub set_name { my ($self, $name) = @_; $self->dirty(); $name{ident $self} = $name; }
+sub set_residues { my ($self, $residues) = @_; $self->dirty(); $residues{ident $self} = $residues; }
+sub set_seqlen { my ($self, $seqlen) = @_; $self->dirty(); $seqlen{ident $self} = $seqlen; }
+sub set_timeaccessioned { my ($self, $timeaccessioned) = @_; $self->dirty(); $timeaccessioned{ident $self} = $timeaccessioned; }
+sub set_timelastmodified { my ($self, $timelastmodified) = @_; $self->dirty(); $timelastmodified{ident $self} = $timelastmodified; }
+sub set_is_analysis { my ($self, $is_analysis) = @_; $self->dirty(); $is_analysis{ident $self} = $is_analysis; }
+sub set_analysisfeatures { my ($self, $analysisfeatures) = @_; $self->dirty(); $analysisfeatures{ident $self} = $analysisfeatures; }
+sub set_locations { my ($self, $locations) = @_; $self->dirty(); $locations{ident $self} = $locations; }
+
+sub dirty {
+  $dirty{ident shift} = 1;
 }
 
-sub get_all_features {
-  return \@all_features;
+sub clean {
+  $dirty{ident shift} = 0;
+}
+
+sub is_dirty {
+  return $dirty{ident shift};
+}
+
+sub new_no_cache {
+  return Class::Std::new(@_);
+}
+
+sub new {
+  my $temp = Class::Std::new(@_);
+  my $cached_feature = ModENCODE::Cache::get_cached_feature($temp);
+
+  if ($cached_feature) {
+    # Update any cached feature
+    my $need_save = 0;
+
+    if ($temp->get_name && !($cached_feature->get_object->get_name)) {
+      $cached_feature->get_object->set_name($temp->get_name);
+      $need_save = 1;
+    }
+    if ($temp->get_residues && !($cached_feature->get_object->get_residues)) {
+      $cached_feature->get_object->set_residues($temp->get_residues);
+      $need_save = 1;
+    }
+    if ($temp->get_seqlen && !($cached_feature->get_object->get_seqlen)) {
+      $cached_feature->get_object->set_seqlen($temp->get_seqlen);
+      $need_save = 1;
+    }
+    if ($temp->get_timeaccessioned && !($cached_feature->get_object->get_timeaccessioned)) {
+      $cached_feature->get_object->set_timeaccessioned($temp->get_timeaccessioned);
+      $need_save = 1;
+    }
+    if ($temp->get_timelastmodified && !($cached_feature->get_object->get_timelastmodified)) {
+      $cached_feature->get_object->set_timelastmodified($temp->get_timelastmodified);
+      $need_save = 1;
+    }
+    if ($temp->get_is_analysis && !($cached_feature->get_object->get_is_analysis)) {
+      $cached_feature->get_object->set_is_analysis($temp->get_is_analysis);
+      $need_save = 1;
+    }
+
+    if ($temp->get_organism && !($cached_feature->get_object->get_organism)) {
+      $cached_feature->get_object->set_organism($temp->get_organism);
+      $need_save = 1;
+    }
+    if ($temp->get_type && !($cached_feature->get_object->get_type)) {
+      $cached_feature->get_object->set_type($temp->get_type);
+      $need_save = 1;
+    }
+
+    if (scalar($temp->get_analysisfeatures) && !scalar($cached_feature->get_object->get_analysisfeatures)) {
+      $cached_feature->get_object->set_analysisfeatures($temp->get_analysisfeatures);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_locations) && !scalar($cached_feature->get_object->get_locations)) {
+      $cached_feature->get_object->set_locations($temp->get_locations);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_relationships) && !scalar($cached_feature->get_object->get_relationships)) {
+      $cached_feature->get_object->set_relationships($temp->get_relationships);
+      $need_save = 1;
+    }
+    if ($temp->get_primary_dbxref && !($cached_feature->get_object->get_primary_dbxref)) {
+      $cached_feature->get_object->set_primary_dbxref($temp->get_primary_dbxref);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_dbxrefs) && !scalar($cached_feature->get_object->get_dbxrefs)) {
+      $cached_feature->get_object->set_dbxrefs($temp->get_dbxrefs);
+      $need_save = 1;
+    }
+
+    ModENCODE::Cache::save_feature($cached_feature->get_object) if $need_save;
+    return $cached_feature;
+  }
+
+  # This is a new feature
+  my $self = $temp;
+  return ModENCODE::Cache::add_feature_to_cache($self);
 }
 
 sub START {
   my ($self, $ident, $args) = @_;
-  my $organism = $args->{'organism'};
-  if (defined($organism)) {
-    $self->set_organism($organism);
+
+  # Make sure the primary DBXref is in the list of DBXrefs
+  if ($self->get_primary_dbxref) {
+    $self->set_primary_dbxref($self->get_primary_dbxref);
   }
-  my $type = $args->{'type'};
-  if (defined($type)) {
-    $self->set_type($type);
+
+  # Set the primary_dbxref if one hasn't yet been
+  if (!$self->get_primary_dbxref && scalar($self->get_dbxrefs)) {
+    my ($first_dbxref) = $self->get_dbxrefs;
+    $self->set_primary_dbxref($first_dbxref);
   }
-  my $locations = $args->{'locations'};
-  if (defined($locations)) {
-    (ref($locations) eq "ARRAY") or croak("Can't set locations from a " . ref($locations) . ". Expected an ARRAY");
-    foreach my $location (@$locations) {
-      $self->add_location($location);
-    }
-  }
-  my $analysisfeatures = $args->{'analysisfeatures'};
-  if (defined($analysisfeatures)) {
-    (ref($analysisfeatures) eq "ARRAY") or croak("Can't set analysisfeatures from a " . ref($analysisfeatures) . ". Expected an ARRAY");
-    foreach my $analysisfeature (@$analysisfeatures) {
-      $self->add_analysisfeature($analysisfeature);
-    }
-  }
-  my $relationships = $args->{'relationships'};
-  if (defined($relationships)) {
-    (ref($relationships) eq "ARRAY") or croak("Can't set relationships from a " . ref($relationships) . ". Expected an ARRAY");
-    foreach my $relationship (@$relationships) {
-      $self->add_relationship($relationship);
-    }
-  }
-  my $dbxrefs = $args->{'dbxrefs'};
-  if (defined($dbxrefs)) {
-    (ref($dbxrefs) eq "ARRAY") or croak("Can't set dbxrefs from a " . ref($dbxrefs) . ". Expected an ARRAY");
-    foreach my $dbxref (@$dbxrefs) {
-      $self->add_dbxref($dbxref);
-    }
-  }
-  my $primary_dbxref = $args->{'primary_dbxref'};
-  if (defined($primary_dbxref)) {
-    $self->set_primary_dbxref($primary_dbxref);
-  }
+
+}
+
+sub get_organism_id {
+  my $self = shift;
+  return $organism{ident $self} ? $organism{ident $self}->get_id : undef;
+}
+
+sub get_organism {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $organism = $organism{ident $self};
+  return undef unless defined $organism;
+  return $get_cached_object ? $organism{ident $self}->get_object : $organism{ident $self};
+}
+
+sub get_type_id {
+  my $self = shift;
+  return $type{ident $self} ? $type{ident $self}->get_id : undef;
+}
+
+sub get_type {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $type = $type{ident $self};
+  return undef unless defined $type;
+  return $get_cached_object ? $type{ident $self}->get_object : $type{ident $self};
+}
+
+sub get_primary_dbxref_id {
+  my $self = shift;
+  return $primary_dbxref{ident $self} ? $primary_dbxref{ident $self}->get_id : undef;
+}
+
+sub get_primary_dbxref {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $primary_dbxref = $primary_dbxref{ident $self};
+  return $get_cached_object ? $primary_dbxref->get_object : $primary_dbxref;
+}
+
+sub get_dbxref_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$dbxrefs{ident $self}}
+}
+
+sub get_dbxrefs {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $dbxrefs = $dbxrefs{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$dbxrefs : @$dbxrefs;
 }
 
 sub add_dbxref {
   my ($self, $dbxref) = @_;
-  ($dbxref->isa('ModENCODE::Chado::DBXref')) or Carp::confess("Can't add a " . ref($dbxref) . " as a dbxref.");
-  return if scalar(grep { $dbxref->equals($_) } @{$self->get_dbxrefs()}); # No duplicates
+  ($dbxref->get_object->isa('ModENCODE::Chado::DBXref')) or Carp::confess("Can't add a " . ref($dbxref) . " as a dbxref.");
+  return if scalar(grep { $dbxref->get_id == $_ } $self->get_dbxref_ids); # No duplicates
   push @{$dbxrefs{ident $self}}, $dbxref;
   if (!$self->get_primary_dbxref()) {
     $self->set_primary_dbxref($dbxref);
   }
 }
 
+sub set_dbxrefs {
+  my ($self, $dbxrefs) = @_;
+  $dbxrefs{ident $self} = [];
+  $self->dirty();
+  if (!scalar(@$dbxrefs)) {
+    delete $primary_dbxref{ident $self};
+    return;
+  }
+
+  my $found_primary = 0;
+  foreach my $dbxref (@$dbxrefs) {
+    $found_primary = 1 if ($primary_dbxref{ident $self}->get_id == $dbxref->get_id);
+    push @{$dbxrefs{ident $self}}, $dbxref;
+  }
+  $self->set_primary_dbxref($dbxrefs->[0]) unless $found_primary;
+}
+
 sub set_primary_dbxref {
   my ($self, $dbxref) = @_;
-  ($dbxref->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($dbxref) . " as a primary_dbxref.");
-  my ($matching_dbxref) = grep { $dbxref->equals($_) } @{$self->get_dbxrefs()};
-  my $matching_dbxref;
+  $self->dirty();
+  ($dbxref->get_object->isa('ModENCODE::Chado::DBXref')) or croak("Can't add a " . ref($dbxref) . " as a primary_dbxref.");
+  my ($matching_dbxref) = grep { $dbxref->get_id == $_->get_id } $self->get_dbxrefs;
   if (!$matching_dbxref) {
     $self->add_dbxref($dbxref);
     $matching_dbxref = $dbxref;
@@ -338,13 +462,15 @@ sub set_primary_dbxref {
 
 sub set_type {
   my ($self, $type) = @_;
-  ($type->isa('ModENCODE::Chado::CVTerm')) or croak("Can't add a " . ref($type) . " as a type.");
+  $self->dirty();
+  ($type->get_object->isa('ModENCODE::Chado::CVTerm')) or croak("Can't add a " . ref($type) . " as a type.");
   $type{ident $self} = $type;
 }
 
 sub set_organism {
   my ($self, $organism) = @_;
-  ($organism->isa('ModENCODE::Chado::Organism')) or Carp::confess("Can't add a " . ref($organism) . " as an organism.");
+  $self->dirty();
+  ($organism->get_object->isa('ModENCODE::Chado::Organism')) or Carp::confess("Can't add a " . ref($organism) . " as an organism.");
   $organism{ident $self} = $organism;
 }
 
@@ -360,117 +486,23 @@ sub add_analysisfeature {
   push @{$analysisfeatures{ident $self}}, $analysisfeature;
 }
 
+sub get_relationship_ids {
+  my $self = shift;
+  return map { $_->get_id } @{$relationships{ident $self}}
+}
+
+sub get_relationships {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $relationships = $relationships{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$relationships : @$relationships;
+}
+
 sub add_relationship {
   my ($self, $relationship) = @_;
-  ($relationship->isa('ModENCODE::Chado::FeatureRelationship')) or Carp::confess("Can't add a " . ref($relationship) . " as an relationship.");
-#  if (!scalar(grep { $_->equals($relationship) } @{$self->get_relationships()})) {
-    push @{$relationships{ident $self}}, $relationship;
-#  }
-}
-
-sub equals {
-  my ($self, $other) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless ($self->get_name() eq $other->get_name() && $self->get_uniquename() eq $other->get_uniquename() && $self->get_residues() eq $other->get_residues() && $self->get_seqlen() eq $other->get_seqlen() && $self->get_timeaccessioned() eq $other->get_timeaccessioned() && $self->get_timelastmodified() eq $other->get_timelastmodified());
-  if ($self->get_type()) {
-    return 0 unless $other->get_type();
-    return 0 unless $self->get_type()->equals($other->get_type());
-  } else {
-    return 0 if $other->get_type();
-  }
-
-  if ($self->get_organism()) {
-    return 0 unless $other->get_organism();
-    return 0 unless $self->get_organism()->equals($other->get_organism());
-  } else {
-    return 0 if $other->get_organism();
-  }
-
-  my @locations = @{$self->get_locations()};
-  return 0 unless scalar(@locations) == scalar(@{$other->get_locations()});
-  foreach my $location (@locations) {
-    return 0 unless scalar(grep { $_->equals($location) } @{$other->get_locations()});
-  }
-
-  my @analysisfeatures = @{$self->get_analysisfeatures()};
-  return 0 unless scalar(@analysisfeatures) == scalar(@{$other->get_analysisfeatures()});
-  foreach my $analysisfeature (@analysisfeatures) {
-    return 0 unless scalar(grep { $_->equals($analysisfeature) } @{$other->get_analysisfeatures()});
-  }
-
-  my @dbxrefs = @{$self->get_dbxrefs()};
-  return 0 unless scalar(@dbxrefs) == scalar(@{$other->get_dbxrefs()});
-  foreach my $dbxref (@dbxrefs) {
-    return 0 unless scalar(grep { $_->equals($dbxref) } @{$other->get_dbxrefs()});
-  }
-
-  if ($self->get_primary_dbxref()) {
-    return 0 unless $other->get_primary_dbxref();
-    return 0 unless $self->get_primary_dbxref()->equals($other->get_primary_dbxref());
-  } else {
-    return 0 if $other->get_primary_dbxref();
-  }
-
-#  my @relationships = @{$self->get_relationships()};
-#  return 0 unless scalar(@relationships) == scalar(@{$other->get_relationships()});
-#  foreach my $relationship (@relationships) {
-#    return 0 unless scalar(grep { $_->equals($relationship, $self) } @{$other->get_relationships()});
-#  }
-
-  return 1;
-}
-
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::Feature({
-      'chadoxml_id' => $self->get_chadoxml_id(),
-      'name' => $self->get_name(),
-      'uniquename' => $self->get_uniquename(),
-      'residues' => $self->get_residues(),
-      'seqlen' => $self->get_seqlen(),
-      'timeaccessioned' => $self->get_timeaccessioned(),
-      'timelastmodified' => $self->get_timelastmodified(),
-    });
-  $clone->set_type($self->get_type()->clone()) if $self->get_type();
-  $clone->set_organism($self->get_organism()->clone()) if $self->get_organism();
-  foreach my $location (@{$self->get_locations()}) {
-    $clone->add_location($location->clone());
-  }
-  foreach my $analysisfeature (@{$self->get_analysisfeatures()}) {
-    $clone->add_analysisfeature($analysisfeature->clone());
-  }
-  foreach my $relationship (@{$self->get_relationships()}) {
-    $clone->add_relationship($relationship->clone_for($self, $clone));
-  }
-  foreach my $dbxref (@{$self->get_dbxrefs()}) {
-    $clone->add_dbxref($dbxref->clone($self));
-  }
-  $clone->set_primary_dbxref($self->get_primary_dbxref()->clone()) if $self->get_primary_dbxref();
-  return $clone;
-}
-
-sub mimic {
-  my ($self, $other) = @_;
-  if (ref($self) ne ref($other)) {
-    log_error "A " . ref($self) . " cannot mimic a " . ref($other);
-    return;
-  }
-  $chadoxml_id{ident $self} = $other->get_chadoxml_id();
-  $name{ident $self} = $other->get_name();
-  $uniquename{ident $self} = $other->get_uniquename();
-  $residues{ident $self} = $other->get_residues();
-  $seqlen{ident $self} = $other->get_seqlen();
-  $timeaccessioned{ident $self} = $other->get_timeaccessioned();
-  $timelastmodified{ident $self} = $other->get_timelastmodified();
-  $is_analysis{ident $self} = $other->get_is_analysis();
-  $organism{ident $self} = $other->get_organism();
-  $type{ident $self} = $other->get_type();
-  $analysisfeatures{ident $self} = $other->get_analysisfeatures();
-  $locations{ident $self} = $other->get_locations();
-  $dbxrefs{ident $self} = $other->get_dbxrefs();
-  $primary_dbxref{ident $self} = $other->get_primary_dbxref();
-#  $relationships{ident $self} = $other->get_relationships();
+  ($relationship->get_object->isa('ModENCODE::Chado::FeatureRelationship')) or Carp::confess("Can't add a " . ref($relationship) . " as a feature relationship.");
+  return if scalar(grep { $relationship->get_id == $_ } $self->get_relationship_ids); # No duplicates
+  push @{$relationships{ident $self}}, $relationship;
 }
 
 sub to_string {
@@ -478,17 +510,26 @@ sub to_string {
   $::SEEN_FEATURES = [] if $::DEPTH == 0;
   $::SEEN_RELATIONSHIPS = [] if $::DEPTH == 0;
   $::DEPTH++;
-  my $string = "feature(" . $self->get_uniquename() . ")";
-#  my $string = "feature('" . $self->get_name() . "'/" . $self->get_uniquename() . "')";
-#  $string .= " of organism " . $self->get_organism()->to_string() if $self->get_organism();
-#  $string .= " with " . scalar(@{$self->get_analysisfeatures()}) . " analysisfeatures";
+  my $string = "feature(" . $self->get_uniquename() . "/" . $self->get_name() . ")";
+  $string .= " of type " . $self->get_type(1)->get_name if $self->get_type();
+  $string .= " of organism " . $self->get_organism(1)->to_string() if $self->get_organism();
+  $string .= " with " . scalar(@{$self->get_analysisfeatures()}) . " analysisfeatures";
+  $string .= " with " . scalar($self->get_dbxrefs) . " DBXrefs";
+  $string .= " with primary DBXref: " . $self->get_primary_dbxref(1)->to_string if $self->get_primary_dbxref;
   $string .= " with " . scalar(@{$self->get_locations()}) . " locations";
+  $string .= "\n";
+  foreach my $analysisfeature (@{$self->get_analysisfeatures}) {
+    $string .= "  " . $analysisfeature->to_string . "\n";
+  }
+  foreach my $dbxref ($self->get_dbxrefs(1)) {
+    $string .= "  " . $dbxref->to_string . "\n";
+  }
   my @okay_obj_relationships_to_follow;
   my @okay_subj_relationships_to_follow;
   my @not_okay_obj_relationships_to_follow;
   my @not_okay_subj_relationships_to_follow;
   push @$::SEEN_FEATURES, $self;
-  foreach my $rel (@{$self->get_relationships()}) {
+  foreach my $rel ($self->get_relationships(1)) {
     next if (scalar(grep { $rel == $_ } @$::SEEN_RELATIONSHIPS));
     push @$::SEEN_RELATIONSHIPS, $rel;
 
@@ -519,16 +560,16 @@ sub to_string {
     $spaces .= "  ";
   }
   foreach my $relationship (@okay_obj_relationships_to_follow) {
-    $string .= "${spaces}  OBJ: this feature " . $relationship->get_type()->get_name() . " the above feature; " . $relationship->get_object()->to_string() . "\n";
+    $string .= "${spaces}  OBJ: this feature " . $relationship->get_type(1)->get_name() . " the above feature; " . $relationship->get_object(1)->to_string() . "\n";
   }
   foreach my $relationship (@okay_subj_relationships_to_follow) {
-    $string .= "${spaces}  SUBJ: the above feature " . $relationship->get_type()->get_name() . " " . $relationship->get_subject()->to_string() . "\n";
+    $string .= "${spaces}  SUBJ: the above feature " . $relationship->get_type(1)->get_name() . " " . $relationship->get_subject(1)->to_string() . "\n";
   }
   foreach my $relationship (@not_okay_obj_relationships_to_follow) {
-    $string .= "${spaces}  SEEN OBJ: this feature " . $relationship->get_type()->get_name() . " the above feature; " . $relationship->get_object()->get_uniquename() . "\n";
+    $string .= "${spaces}  SEEN OBJ: this feature " . $relationship->get_type(1)->get_name() . " the above feature; " . $relationship->get_object(1)->get_uniquename() . "\n";
   }
   foreach my $relationship (@not_okay_subj_relationships_to_follow) {
-    $string .= "${spaces}  SEEN SUBJ: the above feature " . $relationship->get_type()->get_name() . " " . $relationship->get_subject()->get_uniquename() . "\n";
+    $string .= "${spaces}  SEEN SUBJ: the above feature " . $relationship->get_type(1)->get_name() . " " . $relationship->get_subject(1)->get_uniquename() . "\n";
   }
   foreach my $srcfeature (@okay_srcfeatures) {
     $string .= "${spaces}  SRCFEATURE: " . $srcfeature->to_string() . "\n";
@@ -539,6 +580,14 @@ sub to_string {
   $string .= "${spaces})" if (scalar(@okay_subj_relationships_to_follow) || scalar(@okay_obj_relationships_to_follow) || scalar(@not_okay_subj_relationships_to_follow) || scalar(@not_okay_obj_relationships_to_follow) || scalar(@okay_srcfeatures) || scalar(@not_okay_srcfeatures));
   $::DEPTH--;
   return $string;
+}
+
+sub save {
+  my $self = shift;
+  if ($dirty{ident $self}) {
+    $dirty{ident $self} = 0;
+    ModENCODE::Cache::save_feature($self);
+  }
 }
 
 1;

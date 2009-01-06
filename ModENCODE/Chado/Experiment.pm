@@ -234,17 +234,49 @@ L<http://www.modencode.org>.
 =cut
 use strict;
 use Class::Std;
+use ModENCODE::Cache;
 use Carp qw(croak carp);
 
-
 # Attributes
-my %chadoxml_id             :ATTR( :name<chadoxml_id>,         :default<undef> );
-my %uniquename              :ATTR( :name<uniquename>,          :default<undef> );
+my %experiment_id           :ATTR( :get<id>,                  :default<1> );
+my %uniquename              :ATTR( :name<uniquename>,          :default<''> );
 my %description             :ATTR( :name<description>,         :default<''> );
 
 # Relationships
-my %properties              :ATTR( :get<properties>,              :default<[]> );
-my %applied_protocol_slots  :ATTR( :get<applied_protocol_slots>,  :default<[]> );
+my %properties              :ATTR( :set<properties>,              :init_arg<properties>, :default<[]> );
+my %applied_protocol_slots  :ATTR( :get<applied_protocol_slots>,  :init_arg<applied_protocol_slots>, :default<[]> );
+
+sub new_no_cache {
+  return Class::Std::new(@_);
+}
+
+#sub new {
+#  my $temp = Class::Std::new(@_);
+#  # Don't be fooled, get_cached_experiment just gets the one-and-only experiment out
+#  # of the cache; $temp is basically ignored
+#  my $cached_experiment = ModENCODE::Cache::get_cached_experiment($temp);
+#
+#  if ($cached_experiment) {
+#    # Update any cached experiment
+#    my $need_save = 0;
+#    if ($temp->get_uniquename && !($cached_experiment->get_uniquename())) {
+#      $cached_experiment->set_uniquename($temp->get_uniquename);
+#      $need_save = 1;
+#    }
+#    if ($temp->get_description && !($cached_experiment->get_description())) {
+#      $cached_experiment->set_description($temp->get_description);
+#      $need_save = 1;
+#    }
+#    ModENCODE::Cache::save_experiment($cached_experiment) if $need_save; # For update
+#    return $cached_experiment;
+#  }
+#
+#  # This is a new ExperimentProp
+#  my $self = $temp;
+#  ModENCODE::Cache::save_experiment($self);
+#  ModENCODE::Cache::add_experiment_to_cache($self);
+#  return $self;
+#}
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
@@ -286,6 +318,13 @@ sub add_applied_protocol_to_slot {
   push @{$applied_protocol_slots{ident $self}->[$slot]}, $applied_protocol;
 }
 
+sub get_properties {
+  my $self = shift;
+  my $get_cached_object = shift || 0;
+  my $properties = $properties{ident $self};
+  return $get_cached_object ? map { $_->get_object } @$properties : @$properties;
+}
+
 sub get_num_applied_protocol_slots {
   my ($self) = @_;
   return scalar(@{$self->get_applied_protocol_slots()});
@@ -310,7 +349,7 @@ sub add_properties {
 
 sub add_property {
   my ($self, $property) = @_;
-  ($property->isa('ModENCODE::Chado::ExperimentProp')) or croak("Can't add a " . ref($property) . " as a property.");
+  ($property->isa('ModENCODE::Cache::ExperimentProp')) or croak("Can't add a " . ref($property) . " as a property.");
   push @{$properties{ident $self}}, $property;
 }
 
@@ -318,7 +357,7 @@ sub to_string {
   my ($self) = @_;
   my $string = "Experiment " . $self->get_uniquename() . "(" . $self->get_description() . ")\n";
   $string .= "  with properties [";
-  $string .= "\n    " . join("\n    ", map { $_->to_string() } @{$self->get_properties()}) . "\n  " if scalar(@{$self->get_properties()});
+  $string .= "\n    " . join("\n    ", map { $_->get_object->to_string() } $self->get_properties) . "\n  " if scalar($self->get_properties);
   $string .= "]\n  has applied_protocols:\n";
   my @proto_slots = @{$self->get_applied_protocol_slots()};
   for (my $i = 0; $i < scalar(@proto_slots); $i++) {
@@ -357,23 +396,9 @@ sub equals {
   return 1;
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::Experiment({
-      'chadoxml_id' => $self->get_chadoxml_id(),
-      'uniquename' => $self->get_uniquename(),
-      'description' => $self->get_description(),
-    });
-  my $applied_protocol_slots = $self->get_applied_protocol_slots();
-  for (my $i = 0; $i < scalar(@{$applied_protocol_slots}); $i++) {
-    foreach my $applied_protocol (@{$applied_protocol_slots->[$i]}) {
-      $clone->add_applied_protocol_to_slot($applied_protocol, $i);
-    }
-  }
-  foreach my $property (@{$self->get_properties()}) {
-    $clone->add_property($property->clone());
-  }
-  return $clone;
+sub save {
+  ModENCODE::Cache::save_experiment(shift);
 }
+
 
 1;

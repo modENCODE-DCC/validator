@@ -151,7 +151,6 @@ use strict;
 use Class::Std;
 use Parse::RecDescent;
 use Carp qw(croak carp);
-use Data::Dumper;
 
 use ModENCODE::Chado::AppliedProtocol;
 use ModENCODE::Chado::Protocol;
@@ -161,6 +160,8 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::Attribute;
+use ModENCODE::Chado::ProtocolAttribute;
+use ModENCODE::Chado::DatumAttribute;
 use ModENCODE::Chado::Experiment;
 use ModENCODE::ErrorHandler qw(log_error);
 
@@ -236,6 +237,7 @@ sub BUILD {
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
+                                            use Data::Dumper;
                                             return $self->create_protocol($value, $item[2], $item[3], $item[4], $values);
                                           };
                                         }
@@ -273,7 +275,7 @@ sub BUILD {
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
-                                            my $value = shift(@$values);
+                                            my $value = shift(@$values) || undef;
                                             my $type = $item[5][0] || undef;
                                             return $self->create_datum($item[1], $value, $item[3], $type, $item[7], $item[8], $values);
                                           };
@@ -416,8 +418,7 @@ sub BUILD {
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
-                                            my $value = shift(@$values);
-                                            return $self->create_attribute($value, $item[1], $item[3][0], $item[5][0], $item[7], $values);
+                                            return [ $item[1], $item[3][0], $item[5][0], $item[7], $values];
                                           };
                                         }
 
@@ -480,6 +481,7 @@ sub parse {
   $document =~ s/\A [" ]*/\t/gxms;
   $document =~ s/\015(?![\012])/\n/g; # Replace old-style (thanks, Excel) Mac CR endings with LFs
   my $parser = $self->_get_parser();
+
   open DOC, '<', \$document;
 
   # Parse header line
@@ -528,9 +530,9 @@ sub parse {
     for (my $j = 0; $j < scalar(@{$applied_protocol_slots[$i]}); $j++) {
       my $previous_applied_protocol = $applied_protocol_slots[$i][$j];
       my $next_applied_protocol = $applied_protocol_slots[$i+1][$j];
-      my $data = $previous_applied_protocol->get_output_data();
-      if (scalar(@$data)) {
-        foreach my $datum (@$data) {
+      my @data = $previous_applied_protocol->get_output_data();
+      if (scalar(@data)) {
+        foreach my $datum (@data) {
           $next_applied_protocol->add_input_datum($datum);
         }
       }
@@ -541,11 +543,25 @@ sub parse {
     for (my $j = 0; $j < scalar(@{$applied_protocol_slots[$i]}); $j++) {
       my $previous_applied_protocol = $applied_protocol_slots[$i][$j];
       my $next_applied_protocol = $applied_protocol_slots[$i+1][$j];
-      my $data = $previous_applied_protocol->get_output_data();
-      if (!scalar(@$data)) {
+      my @data = $previous_applied_protocol->get_output_data();
+      if (!scalar(@data)) {
         # No outputs, so we need to create an anonymous link
-        grep { $previous_applied_protocol->equals($_->{'applied_protocol'}) } @anonymous_data_by_applied_protocol;
-        my ($existing_anonymous_datum) = map { $_->{'anonymous_datum'} } grep { $previous_applied_protocol->equals($_->{'applied_protocol'}) } @anonymous_data_by_applied_protocol;
+
+        # Is there another protocol that's identical but for an additional 
+        # anonymous datum?
+        
+        my ($existing_anonymous_datum) = map { $_->{'anonymous_datum'} } grep { 
+          $previous_applied_protocol->get_protocol_id == $_->{'applied_protocol'}->get_protocol_id &&
+          data_array_equals(
+            [ $previous_applied_protocol->get_input_data ], 
+            [ $_->{'applied_protocol'}->get_input_data ]
+          ) &&
+          data_array_equals(
+            [ $previous_applied_protocol->get_output_data ],
+            [ grep { !$_->get_object->is_anonymous } $_->{'applied_protocol'}->get_output_data ]
+          )
+        } @anonymous_data_by_applied_protocol;
+
         # Don't create a new anonymous datum if it's to be the output of an identical previous protocol
         if (!$existing_anonymous_datum) {
           my $type = new ModENCODE::Chado::CVTerm({
@@ -558,8 +574,9 @@ sub parse {
               'heading' => "Anonymous Datum #" . $anonymous_data_num++,
               'type' => $type,
               'anonymous' => 1,
+              'value' => '',
             });
-          push @anonymous_data_by_applied_protocol, { 'anonymous_datum' => $anonymous_datum, 'applied_protocol' => $previous_applied_protocol->clone() };
+          push @anonymous_data_by_applied_protocol, { 'anonymous_datum' => $anonymous_datum, 'applied_protocol' => $previous_applied_protocol };
           $previous_applied_protocol->add_output_datum($anonymous_datum);
           $next_applied_protocol->add_input_datum($anonymous_datum);
         } else {
@@ -570,9 +587,7 @@ sub parse {
     }
   }
 
-  for (my $i = 0; $i < $num_applied_protocols; $i++) {
-    $applied_protocol_slots[$i] = $self->_reduce_applied_protocols($applied_protocol_slots[$i]);
-  }
+  $self->_reduce_applied_protocols(\@applied_protocol_slots);
 
   my $experiment = new ModENCODE::Chado::Experiment({
       'applied_protocol_slots' => \@applied_protocol_slots,
@@ -581,24 +596,71 @@ sub parse {
   return $experiment;
 }
 
+# Reduce protocols based on equal inputs, not equal i/o?
+#sub _reduce_applied_protocols : PRIVATE {
+#  my ($self, $applied_protocol_slots) = @_;
+#  my $num_applied_protocols = scalar(@$applied_protocol_slots);
+#  # Remove applied protocols that are actually duplicates
+#  for (my $i = 0; $i < $num_applied_protocols; $i++) {
+#    my $applied_protocols = $applied_protocol_slots->[$i];
+#    my @merged_applied_protocols;
+#    foreach my $applied_protocol (@$applied_protocols) {
+#      if (!scalar(grep { $_->equals($applied_protocol) } @merged_applied_protocols)) {
+#        push @merged_applied_protocols, $applied_protocol;
+#      }
+#    }
+#    $applied_protocol_slots->[$i] = \@merged_applied_protocols;
+#  }
+#  # Collapse protocols that inherit from the same inputs but lead to different outputs
+#  for (my $i = 0; $i < $num_applied_protocols; $i++) {
+#    my $applied_protocols = $applied_protocol_slots->[$i];
+#    my %seen_aps_by_inputs;
+#    foreach my $applied_protocol (@$applied_protocols) {
+#      my $input_ids = join(',', sort($applied_protocol->get_input_data_ids));
+#      if (!$seen_aps_by_inputs{$input_ids}) {
+#        $seen_aps_by_inputs{$input_ids} = $applied_protocol;
+#      } else {
+#        # Seen these inputs before, assuming there are different outputs?
+#        my @output_ids = sort($applied_protocol->get_output_data_ids);
+#        my @existing_output_ids = sort($seen_aps_by_inputs{$input_ids}->get_output_data_ids);
+#        if (join(',', @output_ids) ne join(',', @existing_output_ids)) {
+#          log_error "Combining applied protocols with the same inputs but different outputs.", "debug";
+#          foreach my $output_datum ($applied_protocol->get_output_data) {
+#            if (scalar(grep { $output_datum->get_id != $_ } @existing_output_ids)) {
+#              # If this datum isn't on the AP, then add it
+#              $seen_aps_by_inputs{$input_ids}->add_output_datum($output_datum);
+#            }
+#          }
+#        }
+#      }
+#    }
+#    $applied_protocol_slots->[$i] = [ values(%seen_aps_by_inputs) ];
+#  }
+#}
+
 sub _reduce_applied_protocols : PRIVATE {
-  my ($self, $applied_protocols) = @_;
-  my @merged_applied_protocols;
-  foreach my $applied_protocol (@$applied_protocols) {
-    if (!scalar(grep { $_->equals($applied_protocol) } @merged_applied_protocols)) {
-      push @merged_applied_protocols, $applied_protocol;
+  my ($self, $applied_protocol_slots) = @_;
+  my $num_applied_protocols = scalar(@$applied_protocol_slots);
+  for (my $i = 0; $i < $num_applied_protocols; $i++) {
+    my @merged_applied_protocols;
+    my $applied_protocols = $applied_protocol_slots->[$i];
+    foreach my $applied_protocol (@$applied_protocols) {
+      if (!scalar(grep { $_->equals($applied_protocol) } @merged_applied_protocols)) {
+        push @merged_applied_protocols, $applied_protocol;
+      }
     }
+    $applied_protocol_slots->[$i] = \@merged_applied_protocols;
   }
-  return \@merged_applied_protocols;
 }
 
 sub _get_parser : RESTRICTED {
   my ($self) = @_;
-  $::RD_ERRORS++;
-  $::RD_WARN++;
-  $::RD_HINT++;
   $Parse::RecDescent::skip = '[ "]*\t[ "]*';
   my $parser = new Parse::RecDescent($grammar{ident $self});
+  $::RD_ERRORS=1;
+  $::RD_WARN=1;
+  $::RD_HINT=1;
+  return $parser;
 }
 
 sub create_datum {
@@ -613,16 +675,18 @@ sub create_datum {
 
   # Map functions to values; order matters (should match datums)
   my ($termsource) = map { &$_($self, $values, $value) } @$termsource;
+
   my @attributes = map { &$_($self, $values) } @$attributes;
+  @attributes = map { $self->create_datum_attribute($datum, @$_) } @attributes;
 
   # Term source
   if ($termsource) {
-    $datum->set_termsource($termsource);
+    $datum->get_object->set_termsource($termsource);
   }
 
   # Attributes
   foreach my $attribute (@attributes) {
-    $datum->add_attribute($attribute);
+    $datum->get_object->add_attribute($attribute);
   }
 
   # Type
@@ -634,7 +698,7 @@ sub create_datum {
             'name' => $cv,
           }),
       });
-    $datum->set_type($type);
+    $datum->get_object->set_type($type);
   }
 
   return $datum;
@@ -642,24 +706,29 @@ sub create_datum {
 
 sub create_protocol {
   my ($self, $name, $termsource, $attributes, $data, $values) = @_;
+
   my $protocol = new ModENCODE::Chado::Protocol({
       'name'       => $name,
     });
 
   # Map functions to values; order matters (should match inputs)
   my ($termsource) = map { &$_($self, $values, $name) } @$termsource;
+
   my @attributes = map { &$_($self, $values) } @$attributes;
-  my @data = map { &$_($self, $values) } @$data;
+  @attributes = map { $self->create_protocol_attribute($protocol, @$_) } @attributes;
+
+  my @data = map { &$_($self, $values); } @$data;
 
   # Term source
   if ($termsource) {
-    $protocol->set_termsource($termsource);
+    $protocol->get_object->set_termsource($termsource);
   }
 
   # Attributes
   foreach my $attribute (@attributes) {
-    $protocol->add_attribute($attribute);
+    $protocol->get_object->add_attribute($attribute);
   }
+
 
   my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({
       'protocol'       => $protocol,
@@ -702,12 +771,14 @@ sub create_termsource {
   return $dbxref;
 }
 
-sub create_attribute {
-  my ($self, $value, $heading, $name, $type, $termsource, $values) = @_;
-  my $attribute = new ModENCODE::Chado::Attribute({
+sub create_protocol_attribute {
+  my ($self, $protocol, $heading, $name, $type, $termsource, $values) = @_;
+  my $value = shift @$values;
+  my $attribute = new ModENCODE::Chado::ProtocolAttribute({
       'heading' => $heading,
       'name' => $name,
       'value' => $value,
+      'protocol' => $protocol,
     });
 
   # Map functions to values; order matters (should match inputs)
@@ -730,15 +801,72 @@ sub create_attribute {
             'name' => 'xsd',
           }),
       });
-    $attribute->set_type($type);
+    $attribute->get_object->set_type($type);
   }
 
   # Term source
   if ($termsource) {
-    $attribute->set_termsource($termsource);
+    $attribute->get_object->set_termsource($termsource);
   }
 
   return $attribute;
+}
+
+sub create_datum_attribute {
+  my ($self, $datum, $heading, $name, $type, $termsource, $values) = @_;
+
+  my $value = shift @$values;
+  # Map functions to values; order matters (should match inputs)
+  my ($termsource) = map { &$_($self, $values, $value) } @$termsource;
+
+  # Type
+  if ($type) {
+    my ($cv, $cvterm) = split(/:/, $type, 2);
+    $type = new ModENCODE::Chado::CVTerm({
+        'name' => $cvterm,
+        'cv' => new ModENCODE::Chado::CV({
+            'name' => $cv,
+          }),
+      });
+  } else {
+    $type = new ModENCODE::Chado::CVTerm({
+        'name' => 'string',
+        'cv' => new ModENCODE::Chado::CV({
+            'name' => 'xsd',
+          }),
+      });
+  }
+
+  my $attribute = new ModENCODE::Chado::DatumAttribute({
+      'heading' => $heading,
+      'name' => $name,
+      'value' => $value,
+      'datum' => $datum,
+      'type' => $type,
+    });
+
+
+  # Term source
+  if ($termsource) {
+    $attribute->get_object->set_termsource($termsource);
+  }
+
+  return $attribute;
+}
+
+sub data_array_equals : PRIVATE {
+  my ($a, $b) = @_;
+  
+  return 0 unless (scalar(@$a) == scalar(@$b));
+
+  my @arra = map { $_->get_id } @$a;
+  my @arrb = map { $_->get_id } @$b;
+
+  foreach my $aid (@arra) {
+    return 0 unless grep { $_ == $aid } @arrb;
+  }
+    
+  return 1;
 }
 
 1;

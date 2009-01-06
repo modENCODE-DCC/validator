@@ -125,9 +125,22 @@ use strict;
 use Carp qw(croak carp);
 use Config::IniFiles;
 use ModENCODE::Validator::CVHandler;
+use Cwd qw(abs_path);
 
 my $config_object;
 my $cvhandler;
+my $root_dir;
+
+BEGIN {
+  $root_dir = abs_path($0);
+  $root_dir =~ s/[^\/]*$//;
+  $root_dir = "./" unless $root_dir =~ /^\//;
+  $root_dir .= "/" unless $root_dir =~ /\/$/;
+}
+
+sub get_root_dir {
+  return $root_dir;
+}
 
 sub get_cfg {
   croak "The ModENCODE::Config object has not been initialized" unless $config_object;
@@ -142,6 +155,11 @@ sub set_cfg {
     $config_object = new Config::IniFiles(
       -file => $inifile
     );
+    if (!$config_object) {
+      print STDERR "Couldn't parse $inifile!\n";
+      print STDERR "  " . join("\n  ", @Config::IniFiles::errors) . "\n";
+      exit;
+    }
   }
 }
 
@@ -162,5 +180,6 @@ sub get_cvhandler {
   }
   return $cvhandler;
 }
+
 
 1;

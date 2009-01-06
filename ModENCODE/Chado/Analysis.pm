@@ -156,57 +156,74 @@ use Class::Std;
 use Carp qw(croak carp);
 
 # Attributes
-my %chadoxml_id      :ATTR( :name<chadoxml_id>,         :default<undef> );
+my %analysis_id      :ATTR( :name<id>,                  :default<undef> );
+my %program          :ATTR( :get<program>,              :init_arg<program> );
+my %programversion   :ATTR( :get<programversion>,       :init_arg<programversion> );
+my %sourcename       :ATTR( :get<sourcename>,           :init_arg<sourcename>, :default<''> );
+
 my %name             :ATTR( :name<name>,                :default<undef> );
 my %description      :ATTR( :name<description>,         :default<undef> );
-my %program          :ATTR( :name<program>,             :default<undef> );
-my %programversion   :ATTR( :name<programversion>,      :default<undef> );
 my %algorithm        :ATTR( :name<algorithm>,           :default<undef> );
-my %sourcename       :ATTR( :name<sourcename>,          :default<undef> );
 my %sourceversion    :ATTR( :name<sourceversion>,       :default<undef> );
 my %sourceuri        :ATTR( :name<sourceuri>,           :default<undef> );
 my %timeexecuted     :ATTR( :name<timeexecuted>,        :default<undef> );
 
-sub equals {
-  my ($self, $other) = @_;
-  return 0 unless ref($self) eq ref($other);
-
-  return 0 unless (
-    $self->get_name() eq $other->get_name() && 
-    $self->get_description() eq $other->get_description() &&
-    $self->get_program() eq $other->get_program() &&
-    $self->get_programversion() eq $other->get_programversion() &&
-    $self->get_algorithm() eq $other->get_algorithm() &&
-    $self->get_sourcename() eq $other->get_sourcename() &&
-    $self->get_sourceversion() eq $other->get_sourceversion() &&
-    $self->get_sourceuri() eq $other->get_sourceuri() &&
-    $self->get_timeexecuted() eq $other->get_timeexecuted()
-  );
-
-  return 1;
+sub new_no_cache {
+  return Class::Std::new(@_);
 }
 
-sub clone {
-  my ($self) = @_;
-  my $clone = new ModENCODE::Chado::Feature({
-      'chadoxml_id' => $self->get_chadoxml_id(),
-      'name' => $self->get_name(), 
-      'description' => $self->get_description(),
-      'program' => $self->get_program(),
-      'programversion' => $self->get_programversion(),
-      'algorithm' => $self->get_algorithm(),
-      'sourcename' => $self->get_sourcename(),
-      'sourceversion' => $self->get_sourceversion(),
-      'sourceuri' => $self->get_sourceuri(),
-      'timeexecuted' => $self->get_timeexecuted(),
-    });
-  return $clone;
+sub new {
+  my $temp = Class::Std::new(@_);
+  my $cached_analysis = ModENCODE::Cache::get_cached_analysis($temp);
+
+  if ($cached_analysis) {
+    # Update any cached analysis
+    my $need_save = 0;
+
+    if ($temp->get_name && !($cached_analysis->get_object->get_name)) {
+      $cached_analysis->get_object->set_name($temp->get_name);
+      $need_save = 1;
+    }
+    if ($temp->get_description && !($cached_analysis->get_object->get_description)) {
+      $cached_analysis->get_object->set_description($temp->get_description);
+      $need_save = 1;
+    }
+    if ($temp->get_algorithm && !($cached_analysis->get_object->get_algorithm)) {
+      $cached_analysis->get_object->set_algorithm($temp->get_algorithm);
+      $need_save = 1;
+    }
+    if ($temp->get_sourceversion && !($cached_analysis->get_object->get_sourceversion)) {
+      $cached_analysis->get_object->set_sourceversion($temp->get_sourceversion);
+      $need_save = 1;
+    }
+    if ($temp->get_sourceuri && !($cached_analysis->get_object->get_sourceuri)) {
+      $cached_analysis->get_object->set_sourceuri($temp->get_sourceuri);
+      $need_save = 1;
+    }
+    if ($temp->get_timeexecuted && !($cached_analysis->get_object->get_timeexecuted)) {
+      $cached_analysis->get_object->set_timeexecuted($temp->get_timeexecuted);
+      $need_save = 1;
+
+    }
+    ModENCODE::Cache::save_analysis($cached_analysis->get_object) if $need_save;
+    return $cached_analysis;
+  }
+
+  # This is a new analysis
+  my $self = $temp;
+  return ModENCODE::Cache::add_analysis_to_cache($self);
 }
+
 
 sub to_string {
   my ($self) = @_;
-  my $string = "analysis '" . $self->get_name() . ": " . $self->get_description() . "'";
+  my $string = "analysis '" . $self->get_name() . ": " . $self->get_sourcename() . "'";
+  $string .= " (" . $self->get_program() . "." . $self->get_programversion() . ")";
   return $string;
+}
+
+sub save {
+  ModENCODE::Cache::save_analysis(shift);
 }
 
 1;
