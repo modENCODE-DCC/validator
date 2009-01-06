@@ -378,9 +378,7 @@ sub add_cv {
   }
 
   # Have we already fetched this URL?
-  my $root_dir = $0;
-  $root_dir =~ s/[^\/]*$//;
-  $root_dir = "./" unless $root_dir =~ /\//;
+  my $root_dir = ModENCODE::Config::get_root_dir();
   my $cache_filename = $cvurl . "." . $cvurltype;
   $cache_filename =~ s/\//!/g;
   $cache_filename = $root_dir . "ontology_cache/" . $cache_filename;
@@ -429,6 +427,11 @@ sub add_cv {
 
   $cvs{ident $self}->{$cvurl} = $newcv;
   return 1;
+}
+
+sub get_cv_by_url {
+  my ($self, $cvurl) = @_;
+  return $cvs{ident $self}->{$cvurl};
 }
 
 sub is_valid_term {
@@ -520,6 +523,7 @@ sub is_valid_accession {
 
     $cv = $self->get_cv_by_name($cvname);
   }
+  if ($cv->{'urltype'} eq '') { return $accession; } # Nothing doing if there's no associated CV (skip)
   if (!$cv->{'accessions'}->{$accession}) {
     # Haven't validated this accession one way or the other
     if (scalar(grep { $_->acc =~ m/:\Q$accession\E$/ }  @{$cv->{'nodes'}})) {
@@ -536,7 +540,7 @@ sub get_accession_for_term {
   my $cv = $self->get_cv_by_name($cvname);
   croak "Can't find CV $cvname, even though we should've validated by now" unless $cv;
 
-  if ($cv->{'urltype'} eq '') { return ($term, $cvname); } # Nothing doing if there's no associated CV (skip)
+  if ($cv->{'urltype'} eq '') { return $term; } # Nothing doing if there's no associated CV (skip)
 
   if ($cv->{'urltype'} =~ m/^URL_DBFields$/) {
     my $res = $self->get_url($cv->{'url'} . $term);
@@ -635,7 +639,6 @@ sub get_term_for_accession {
 
 sub get_db_object_by_cv_name {
   my ($self, $cvname) = @_;
-  #print STDERR "Get a DB by $cvname\n";
   foreach my $cvurl (keys(%{$cvs{ident $self}})) {
     my @names = @{$cvs{ident $self}->{$cvurl}->{'names'}};
     if (scalar(grep { $_ eq $cvname } @names)) {
@@ -730,3 +733,4 @@ sub get_url_for_cv_name : PRIVATE {
 }
 
 1;
+

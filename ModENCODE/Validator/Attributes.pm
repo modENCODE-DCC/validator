@@ -133,148 +133,60 @@ use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %validators                  :ATTR( :default<{}> );
+use constant DEBUG => 1;
 
-sub BUILD {
+my %termsource_validators       :ATTR( :default<{}> );
+my %type_validators             :ATTR( :default<{}> );
+my %experiment                  :ATTR( :name<experiment> );
+
+sub START {
   my ($self, $ident, $args) = @_;
-  $validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Attributes::URL_mediawiki_expansion();
-  $validators{$ident}->{'organism'} = new ModENCODE::Validator::Attributes::Organism();
-}
-
-sub merge {
-  my ($self, $experiment) = @_;
-  #$experiment = $experiment->clone();
-  
-  # Get attributes for data only; don't expand protocol attributes
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      my @protocol_attributes = @{$applied_protocol->get_protocol()->get_attributes()};
-      my @new_attributes;
-      foreach my $attribute (@{$applied_protocol->get_protocol()->get_attributes()}) {
-        if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
-          my $attribute_termsource_type = $attribute->get_termsource()->get_db()->get_description();
-          my $validator = $validators{ident $self}->{$attribute_termsource_type};
-          if ($validator) {
-            my $merged_attributes = $validator->merge($attribute);
-	    if ($merged_attributes) {
-              push @new_attributes, @$merged_attributes;
-	    } else {
-	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
-	    }
-          } else {
-            # Just keep the original attribute
-            push @new_attributes, $attribute;
-          }
-        } elsif ($attribute->get_type() && $attribute->get_type()->get_cv()) {
-          my $attribute_type_source = $attribute->get_type->get_cv()->get_name();
-          my $validator = $validators{ident $self}->{$attribute_type_source};
-          if ($validator) {
-            my $merged_attributes = $validator->merge($attribute);
-	    if ($merged_attributes) {
-              push @new_attributes, @$merged_attributes;
-	    } else {
-	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
-	    }
-          } else {
-            # Just keep the original attribute
-            push @new_attributes, $attribute;
-          }
-        }
-      }
-      $applied_protocol->get_protocol()->set_attributes(\@new_attributes);
-      foreach my $datum (@{$applied_protocol->get_output_data()}, @{$applied_protocol->get_input_data()}) {
-        # Get a copy of the array of attributes (so we can swap them out)
-        my @datum_attributes = @{$datum->get_attributes()};
-        my @new_attributes;
-        foreach my $attribute (@datum_attributes) {
-          if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
-            my $attribute_termsource_type = $attribute->get_termsource()->get_db()->get_description();
-            my $validator = $validators{ident $self}->{$attribute_termsource_type};
-            if ($validator) {
-              my $merged_attributes = $validator->merge($attribute);
-	    if ($merged_attributes) {
-              push @new_attributes, @$merged_attributes;
-	    } else {
-	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
-	    }
-            } else {
-              # Just keep the original attribute
-              push @new_attributes, $attribute;
-            }
-          } elsif ($attribute->get_type() && $attribute->get_type()->get_cv()) {
-            my $attribute_type_source = $attribute->get_type->get_cv()->get_name();
-            my $validator = $validators{ident $self}->{$attribute_type_source};
-            if ($validator) {
-              my $merged_attributes = $validator->merge($attribute);
-	    if ($merged_attributes) {
-              push @new_attributes, @$merged_attributes;
-	    } else {
-	    log_error ("Cannot merge attribute " . $attribute->get_name . " if they do not validate", "error" ) unless $merged_attributes;
-	    }
-            } else {
-              # Just keep the original attribute
-              push @new_attributes, $attribute;
-            }
-          }
-        }
-        $datum->set_attributes(\@new_attributes);
-      }
-    }
-  }
-  return $experiment;
+  $termsource_validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Attributes::URL_mediawiki_expansion();
+  $type_validators{$ident}->{'organism'} = new ModENCODE::Validator::Attributes::Organism();
 }
 
 sub validate {
-  my ($self, $experiment) = @_;
-  #$experiment = $experiment->clone();
+  my $self = shift;
   my $success = 1;
+  my $experiment = $self->get_experiment;
 
-  my @unique_attributes;
-  foreach my $applied_protocol_slots (@{$experiment->get_applied_protocol_slots()}) {
-    foreach my $applied_protocol (@$applied_protocol_slots) {
-      foreach my $attribute (@{$applied_protocol->get_protocol()->get_attributes()}) {
-        if (!scalar(grep { $attribute == $_ } @unique_attributes)) {
-          push @unique_attributes, $attribute;
-        }
-      }
-      foreach my $datum (@{$applied_protocol->get_output_data()}, @{$applied_protocol->get_input_data()}) {
-        foreach my $attribute (@{$datum->get_attributes()}) {
-          # Actual equality, not ->equals, since we want to validate the attributes
-          if (!scalar(grep { $attribute == $_ } @unique_attributes)) {
-            push @unique_attributes, $attribute;
-          }
-        }
-      }
-    }
-  }
+  my @all_attributes = (
+    (map { $_->get_object->get_attributes } ModENCODE::Cache::get_all_objects('protocol')),
+    (map { $_->get_object->get_attributes } ModENCODE::Cache::get_all_objects('data')),
+  );
 
-  # For any attribute with a termsource of type where there exists a validator module
-  foreach my $attribute (@unique_attributes) {
-    if ($attribute->get_termsource() && $attribute->get_termsource()->get_db()) {
-      my $attribute_termsource_type = $attribute->get_termsource()->get_db()->get_description();
-      my $validator = $validators{ident $self}->{$attribute_termsource_type};
+
+  foreach my $attribute_cacheobj (@all_attributes) {
+
+    my $attribute = $attribute_cacheobj->get_object;
+    # For any attribute with a termsource for which there exists a validator module
+    if ($attribute->get_termsource() && $attribute->get_termsource(1)->get_db()) {
+      my $attribute_termsource_type = $attribute->get_termsource(1)->get_db(1)->get_description();
+      my $validator = $termsource_validators{ident $self}->{$attribute_termsource_type};
       if (!$validator) {
         log_error "No validator for attribute " . $attribute->get_heading() . " [" . $attribute->get_name() . "] with term source type $attribute_termsource_type.", "warning";
         next;
       }
-      $validator->add_attribute($attribute);
+      log_error "Adding attribute " . $attribute->get_heading . " [" . $attribute->get_name . "] to validator " . ref($validator) . " because of term source.", "debug";
+      $validator->add_attribute($attribute_cacheobj);
     }
-  }
-  # For any attribute with a type where there exists a validator module
-  foreach my $attribute (@unique_attributes) {
-    if ($attribute->get_type() && $attribute->get_type()->get_cv()) {
-      my $attribute_type_source = $attribute->get_type->get_cv()->get_name();
-      my $validator = $validators{ident $self}->{$attribute_type_source};
+
+    # For any attribute with a type for which there exists a validator module
+    if ($attribute->get_type() && $attribute->get_type(1)->get_cv()) {
+      my $attribute_type_source = $attribute->get_type(1)->get_cv(1)->get_name();
+      my $validator = $type_validators{ident $self}->{$attribute_type_source};
       if (!$validator) {
         log_error "No validator for attribute of type $attribute_type_source.", "warning";
         next;
       }
-      $validator->add_attribute($attribute);
+      log_error "Adding attribute " . $attribute->get_heading . " [" . $attribute->get_name . "] to validator " . ref($validator) . " because of type.", "debug";
+      $validator->add_attribute($attribute_cacheobj);
     }
   }
-  foreach my $validator (values(%{$validators{ident $self}})) {
+
+  # For any attribute with a type where there exists a validator module
+  foreach my $validator (values(%{$termsource_validators{ident $self}}), values(%{$type_validators{ident $self}})) {
     if (!$validator->validate()) {
-      log_error "Attributes columns do not validate", "error";
       return 0;
     }
   }
@@ -282,3 +194,4 @@ sub validate {
 }
 
 1;
+

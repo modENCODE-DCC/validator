@@ -94,6 +94,7 @@ L<http://www.modencode.org>.
 
 =cut
 use strict;
+use constant DEBUG => 0;
 use Exporter 'import';
 use IO::Handle;
 use Class::Std;
@@ -152,11 +153,13 @@ sub _log_error {
   # Standardize the level name
   $level = 'error' if ($level =~ m/error/i);
   $level = 'warning' if ($level =~ m/warning/i);
+  $level = 'debug' if ($level =~ m/debug/i);
   $level = 'notice' if ($level =~ m/notice/i);
   $level = 'error' unless $level;
   my @seen_error = grep { $_ eq $message } @{$self->get_seen_errors()->{$level}};
+  return if ($level eq 'debug' && !DEBUG);
   # Only print if we haven't seen this message before or if it's a notice
-  if ((!scalar(@seen_error) || $level eq 'notice') && length($message)) {
+  if ((!scalar(@seen_error) || $level eq 'notice' || $level eq 'debug') && length($message)) {
     my $levelprefix;
     $levelprefix = "Warning: " if ($level eq 'warning');
     $levelprefix = "Error: " if ($level eq 'error');
@@ -168,8 +171,13 @@ sub _log_error {
       $spaces .= "    ";
     }
     if ($self->get_show_logtype()) {
-      my $logtype = uc($level . ":");
-      while (length($logtype) < length("WARNING:    ")) {
+      my $logtype = uc($level);
+      #$logtype .= " (" . int($self->process_size()/1024) . "MB)" if DEBUG;
+     
+      $logtype .= ":";
+      my $maxlength = length("WARNING:    ");
+      $maxlength += 7 if DEBUG;
+      while (length($logtype) < $maxlength) {
         $logtype .= " ";
       }
       print STDERR $logtype unless $change_indent eq ".";
@@ -190,5 +198,21 @@ sub _log_error {
 
   $indent{ident $self}++ if ($change_indent eq ">");
 }
+
+sub process_size {
+  my $size;
+
+  open PIPE, "/bin/ps wwaxo 'pid,rss' |";
+  while(<PIPE>) {
+    next unless /^\s*$$\s/;
+    s/^\s+//g;
+    chomp;
+    $size = (split(' ', $_))[1];
+  }
+  close PIPE;
+
+  return $size;
+}
+
 
 1;

@@ -155,7 +155,6 @@ use strict;
 # Attributes
 my %version          :ATTR( :name<version>, :default<0> );
 my %name             :ATTR( :name<name>, :default<undef> );
-my %is_complete      :ATTR( :name<is_complete>, :default<undef> );
 
 # Relationships
 my %values           :ATTR( :get<values>, :default<[]> );
@@ -287,7 +286,6 @@ sub to_string {
   my ($self) = @_;
   my $string = "Form: " . $self->get_name() . "." . $self->get_version();
   $string .= "\n  " . join("\n  ", map { $_->to_string() } @{$self->get_values()}) . "\n";
-  $string .= "Complete? " . $self->get_is_complete();
   return $string;
 }
 

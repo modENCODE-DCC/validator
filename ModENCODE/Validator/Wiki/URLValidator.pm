@@ -121,9 +121,8 @@ sub START {
 
 sub get_url {
   my ($self, $url) = @_;
-  my $escaped_url = $url;
-  $escaped_url =~ s/ /_/g;
-  return $useragent{ident $self}->request(new HTTP::Request('GET' => $escaped_url));
+  return $useragent{ident $self}->request(new HTTP::Request('GET' => $url));
 }
 
 1;
+
