@@ -129,16 +129,24 @@ sub validate {
         } else { 
           $wiggle_data .= "$chrom_start $value\n";
         }
+      } elsif ($wig_type eq "fixedStep") {
+        my ($value) = ($line =~ m/^([-+]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*$/); # 1.26307949016887
+        if (!(length($value))) {
+          log_error "WIG file " . $datum_obj->get_value() . " is declared fixedStep and is not properly formatted at line $linenum:\n      $line";	    
+          $success = 0;
+          last;
+        } else { 
+          $wiggle_data .= "$value\n";
+        }
       } else {
-        if ($wig_type eq "fixedStep") { 
-          my ($value) = ($line =~ m/^([-+]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*$/); # 1.26307949016887
-          if (!(length($value))) {
-            log_error "WIG file " . $datum_obj->get_value() . " is declared fixedStep and is not properly formatted at line $linenum:\n      $line";	    
-            $success = 0;
-            last;
-          } else { 
-            $wiggle_data .= "$value\n";
-          }
+        # Assume BED
+        my ($chr, $start, $end, $value) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)\s+([-+]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*$/);
+        if (!(length($chr) && length($start) && length($end) && length($value))) {
+          log_error "WIG file " . $datum_obj->get_value() . " is assumed to be BED format and is not properly formatted at line $linenum:\n      $line";	    		
+          $success = 0;
+          last;
+        } else {
+          $wiggle_data .= "$chr $start $end $value\n";
         }
       }
     }
