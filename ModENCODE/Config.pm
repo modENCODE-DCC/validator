@@ -130,12 +130,22 @@ use Cwd qw(abs_path);
 my $config_object;
 my $cvhandler;
 my $root_dir;
+my $submission_pipeline_name;
 
 BEGIN {
   $root_dir = abs_path($0);
   $root_dir =~ s/[^\/]*$//;
   $root_dir = "./" unless $root_dir =~ /^\//;
   $root_dir .= "/" unless $root_dir =~ /\/$/;
+}
+
+sub get_submission_pipeline_name {
+  return $submission_pipeline_name;
+}
+
+sub set_submission_pipeline_name {
+  ($submission_pipeline_name) = @_;
+  return $submission_pipeline_name;
 }
 
 sub get_root_dir {

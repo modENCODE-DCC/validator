@@ -244,7 +244,6 @@ my %cached_gff_files            :ATTR( :default<{}> );
 my %features_by_uniquename      :ATTR( :default<{}> );
 my %seen_data                   :ATTR( :default<{}> );       
 
-
 sub validate {
   my ($self) = @_;
   my $success = 1;
@@ -302,6 +301,11 @@ sub validate {
         'builds' => $build_config,
         'id_callback' => *id_callback,
       });
+
+    my $gff_submission_name = ModENCODE::Config::get_submission_pipeline_name;
+    $gff_submission_name =~ s/[^0-9A-Za-z]/_/g;
+    $parser->{'gff_submission_name'} = $gff_submission_name;
+
     my $group_iter = $parser->iterator();
     my $group_num = 0;
     while ($group_iter->has_next()) {
@@ -325,10 +329,13 @@ sub validate {
 
 my $gff_counter = 1;
 sub id_callback {
-  my ($id, $name, $seqid, $source, $type, $start, $end, $score, $strand, $phase) = @_;
+  my ($parser, $id, $name, $seqid, $source, $type, $start, $end, $score, $strand, $phase) = @_;
   # TODO: Generate ID better
   # In particular, change gff_ to filename and/or experiment_num
   $id ||= $name || "gff_" . sprintf("ID%.6d", ++$gff_counter);
+  if ($type !~ /^(gene|transcript|exon|EST|chromosome|chromosome_arm)$/) {
+    $id = $parser->{'gff_submission_name'} . "." . $id;
+  }
   return $id;
 }
 

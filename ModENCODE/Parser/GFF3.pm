@@ -191,7 +191,7 @@ sub parse
 
 		my $name = $attrs{Name}->[0];
 
-                my $id = &{$this->{id_callback}}($attrs{ID}->[0], $name,
+                my $id = &{$this->{id_callback}}($this, $attrs{ID}->[0], $name,
                         $seqid, $source, $type, $start, $end, $score, $strand,
                         $phase) if ($this->{id_callback});
 
@@ -228,7 +228,7 @@ sub parse
 			my ($target_id, $target_start, $target_end,
 				$target_strand) = split(/ /, $target);
 
-                        $target_id = &{$this->{id_callback}}($target_id) 
+                        $target_id = &{$this->{id_callback}}($this, $target_id) 
                           if ($this->{id_callback});
 
 			my $target_feature = $features{$target_id} ||
@@ -261,7 +261,7 @@ sub parse
 			}
 			my $rank = 0;
 			foreach my $object_id (@{$parents}) {
-                                $object_id = &{$this->{id_callback}}($object_id) 
+                                $object_id = &{$this->{id_callback}}($this, $object_id) 
                                   if ($this->{id_callback});
 				my $object = $features{$object_id} ||
 					die "$object_id for relationship  " .

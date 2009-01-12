@@ -23,11 +23,17 @@ use ModENCODE::Validator::Attributes;
 use ModENCODE::Validator::Data;
 use ModENCODE::Validator::TermSources;
 use ModENCODE::Chado::XMLWriter;
+use Getopt::Long;
 
 ModENCODE::ErrorHandler::set_logtype(ModENCODE::ErrorHandler::LOGGING_PREFIX_ON);
 ModENCODE::Config::set_cfg($root_dir . 'validator.ini');
 ModENCODE::Cache::init();
 
+
+my $submission_name;
+my $options = GetOptions(
+  "submission_name|n=s" => sub { ModENCODE::Config::set_submission_pipeline_name($_[1]); },
+);
 
 log_error "Validating submission...", "notice", ">";
 # Get IDF file
@@ -70,6 +76,12 @@ if (!$experiment) {
   exit;
 }
 log_error "Done.", "notice", "<";
+
+# Set the experiment uniquename to the submission pipeline name, if available
+if (ModENCODE::Config::get_submission_pipeline_name) {
+  $experiment->set_uniquename(ModENCODE::Config::get_submission_pipeline_name);
+  log_error "Set submission name to \"" . ModENCODE::Config::get_submission_pipeline_name . "\".", "notice";
+}
 
 log_error "Validating presence of valid ModENCODE project/subproject names...", "notice", ">";
 my $project_validator = new ModENCODE::Validator::ModENCODE_Projects({ 'experiment' => $experiment });
