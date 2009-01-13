@@ -208,7 +208,7 @@ sub write_chadoxml {
   my ($self, $experiment) = @_;
   $self->set_indent(0);
   $seen_ids{ident $self} = {};
-  my @tempfile_names = ('dbxrefs', 'cvterms', 'organisms', 'features', 'featurelocs', 'feature_relationships', 'analyses', 'analysisfeatures', 'attributes', 'protocols', 'wiggle_data', 'data', 'default');
+  my @tempfile_names = ('dbxrefs', 'cvterms', 'organisms', 'features', 'featurelocs', 'featureprops', 'feature_relationships', 'analyses', 'analysisfeatures', 'attributes', 'protocols', 'wiggle_data', 'data', 'default');
   foreach my $tempfile (@tempfile_names) {
     $self->get_tempfiles()->{$tempfile} = File::Temp::tempfile();
   }
@@ -223,7 +223,7 @@ sub write_chadoxml {
       $self->write_applied_protocol($applied_protocol);
     }
   }
-  log_error "Done.", "notice", ">";
+  log_error "Done.", "notice", "<";
 
 
   # Write the experiment
@@ -421,6 +421,9 @@ sub write_feature : PRIVATE {
     foreach my $feature_location (@{$feature->get_locations()}) {
       $self->write_featureloc($feature_location, $id);
     }
+    foreach my $feature_property (@{$feature->get_properties()}) {
+      $self->write_featureprop($feature_property, $id);
+    }
   }
   return $id;
 }
@@ -474,6 +477,17 @@ sub write_featureloc : PRIVATE {
     $self->println_to('featurelocs', "<srcfeature_id>" . $self->write_feature($featureloc->get_srcfeature(1)) . "</srcfeature_id>");
   }
   $self->println_to('featurelocs', "</featureloc>");
+}
+
+sub write_featureprop : PRIVATE {
+  my ($self, $featureprop, $feature_id) = @_;
+
+  $self->println_to('featureprops', "<featureprop>");
+  $self->println_to('featureprops', "<feature_id>$feature_id</feature_id>");
+  $self->println_to('featureprops', "<value>" . xml_escape($featureprop->get_value()) . "</value>") if length($featureprop->get_value());
+  $self->println_to('featureprops', "<rank>" . xml_escape($featureprop->get_rank()) . "</rank>") if length($featureprop->get_rank());
+  $self->println_to('featureprops', "<type_id>" . $self->write_cvterm($featureprop->get_type(1)) .  "</type_id>");
+  $self->println_to('featureprops', "</featureprop>");
 }
 
 sub write_analysis : PRIVATE {

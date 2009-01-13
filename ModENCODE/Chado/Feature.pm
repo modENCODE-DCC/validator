@@ -254,6 +254,7 @@ my %organism         :ATTR(                             :init_arg<organism>,    
 my %type             :ATTR(                             :init_arg<type>,                :default<undef> );
 my %analysisfeatures :ATTR( :get<analysisfeatures>,     :init_arg<analysisfeatures>,    :default<[]> );
 my %locations        :ATTR( :get<locations>,            :init_arg<locations>,           :default<[]> );
+my %properties       :ATTR( :get<properties>,           :init_arg<properties>,          :default<[]> );
 my %relationships    :ATTR( :set<relationships>,        :init_arg<relationships>,       :default<[]> );
 my %dbxrefs          :ATTR(                             :init_arg<dbxrefs>,             :default<[]> );
 my %primary_dbxref   :ATTR(                             :init_arg<primary_dbxref>,      :default<undef> );
@@ -266,6 +267,7 @@ sub set_timelastmodified { my ($self, $timelastmodified) = @_; $self->dirty(); $
 sub set_is_analysis { my ($self, $is_analysis) = @_; $self->dirty(); $is_analysis{ident $self} = $is_analysis; }
 sub set_analysisfeatures { my ($self, $analysisfeatures) = @_; $self->dirty(); $analysisfeatures{ident $self} = $analysisfeatures; }
 sub set_locations { my ($self, $locations) = @_; $self->dirty(); $locations{ident $self} = $locations; }
+sub set_properties { my ($self, $properties) = @_; $self->dirty(); $properties{ident $self} = $properties; }
 
 sub dirty {
   $dirty{ident shift} = 1;
@@ -331,6 +333,10 @@ sub new {
     }
     if (scalar($temp->get_locations) && !scalar($cached_feature->get_object->get_locations)) {
       $cached_feature->get_object->set_locations($temp->get_locations);
+      $need_save = 1;
+    }
+    if (scalar($temp->get_properties) && !scalar($cached_feature->get_object->get_properties)) {
+      $cached_feature->get_object->set_properties($temp->get_properties);
       $need_save = 1;
     }
     if (scalar($temp->get_relationships) && !scalar($cached_feature->get_object->get_relationships)) {
@@ -480,6 +486,12 @@ sub add_location {
   push @{$locations{ident $self}}, $location;
 }
 
+sub add_property {
+  my ($self, $property) = @_;
+  ($property->isa('ModENCODE::Chado::FeatureProp')) or Carp::confess("Can't add a " . ref($property) . " as a property.");
+  push @{$properties{ident $self}}, $property;
+}
+
 sub add_analysisfeature {
   my ($self, $analysisfeature) = @_;
   ($analysisfeature->isa('ModENCODE::Chado::AnalysisFeature')) or Carp::confess("Can't add a " . ref($analysisfeature) . " as an analysisfeature.");
@@ -517,6 +529,7 @@ sub to_string {
   $string .= " with " . scalar($self->get_dbxrefs) . " DBXrefs";
   $string .= " with primary DBXref: " . $self->get_primary_dbxref(1)->to_string if $self->get_primary_dbxref;
   $string .= " with " . scalar(@{$self->get_locations()}) . " locations";
+  $string .= " with " . scalar(@{$self->get_properties()}) . " properties";
   $string .= "\n";
   foreach my $analysisfeature (@{$self->get_analysisfeatures}) {
     $string .= "  " . $analysisfeature->to_string . "\n";

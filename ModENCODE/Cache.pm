@@ -214,6 +214,14 @@ sub init_schema {
         srcfeature_id INTEGER
     )',
     'CREATE INDEX fl_feature_idx ON featureloc(feature_id)',
+    'CREATE TABLE featureprop (
+        featureprop_id INTEGER PRIMARY KEY,
+        feature_id INTEGER,
+        value INTEGER,
+        rank INTEGER,
+        type_id INTEGER
+    )',
+    'CREATE INDEX fp_feature_idx ON featureprop(feature_id)',
     'CREATE TABLE feature_feature_relationship (
         feature_id INTEGER,
         feature_relationship_id INTEGER
@@ -1142,6 +1150,10 @@ sub save_feature {
   $queries{'del_feature_locs'} = ModENCODE::Cache::dbh->prepare('DELETE FROM featureloc WHERE feature_id = ?') unless $queries{'del_feature_locs'};
   $queries{'add_feature_loc'} = ModENCODE::Cache::dbh->prepare('INSERT INTO featureloc (feature_id, fmin, fmax, rank, strand, srcfeature_id) VALUES(?, ?, ?, ?, ?, ?)') unless $queries{'add_feature_loc'};
 
+  # Featureprops
+  $queries{'del_feature_props'} = ModENCODE::Cache::dbh->prepare('DELETE FROM featureprop WHERE feature_id = ?') unless $queries{'del_feature_props'};
+  $queries{'add_feature_prop'} = ModENCODE::Cache::dbh->prepare('INSERT INTO featureprop (feature_id, value, rank, type_id) VALUES(?, ?, ?, ?)') unless $queries{'add_feature_prop'};
+
   # Analysisfeatures
   $queries{'del_analysisfeatures'} = ModENCODE::Cache::dbh->prepare('DELETE FROM analysisfeature WHERE feature_id = ?') unless $queries{'del_analysisfeatures'};
   $queries{'add_analysisfeature'} = ModENCODE::Cache::dbh->prepare('INSERT INTO analysisfeature (feature_id, analysis_id, rawscore, normscore, significance, identity) VALUES(?, ?, ?, ?, ?, ?)') unless $queries{'add_analysisfeature'};
@@ -1172,6 +1184,13 @@ sub save_feature {
   foreach my $featureloc (@{$feature->get_locations}) {
     modification_notification();
     $queries{'add_feature_loc'}->execute($feature->get_id, $featureloc->get_fmin, $featureloc->get_fmax, $featureloc->get_rank, $featureloc->get_strand, $featureloc->get_srcfeature_id);
+  }
+
+  # Update links to feature properties
+  $queries{'del_feature_props'}->execute($feature->get_id);
+  foreach my $featureprop (@{$feature->get_properties}) {
+    modification_notification();
+    $queries{'add_feature_prop'}->execute($feature->get_id, $featureprop->get_value, $featureprop->get_rank, $featureprop->get_type_id);
   }
 
   # Update links to analysisfeatures
@@ -1230,6 +1249,15 @@ sub load_feature {
     $row->{'srcfeature'} = $cachesets{'feature'}->get_from_id_cache($row->{'srcfeature'});
     my $featureloc = new ModENCODE::Chado::FeatureLoc($row);
     $feature->add_location($featureloc);
+  }
+
+  # Feature properties
+  $queries{'featureprops_get'} = ModENCODE::Cache::dbh->prepare('SELECT value, rank, type_id AS type FROM featureprop WHERE feature_id = ?') unless $queries{'featureprops_get'};
+  $queries{'featureprops_get'}->execute($feature_id);
+  while (my $row = $queries{'featureprops_get'}->fetchrow_hashref()) {
+    $row->{'type'} = $cachesets{'cvterm'}->get_from_id_cache($row->{'type'});
+    my $featureprop = new ModENCODE::Chado::FeatureProp($row);
+    $feature->add_property($featureprop);
   }
 
   # Analysis features

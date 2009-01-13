@@ -296,14 +296,15 @@ sub validate {
       }
     }
 
+    my $gff_submission_name = ModENCODE::Config::get_submission_pipeline_name;
+    $gff_submission_name =~ s/[^0-9A-Za-z]/_/g;
+
     my $parser = new ModENCODE::Parser::GFF3({
         'gff3' => \*GFF,
         'builds' => $build_config,
         'id_callback' => *id_callback,
+        'source_prefix' => $gff_submission_name,
       });
-
-    my $gff_submission_name = ModENCODE::Config::get_submission_pipeline_name;
-    $gff_submission_name =~ s/[^0-9A-Za-z]/_/g;
     $parser->{'gff_submission_name'} = $gff_submission_name;
 
     my $group_iter = $parser->iterator();

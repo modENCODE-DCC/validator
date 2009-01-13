@@ -116,6 +116,7 @@ use IO::File;
 use ModENCODE::Chado::Feature;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Chado::FeatureRelationship;
+use ModENCODE::Chado::FeatureProp;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Analysis;
@@ -246,8 +247,20 @@ sub parse
 				$this->create_analysis_feature($score,
 							       $source, 
                                                                $feature);
+                        if (defined(attrs{'normscore'}->[0])) {
+                          $analysis_feature->get_object->set_normscore(attrs{'normscore'}->[0]);
+                        }
 			$feature->get_object->add_analysisfeature($analysis_feature);
-		}
+		} elsif ($score ne '.') {
+                        my $analysis_feature =
+                                $this->create_analysis_feature($score, 
+                                                               $source,
+                                                               $feature);
+                        if (defined(attrs{'normscore'}->[0])) {
+                          $analysis_feature->get_object->set_normscore(attrs{'normscore'}->[0]);
+                        }
+			$feature->get_object->add_analysisfeature($analysis_feature);
+                }
 		my $parents = $attrs{Parent};
 		if ($parents) {
 			my %relationships;
@@ -278,6 +291,17 @@ sub parse
 					$feature_relationship);
 			}
 		}
+                if (my $prediction_status = $attrs{'prediction_status'}->[0]) {
+                        my $prediction_prop = $this->create_feature_prop(
+                                $prediction_status,
+                                0, 
+                                new ModENCODE::Chado::CVTerm({
+                                        name => 'prediction_status',
+                                        cv => new ModENCODE::Chado::CV({ name => 'modencode' }),
+                        }));
+                        $feature->get_object->add_property($prediction_prop);
+                }
+
 		$features{$feature->get_object->get_uniquename()} = $feature;
 	}
 	return values %features;
@@ -354,6 +378,19 @@ sub create_feature_loc
 	$feature_loc->set_strand($strand);
 	$feature_loc->set_srcfeature($src_feature) if $src_feature;
 	return $feature_loc;
+}
+
+sub create_feature_prop
+{
+	my $this = shift;
+	my ($value, $rank, $type) = @_;
+        $rank ||= 0;
+        my $feature_prop = new ModENCODE::Chado::FeatureProp({
+                        value => $value,
+                        rank => $rank,
+                        type => $type,
+                });
+	return $feature_prop;
 }
 
 sub create_feature_relationship
