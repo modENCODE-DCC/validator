@@ -229,8 +229,10 @@ sub parse
 			my ($target_id, $target_start, $target_end,
 				$target_strand) = split(/ /, $target);
 
-                        $target_id = &{$this->{id_callback}}($this, $target_id) 
-                          if ($this->{id_callback});
+                        if (!$features{$target_id}) {
+                                $target_id = &{$this->{id_callback}}($this, $target_id) 
+                                if ($this->{id_callback});
+                        }
 
 			my $target_feature = $features{$target_id} ||
 				die "No feature found for target $target_id";
@@ -247,7 +249,7 @@ sub parse
 				$this->create_analysis_feature($score,
 							       $source, 
                                                                $feature);
-                        if (defined(attrs{'normscore'}->[0])) {
+                        if (defined($attrs{'normscore'}->[0])) {
                           $analysis_feature->get_object->set_normscore(attrs{'normscore'}->[0]);
                         }
 			$feature->get_object->add_analysisfeature($analysis_feature);
