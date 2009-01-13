@@ -484,7 +484,7 @@ sub validate {
         log_error("There are " . scalar(@wiki_input_definitions) . " input parameters according to the wiki" .
         " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @wiki_input_definitions) . ")" .
         ", and " . scalar($applied_protocol->get_input_data) . " input parameters in the SDRF" .
-        " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } $applied_protocol->get_input_data) . ")" .
+        " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } $applied_protocol->get_input_data(1)) . ")" .
         " for protocol " . $protocol->get_object->get_name() . ".\n" .
         "Please correct one or the other.");
         $success = 0;
