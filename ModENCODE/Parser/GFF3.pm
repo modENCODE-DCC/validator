@@ -250,7 +250,7 @@ sub parse
 							       $source, 
                                                                $feature);
                         if (defined($attrs{'normscore'}->[0])) {
-                          $analysis_feature->get_object->set_normscore(attrs{'normscore'}->[0]);
+                          $analysis_feature->get_object->set_normscore($attrs{'normscore'}->[0]);
                         }
 			$feature->get_object->add_analysisfeature($analysis_feature);
 		} elsif ($score ne '.') {
@@ -258,8 +258,8 @@ sub parse
                                 $this->create_analysis_feature($score, 
                                                                $source,
                                                                $feature);
-                        if (defined(attrs{'normscore'}->[0])) {
-                          $analysis_feature->get_object->set_normscore(attrs{'normscore'}->[0]);
+                        if (defined($attrs{'normscore'}->[0])) {
+                          $analysis_feature->get_object->set_normscore($attrs{'normscore'}->[0]);
                         }
 			$feature->get_object->add_analysisfeature($analysis_feature);
                 }
