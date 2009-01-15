@@ -202,8 +202,10 @@ sub parse
 		## can't have duplicate ids within the same file
 		die "Duplicate id $id found" if $this->{$id}++;
 
-		my $src_feature = $seqid ne $id ?
-			$this->get_src_feature($seqid) : undef;
+
+                my $seqid_uniq = &{$this->{id_callback}}($this, $seqid, $seqid, $seqid, $source) if ($this->{id_callback});
+                $seqid = $seqid_uniq if ($seqid_uniq eq $id);
+                my $src_feature = ($seqid ne $id) ? $this->get_src_feature($seqid) : undef;
 
                 my $organism;
                 if ($src_feature && $src_feature->get_object->get_organism()) {
