@@ -285,6 +285,10 @@ sub init_schema {
 }
 
 sub destroy {
+  $dbh->disconnect if ($dbh);
+  foreach my $cacheset_name (@cacheset_names) {
+    $cachesets{$cacheset_name} = undef;
+  }
   if ($db_tempfile && -e $db_tempfile) {
     unlink($db_tempfile);
   }
