@@ -229,68 +229,68 @@ sub new {
     # Update any cached wiggle_data
     my $need_save = 0;
 
-    if ($temp->get_type && !($cached_wiggle_data->get_type)) {
-      $cached_wiggle_data->set_type($temp->get_type);
+    if ($temp->get_type && !($cached_wiggle_data->get_object->get_type)) {
+      $cached_wiggle_data->get_object->set_type($temp->get_type);
       $need_save = 1;
     }
-    if ($temp->get_visibility && !($cached_wiggle_data->get_visibility)) {
-      $cached_wiggle_data->set_visibility($temp->get_visibility);
+    if ($temp->get_visibility && !($cached_wiggle_data->get_object->get_visibility)) {
+      $cached_wiggle_data->get_object->set_visibility($temp->get_visibility);
       $need_save = 1;
     }
-    if ($temp->get_color && !($cached_wiggle_data->get_color)) {
-      $cached_wiggle_data->set_color($temp->get_color);
+    if ($temp->get_color && !($cached_wiggle_data->get_object->get_color)) {
+      $cached_wiggle_data->get_object->set_color($temp->get_color);
       $need_save = 1;
     }
-    if ($temp->get_altColor && !($cached_wiggle_data->get_altColor)) {
-      $cached_wiggle_data->set_altColor($temp->get_altColor);
+    if ($temp->get_altColor && !($cached_wiggle_data->get_object->get_altColor)) {
+      $cached_wiggle_data->get_object->set_altColor($temp->get_altColor);
       $need_save = 1;
     }
-    if ($temp->get_priority && !($cached_wiggle_data->get_priority)) {
-      $cached_wiggle_data->set_priority($temp->get_priority);
+    if ($temp->get_priority && !($cached_wiggle_data->get_object->get_priority)) {
+      $cached_wiggle_data->get_object->set_priority($temp->get_priority);
       $need_save = 1;
     }
-    if ($temp->get_autoscale && !($cached_wiggle_data->get_autoscale)) {
-      $cached_wiggle_data->set_autoscale($temp->get_autoscale);
+    if ($temp->get_autoscale && !($cached_wiggle_data->get_object->get_autoscale)) {
+      $cached_wiggle_data->get_object->set_autoscale($temp->get_autoscale);
       $need_save = 1;
     }
-    if ($temp->get_gridDefault && !($cached_wiggle_data->get_gridDefault)) {
-      $cached_wiggle_data->set_gridDefault($temp->get_gridDefault);
+    if ($temp->get_gridDefault && !($cached_wiggle_data->get_object->get_gridDefault)) {
+      $cached_wiggle_data->get_object->set_gridDefault($temp->get_gridDefault);
       $need_save = 1;
     }
-    if ($temp->get_maxHeightPixels && !($cached_wiggle_data->get_maxHeightPixels)) {
-      $cached_wiggle_data->set_maxHeightPixels($temp->get_maxHeightPixels);
+    if ($temp->get_maxHeightPixels && !($cached_wiggle_data->get_object->get_maxHeightPixels)) {
+      $cached_wiggle_data->get_object->set_maxHeightPixels($temp->get_maxHeightPixels);
       $need_save = 1;
     }
-    if ($temp->get_graphType && !($cached_wiggle_data->get_graphType)) {
-      $cached_wiggle_data->set_graphType($temp->get_graphType);
+    if ($temp->get_graphType && !($cached_wiggle_data->get_object->get_graphType)) {
+      $cached_wiggle_data->get_object->set_graphType($temp->get_graphType);
       $need_save = 1;
     }
-    if ($temp->get_viewLimits && !($cached_wiggle_data->get_viewLimits)) {
-      $cached_wiggle_data->set_viewLimits($temp->get_viewLimits);
+    if ($temp->get_viewLimits && !($cached_wiggle_data->get_object->get_viewLimits)) {
+      $cached_wiggle_data->get_object->set_viewLimits($temp->get_viewLimits);
       $need_save = 1;
     }
-    if ($temp->get_yLineMark && !($cached_wiggle_data->get_yLineMark)) {
-      $cached_wiggle_data->set_yLineMark($temp->get_yLineMark);
+    if ($temp->get_yLineMark && !($cached_wiggle_data->get_object->get_yLineMark)) {
+      $cached_wiggle_data->get_object->set_yLineMark($temp->get_yLineMark);
       $need_save = 1;
     }
-    if ($temp->get_yLineOnOff && !($cached_wiggle_data->get_yLineOnOff)) {
-      $cached_wiggle_data->set_yLineOnOff($temp->get_yLineOnOff);
+    if ($temp->get_yLineOnOff && !($cached_wiggle_data->get_object->get_yLineOnOff)) {
+      $cached_wiggle_data->get_object->set_yLineOnOff($temp->get_yLineOnOff);
       $need_save = 1;
     }
-    if ($temp->get_windowingFunction && !($cached_wiggle_data->get_windowingFunction)) {
-      $cached_wiggle_data->set_windowingFunction($temp->get_windowingFunction);
+    if ($temp->get_windowingFunction && !($cached_wiggle_data->get_object->get_windowingFunction)) {
+      $cached_wiggle_data->get_object->set_windowingFunction($temp->get_windowingFunction);
       $need_save = 1;
     }
-    if ($temp->get_smoothingWindow && !($cached_wiggle_data->get_smoothingWindow)) {
-      $cached_wiggle_data->set_smoothingWindow($temp->get_smoothingWindow);
+    if ($temp->get_smoothingWindow && !($cached_wiggle_data->get_object->get_smoothingWindow)) {
+      $cached_wiggle_data->get_object->set_smoothingWindow($temp->get_smoothingWindow);
       $need_save = 1;
     }
-    if ($temp->get_data && !($cached_wiggle_data->get_data)) {
-      $cached_wiggle_data->set_data($temp->get_data);
+    if ($temp->get_data && !($cached_wiggle_data->get_object->get_data)) {
+      $cached_wiggle_data->get_object->set_data($temp->get_data);
       $need_save = 1;
     }
 
-    ModENCODE::Cache::save_wiggle_data($cached_wiggle_data) if $need_save;
+    ModENCODE::Cache::save_wiggle_data($cached_wiggle_data->get_object) if $need_save;
     return $cached_wiggle_data;
   }
   # This is a new wiggle_data
