@@ -495,7 +495,25 @@ sub add_property {
 sub add_analysisfeature {
   my ($self, $analysisfeature) = @_;
   ($analysisfeature->isa('ModENCODE::Chado::AnalysisFeature')) or Carp::confess("Can't add a " . ref($analysisfeature) . " as an analysisfeature.");
-  push @{$analysisfeatures{ident $self}}, $analysisfeature;
+  my ($existing_af) = grep { $_->get_analysis_id == $analysisfeature->get_analysis_id } @{$self->get_analysisfeatures()};
+  if ($existing_af) {
+    log_error "Updating existing analysisfeature", "debug";
+    # Duplicate, so update the existing one if necessary
+    if ($analysisfeature->get_rawscore() && !$existing_af->get_rawscore()) {
+      $existing_af->set_rawscore($analysisfeature->get_rawscore);
+    }
+    if ($analysisfeature->get_normscore() && !$existing_af->get_normscore()) {
+      $existing_af->set_normscore($analysisfeature->get_normscore);
+    }
+    if ($analysisfeature->get_significance() && !$existing_af->get_significance()) {
+      $existing_af->set_significance($analysisfeature->get_significance);
+    }
+    if ($analysisfeature->get_identity() && !$existing_af->get_identity()) {
+      $existing_af->set_identity($analysisfeature->get_identity);
+    }
+  } else {
+    push @{$analysisfeatures{ident $self}}, $analysisfeature;
+  }
 }
 
 sub get_relationship_ids {
