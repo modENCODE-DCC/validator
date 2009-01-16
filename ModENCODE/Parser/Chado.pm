@@ -288,6 +288,8 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::Attribute;
+use ModENCODE::Chado::ProtocolAttribute;
+use ModENCODE::Chado::DatumAttribute;
 use ModENCODE::Chado::Feature;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Chado::AnalysisFeature;
@@ -382,9 +384,9 @@ sub load_experiment {
     my @applied_protocol_data;
     # For each applied_protocol in the current column, get the output data
     foreach my $applied_protocol (@{$protocol_slots[scalar(@protocol_slots)-1]}) {
-      foreach my $datum (@{$applied_protocol->{'applied_protocol'}->get_output_data()}) {
+      foreach my $datum ($applied_protocol->{'applied_protocol'}->get_output_data(1)) {
         push @applied_protocol_data, { 
-          'from_applied_protocol' => $applied_protocol->{'applied_protocol'}->get_chadoxml_id, 
+          'from_applied_protocol' => $applied_protocol->{'applied_protocol'}->get_id, 
           'datum' => $datum
         };
       }
@@ -394,7 +396,7 @@ sub load_experiment {
     my @next_applied_protocol_ids;
     undef(%next_applied_protocols);
     foreach my $datum (@applied_protocol_data) {
-      $get_next_applied_protocols_sth->execute($datum->{'datum'}->get_chadoxml_id());
+      $get_next_applied_protocols_sth->execute($datum->{'datum'}->get_id());
       while (my ($applied_protocol_id) = $get_next_applied_protocols_sth->fetchrow_array()) {
         if (!scalar(grep { $_ == $applied_protocol_id } @next_applied_protocol_ids)) {
           push @next_applied_protocol_ids, $applied_protocol_id;
@@ -430,30 +432,31 @@ sub load_experiment {
   while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
     map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
     my $property = new ModENCODE::Chado::ExperimentProp({
+        'experiment' => $experiment{ident $self},
         'name' => $row->{'name'},
         'value' => $row->{'value'},
         'rank' => $row->{'rank'},
       });
     my $termsource = $self->get_termsource($row->{'dbxref_id'});
-    $property->set_termsource($termsource) if $termsource;
+    $property->get_object->set_termsource($termsource) if $termsource;
     my $type = $self->get_type($row->{'type_id'});
-    $property->set_type($type) if $type;
+    $property->get_object->set_type($type) if $type;
     $experiment{ident $self}->add_property($property);
   }
 }
 
 sub get_applied_protocol {
   my ($self, $applied_protocol_id) = @_;
-  my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 
-      'chadoxml_id' => $applied_protocol_id 
-    });
   my $sth = $self->get_prepared_query("SELECT protocol_id FROM applied_protocol WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
   my ($protocol_id) = $sth->fetchrow_array();
   my $protocol = $self->get_protocol($protocol_id);
-  $applied_protocol->set_protocol($protocol);
   $sth = $self->get_prepared_query("SELECT data_id, direction FROM applied_protocol_data WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
+  my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 
+      'id' => $applied_protocol_id,
+      'protocol' => $protocol,
+    });
   while (my $row = $sth->fetchrow_hashref()) {
     map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
     if ($row->{'direction'} =~ 'input') {
@@ -467,61 +470,66 @@ sub get_applied_protocol {
 
 sub get_protocol {
   my ($self, $protocol_id) = @_;
-  my $protocol = new ModENCODE::Chado::Protocol({ 'chadoxml_id' => $protocol_id });
   my $sth = $self->get_prepared_query("SELECT name, version, description, dbxref_id FROM protocol WHERE protocol_id = ?");
   $sth->execute($protocol_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
-  $protocol->set_name($row->{'name'});
-  $protocol->set_version($row->{'version'});
-  $protocol->set_description($row->{'description'});
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
-  $protocol->set_termsource($termsource) if $termsource;
+  my $protocol = new ModENCODE::Chado::Protocol({ 
+      'id' => $protocol_id,
+      'name' => $row->{'name'},
+      'version' => $row->{'version'},
+      'description' => $row->{'description'},
+      'termsource' => $termsource,
+    });
   $sth = $self->get_prepared_query("SELECT attribute_id FROM protocol_attribute WHERE protocol_id = ?");
   $sth->execute($protocol_id);
   while (my ($attr_id) = $sth->fetchrow_array()) {
-    $protocol->add_attribute($self->get_attribute($attr_id));
+    $protocol->get_object->add_attribute($self->get_attribute($attr_id, $protocol));
   }
   return $protocol;
 }
 
 sub get_datum {
   my ($self, $datum_id) = @_;
-  my $datum = new ModENCODE::Chado::Data({ 'chadoxml_id' => $datum_id });
   my $sth = $self->get_prepared_query("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
-  $datum->set_name($row->{'name'});
-  $datum->set_heading($row->{'heading'});
-  $datum->set_value($row->{'value'});
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
-  $datum->set_termsource($termsource) if $termsource;
   my $type = $self->get_type($row->{'type_id'});
-  $datum->set_type($type) if $type;
+
+  my $datum = new ModENCODE::Chado::Data({ 
+      'id' => $datum_id,
+      'name' => $row->{'name'},
+      'heading' => $row->{'heading'},
+      'value' => $row->{'value'},
+      'termsource' => $termsource,
+      'type' => $type,
+    });
 
   $sth = $self->get_prepared_query("SELECT wiggle_data_id FROM data_wiggle_data WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($wiggle_data_id) = $sth->fetchrow_array()) {
-    $datum->add_wiggle_data($self->get_wiggle_data($wiggle_data_id));
+    $datum->get_object->add_wiggle_data($self->get_wiggle_data($wiggle_data_id, $datum));
   }
 
   $sth = $self->get_prepared_query("SELECT feature_id FROM data_feature WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($feature_id) = $sth->fetchrow_array()) {
-    $datum->add_feature($self->get_feature($feature_id));
+    $datum->get_object->add_feature($self->get_feature($feature_id));
   }
 
   $sth = $self->get_prepared_query("SELECT organism_id FROM data_organism WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($organism_id) = $sth->fetchrow_array()) {
-    $datum->add_organism($self->get_organism($organism_id));
+    $datum->get_object->add_organism($self->get_organism($organism_id));
   }
 
   $sth = $self->get_prepared_query("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($attr_id) = $sth->fetchrow_array()) {
-    $datum->add_attribute($self->get_attribute($attr_id));
+    $datum->get_object->add_attribute($self->get_attribute($attr_id, $datum));
   }
   return $datum;
 }
@@ -591,7 +599,7 @@ sub get_feature {
 
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $feature = new ModENCODE::Chado::Feature({
-      'chadoxml_id' => $feature_id,
+      'id' => $feature_id,
       'name' => $row->{'name'},
       'uniquename' => $row->{'uniquename'},
       'residues' => $row->{'residues'},
@@ -661,7 +669,7 @@ sub get_analysisfeature {
   my $feature = $self->get_feature($row->{'feature_id'});
 
   my $analysisfeature = new ModENCODE::Chado::AnalysisFeature({ 
-      'chadoxml_id' => $analysisfeature_id,
+      'id' => $analysisfeature_id,
       'rawscore' => $row->{'rawscore'},
       'normscore' => $row->{'normscore'},
       'significance' => $row->{'significance'},
@@ -681,7 +689,7 @@ sub get_analysis {
 
   
   my $analysis = new ModENCODE::Chado::Analysis({ 
-      'chadoxml_id' => $analysis_id,
+      'id' => $analysis_id,
       'name' => $row->{'name'},
       'description' => $row->{'description'},
       'program' => $row->{'program'},
@@ -710,13 +718,14 @@ sub get_organism {
 }
 
 sub get_wiggle_data {
-  my ($self, $wiggle_data_id) = @_;
+  my ($self, $wiggle_data_id, $datum) = @_;
   return undef unless($wiggle_data_id);
   my $sth = $self->get_prepared_query("SELECT type, name, visibility, color, altColor, priority, autoscale, gridDefault, maxHeightPixels, graphType, viewLimits, yLineMark, yLineOnOff, windowingFunction, smoothingWindow, data FROM wiggle_data WHERE wiggle_data_id = ?");
   $sth->execute($wiggle_data_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $wiggle_data = new ModENCODE::Chado::Wiggle_Data({
+      'datum' => $datum,
       'type' => $row->{'type'},
       'name' => $row->{'name'},
       'visibility' => $row->{'visibility'},
@@ -778,24 +787,38 @@ sub get_type {
 }
 
 sub get_attribute {
-  my ($self, $attribute_id) = @_;
-  my $attribute = new ModENCODE::Chado::Attribute({ 'chadoxml_id' => $attribute_id });
+  my ($self, $attribute_id, $parent) = @_;
   my $sth = $self->get_prepared_query("SELECT name, heading, value, dbxref_id, type_id FROM attribute WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
-  $attribute->set_name($row->{'name'});
-  $attribute->set_heading($row->{'heading'});
-  $attribute->set_value($row->{'value'});
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
-  $attribute->set_termsource($termsource) if $termsource;
   my $type = $self->get_type($row->{'type_id'});
-  $attribute->set_type($type) if $type;
+
+  my $init_args = { 
+    'id' => $attribute_id,
+    'name' => $row->{'name'},
+    'heading' => $row->{'heading'},
+    'value' => $row->{'value'},
+    'termsource' => $termsource,
+    'type' => $type,
+  };
+  my $attribute;
+  if (ref($parent) eq "ModENCODE::Cache::Protocol") {
+    $init_args->{'protocol'} = $parent;
+    $attribute = new ModENCODE::Chado::ProtocolAttribute($init_args);
+  } elsif (ref($parent) eq "ModENCODE::Cache::Data") {
+    $init_args->{'datum'} = $parent;
+    $attribute = new ModENCODE::Chado::DatumAttribute($init_args);
+  } else {
+    print STDERR "What's a " . ref($parent) . "\n";
+    $attribute = new ModENCODE::Chado::Attribute($init_args);
+  }
 
   $sth = $self->get_prepared_query("SELECT organism_id FROM attribute_organism WHERE attribute_id = ?");
   $sth->execute($attribute_id);
   while (my ($organism_id) = $sth->fetchrow_array()) {
-    $attribute->add_organism($self->get_organism($organism_id));
+    $attribute->get_object->add_organism($self->get_organism($organism_id));
   }
 
   return $attribute;
@@ -828,7 +851,7 @@ sub get_feature_id_by_name_and_type {
             $type->get_name()),
         )
       )
-      && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv()->get_name())
+      && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv(1)->get_name())
     ) {
       push @found_feature_ids, $row->{'feature_id'};
     }
@@ -856,7 +879,7 @@ sub get_feature_id_by_name_and_type {
               $type->get_name()),
           )
         )
-        && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv()->get_name())
+        && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($row->{'cv'}, $type->get_cv(1)->get_name())
       ) {
         push @found_feature_ids, $row->{'feature_id'};
       }
@@ -1019,7 +1042,7 @@ sub get_tsv_columns {
       my @input_columns;
       foreach my $applied_protocol (@$applied_protocols) {
         # Inputs go after the protocol if it's not the first protocol
-        my @input_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} @{$applied_protocol->{'applied_protocol'}->get_input_data()};
+        my @input_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} $applied_protocol->{'applied_protocol'}->get_input_data(1);
         for (my $i = 0; $i < scalar(@input_data); $i++) {
           my $input = $input_data[$i];
           $input_columns[$i] = [] if (ref($input_columns[$i]) ne "ARRAY");
@@ -1038,30 +1061,30 @@ sub get_tsv_columns {
     # and collect the columns into protocol_columns
     my @protocol_columns;
     foreach my $applied_protocol (@$applied_protocols) {
-      my $protocol = $applied_protocol->{'applied_protocol'}->get_protocol();
+      my $protocol = $applied_protocol->{'applied_protocol'}->get_protocol(1);
       if (!scalar(@protocol_columns)) {
         # Core protocol name
         push @protocol_columns, [ "Protocol REF" ];
         # Protocol termsource
-        if ($protocol->get_termsource() && $protocol->get_termsource->get_db()) {
+        if ($protocol->get_termsource() && $protocol->get_termsource(1)->get_db()) {
           push @columns, [ "Term Source REF" ];
-          if (length($protocol->get_termsource()->get_accession())) {
+          if (length($protocol->get_termsource(1)->get_accession())) {
             push @columns, [ "Term Accession Number" ];
           }
         }
         # Protocol attributes
-        foreach my $attribute (@{$protocol->get_attributes()}) {
+        foreach my $attribute ($protocol->get_attributes(1)) {
           push @protocol_columns, $self->flatten_attribute($attribute);
         }
       }
       my $cur_column = 0;
       push @{$protocol_columns[$cur_column++]}, $protocol->get_name();
-      push @{$protocol_columns[$cur_column++]}, $protocol->get_termsource()->get_db()->get_name() if $protocol->get_termsource() && $protocol->get_termsource()->get_db();
-      push @{$protocol_columns[$cur_column++]}, $protocol->get_termsource()->get_accession() if $protocol->get_termsource() && $protocol->get_termsource()->get_accession();
-      foreach my $attribute (@{$protocol->get_attributes()}) {
+      push @{$protocol_columns[$cur_column++]}, $protocol->get_termsource(1)->get_db(1)->get_name() if $protocol->get_termsource() && $protocol->get_termsource(1)->get_db();
+      push @{$protocol_columns[$cur_column++]}, $protocol->get_termsource(1)->get_accession() if $protocol->get_termsource() && $protocol->get_termsource(1)->get_accession();
+      foreach my $attribute ($protocol->get_attributes(1)) {
         push @{$protocol_columns[$cur_column++]}, $attribute->get_value();
-        push @{$protocol_columns[$cur_column++]}, $attribute->get_termsource()->get_db()->get_name() if $attribute->get_termsource() && $attribute->get_termsource()->get_db();
-        push @{$protocol_columns[$cur_column++]}, $attribute->get_termsource()->get_accession() if $attribute->get_termsource() && $attribute->get_termsource()->get_accession();
+        push @{$protocol_columns[$cur_column++]}, $attribute->get_termsource(1)->get_db(1)->get_name() if $attribute->get_termsource() && $attribute->get_termsource(1)->get_db();
+        push @{$protocol_columns[$cur_column++]}, $attribute->get_termsource(1)->get_accession() if $attribute->get_termsource() && $attribute->get_termsource(1)->get_accession();
       }
     }
     # Push the protocol's columns onto the final @columns array
@@ -1073,11 +1096,11 @@ sub get_tsv_columns {
       my @input_columns;
       foreach my $applied_protocol (@$applied_protocols) {
         # Inputs go after the protocol if it's not the first protocol
-        my @input_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} @{$applied_protocol->{'applied_protocol'}->get_input_data()};
+        my @input_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} $applied_protocol->{'applied_protocol'}->get_input_data(1);
         for (my $i = 0; $i < scalar(@input_data); $i++) {
           my $input = $input_data[$i];
           $input_columns[$i] = [] if (ref($input_columns[$i]) ne "ARRAY");
-          my @is_seen = grep { $_ == $input->get_chadoxml_id} @seen_data;
+          my @is_seen = grep { $_ == $input->get_id} @seen_data;
           # If this datum has already been used as an output from the previous
           # set of protocols, then it shouldn't be reprinted as an input here
           if (!scalar(@is_seen)) {
@@ -1096,12 +1119,12 @@ sub get_tsv_columns {
     @seen_data = ();
     my @output_columns;
     foreach my $applied_protocol (@$applied_protocols) {
-      my @output_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} @{$applied_protocol->{'applied_protocol'}->get_output_data()};
+      my @output_data = sort { $a->get_heading() . " [" . $a->get_name() . "]" cmp $b->get_heading() . " [" . $b->get_name() . "]"} $applied_protocol->{'applied_protocol'}->get_output_data(1);
       for (my $i = 0; $i < scalar(@output_data); $i++) {
         my $output = $output_data[$i];
         $output_columns[$i] = [] if (ref($output_columns[$i]) ne "ARRAY");
         $self->flatten_data(@output_columns[$i], $output);
-        push @seen_data, $output->get_chadoxml_id();
+        push @seen_data, $output->get_id();
       } 
     }
     for (my $i = 0; $i < scalar(@output_columns); $i++) {
@@ -1128,7 +1151,7 @@ sub denormalize_applied_protocol : PRIVATE {
     return (1);
   }
   my $next_applied_protocols = $protocol_slots->[$slotnum];
-  my $previous_applied_protocol_id = $applied_protocol->{'applied_protocol'}->get_chadoxml_id();
+  my $previous_applied_protocol_id = $applied_protocol->{'applied_protocol'}->get_id();
   my @these_protocols;
 
   # For each applied protocol in the current slot
@@ -1168,12 +1191,12 @@ sub flatten_data : PRIVATE {
     push @$data_columns, $self->get_data_column_headings($datum);
   }
   push @{$data_columns->[$cur_column++]}, $datum->get_value();
-  push @{$data_columns->[$cur_column++]}, $datum->get_termsource()->get_db()->get_name() if $datum->get_termsource() && $datum->get_termsource()->get_db();
-  push @{$data_columns->[$cur_column++]}, $datum->get_termsource()->get_accession() if $datum->get_termsource() && $datum->get_termsource()->get_accession();
-  foreach my $attribute (@{$datum->get_attributes()}) {
+  push @{$data_columns->[$cur_column++]}, $datum->get_termsource(1)->get_db(1)->get_name() if $datum->get_termsource() && $datum->get_termsource(1)->get_db();
+  push @{$data_columns->[$cur_column++]}, $datum->get_termsource(1)->get_accession() if $datum->get_termsource() && $datum->get_termsource(1)->get_accession();
+  foreach my $attribute ($datum->get_attributes(1)) {
     push @{$data_columns->[$cur_column++]}, $attribute->get_value();
-    push @{$data_columns->[$cur_column++]}, $attribute->get_termsource()->get_db()->get_name() if $attribute->get_termsource() && $attribute->get_termsource()->get_db();
-    push @{$data_columns->[$cur_column++]}, $attribute->get_termsource()->get_accession() if $attribute->get_termsource() && $attribute->get_termsource()->get_accession();
+    push @{$data_columns->[$cur_column++]}, $attribute->get_termsource(1)->get_db(1)->get_name() if $attribute->get_termsource() && $attribute->get_termsource(1)->get_db();
+    push @{$data_columns->[$cur_column++]}, $attribute->get_termsource(1)->get_accession() if $attribute->get_termsource() && $attribute->get_termsource(1)->get_accession();
   }
 }
 
@@ -1194,23 +1217,23 @@ sub get_data_column_headings : PRIVATE {
     $datum_heading .= "[" . $datum->get_name() . "]" if (length($datum->get_name()));
   }
   # Datum type
-  if ($datum->get_type() && length($datum->get_type()->get_name()) && !($datum->get_type()->get_cv() && $datum->get_type()->get_cv()->get_name eq "mage")) {
+  if ($datum->get_type() && length($datum->get_type(1)->get_name()) && !($datum->get_type(1)->get_cv() && $datum->get_type(1)->get_cv(1)->get_name eq "mage")) {
     $datum_heading .= "(";
-    $datum_heading .= $datum->get_type()->get_cv()->get_name() . ":" if ($datum->get_type()->get_cv() && length($datum->get_type()->get_cv()->get_name()));
-    $datum_heading .= $datum->get_type()->get_name() . ")";
+    $datum_heading .= $datum->get_type(1)->get_cv(1)->get_name() . ":" if ($datum->get_type(1)->get_cv() && length($datum->get_type(1)->get_cv(1)->get_name()));
+    $datum_heading .= $datum->get_type(1)->get_name() . ")";
   }
   push @columns, [ $datum_heading ];
 
   # Datum termsource
-  if ($datum->get_termsource() && $datum->get_termsource->get_db()) {
+  if ($datum->get_termsource() && $datum->get_termsource(1)->get_db()) {
     push @columns, [ "Term Source REF" ];
-    if (length($datum->get_termsource()->get_accession())) {
+    if (length($datum->get_termsource(1)->get_accession())) {
       push @columns, [ "Term Accession Number" ];
     }
   }
 
   # Datum attributes
-  foreach my $attribute (@{$datum->get_attributes()}) {
+  foreach my $attribute ($datum->get_attributes(1)) {
     push @columns, $self->flatten_attribute($attribute);
   }
 
@@ -1226,16 +1249,16 @@ sub flatten_attribute : PRIVATE {
     $attribute_heading .= "[" . $attribute->get_name() . "]" if (length($attribute->get_name()));
   }
   # Attribute type
-  if ($attribute->get_type() && length($attribute->get_type()->get_name()) && !($attribute->get_type()->get_cv() && $attribute->get_type()->get_cv()->get_name eq "mage")) {
+  if ($attribute->get_type() && length($attribute->get_type(1)->get_name()) && !($attribute->get_type(1)->get_cv() && $attribute->get_type(1)->get_cv(1)->get_name eq "mage")) {
     $attribute_heading .= "(";
-    $attribute_heading .= $attribute->get_type()->get_cv()->get_name() . ":" if ($attribute->get_type()->get_cv() && length($attribute->get_type()->get_cv()->get_name()));
-    $attribute_heading .= $attribute->get_type()->get_name() . ")";
+    $attribute_heading .= $attribute->get_type(1)->get_cv(1)->get_name() . ":" if ($attribute->get_type(1)->get_cv() && length($attribute->get_type(1)->get_cv(1)->get_name()));
+    $attribute_heading .= $attribute->get_type(1)->get_name() . ")";
   }
   push @columns, [ $attribute_heading ];
   # Attribute termsource
-  if ($attribute->get_termsource() && $attribute->get_termsource->get_db()) {
+  if ($attribute->get_termsource() && $attribute->get_termsource(1)->get_db()) {
     push @columns, [ "Term Source REF" ];
-    if (length($attribute->get_termsource()->get_accession())) {
+    if (length($attribute->get_termsource(1)->get_accession())) {
       push @columns, [ "Term Accession Number" ];
     }
   }
