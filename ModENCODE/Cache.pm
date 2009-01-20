@@ -285,6 +285,9 @@ sub init_schema {
 }
 
 sub destroy {
+  foreach my $query (values(%queries)) {
+    $query->finish if $query && $query->{Active};
+  }
   $dbh->disconnect if ($dbh);
   foreach my $cacheset_name (keys(%cachesets)) {
     $cachesets{$cacheset_name} = undef;
