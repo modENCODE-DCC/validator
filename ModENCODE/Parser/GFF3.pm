@@ -218,7 +218,7 @@ sub parse
                         );
                 }
 
-		my $name = $attrs{Name}->[0] || $id;
+		$name = $attrs{Name}->[0] || $id;
 		my $feature = $this->create_feature($id, $name, $type, $organism);
 		## have valid seq loc
 		if ($start =~ /^\d+$/ && $end =~ /^\d+$/) {
