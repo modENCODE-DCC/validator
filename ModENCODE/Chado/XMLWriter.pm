@@ -271,17 +271,21 @@ sub write_applied_protocol : PRIVATE {
   if (!$seen_ids{ident $self}->{$id}++) {
     $self->println("<applied_protocol id=\"$id\">");
     $self->println("<protocol_id>" . $self->write_protocol($applied_protocol->get_protocol(1)) . "</protocol_id>");
-    foreach my $input_datum ($applied_protocol->get_input_data(1)) {
+    foreach my $input_datum_cache ($applied_protocol->get_input_data()) {
+      my $input_datum = $input_datum_cache->get_object; # Do this here so we only load each datum as we need it
       $self->println("<applied_protocol_data>");
       $self->println("<direction>input</direction>");
       $self->println("<data_id>" . $self->write_datum($input_datum) .  "</data_id>");
       $self->println("</applied_protocol_data>");
+      $input_datum_cache->shrink();
     }
-    foreach my $output_datum ($applied_protocol->get_output_data(1)) {
+    foreach my $output_datum_cache ($applied_protocol->get_output_data()) {
+      my $output_datum = $output_datum_cache->get_object; # Do this here so we only load each datum as we need it
       $self->println("<applied_protocol_data>");
       $self->println("<direction>output</direction>");
       $self->println("<data_id>" . $self->write_datum($output_datum) .  "</data_id>");
       $self->println("</applied_protocol_data>");
+      $output_datum_cache->shrink();
     }
     $self->println("</applied_protocol>");
   }
@@ -351,10 +355,12 @@ sub write_datum : PRIVATE {
       $self->println_to('data', "<type_id>" . $self->write_cvterm($datum->get_type(1)) . "</type_id>");
     }
 
-    foreach my $feature ($datum->get_features(1)) {
+    foreach my $feature_cache ($datum->get_features()) {
+      my $feature = $feature_cache->get_object; # Do this here so we only load each feature as we need it
       $self->println_to('data', "<data_feature>");
       $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
       $self->println_to('data', "</data_feature>");
+      $feature_cache->shrink();
     }
 
     foreach my $wiggle_data ($datum->get_wiggle_datas(1)) {
