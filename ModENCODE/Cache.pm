@@ -41,7 +41,7 @@ my $query_count = 0;
 
 sub dbh {
   unless ($dbh) {
-    my ($undef, $filename) = File::Temp::tempfile();
+    my ($undef, $filename) = File::Temp::tempfile( DIR => ModENCODE::Config::get_cfg()->val('cache', 'tmpdir'), SUFFIX => ".sqlite" );
 #    $filename = "/tmp/useme.sql";
     if (-e $filename) { unlink $filename; }
     $db_tempfile = $filename;

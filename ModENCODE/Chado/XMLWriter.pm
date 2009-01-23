@@ -210,7 +210,7 @@ sub write_chadoxml {
   $seen_ids{ident $self} = {};
   my @tempfile_names = ('dbxrefs', 'cvterms', 'organisms', 'features', 'featurelocs', 'featureprops', 'feature_relationships', 'analyses', 'analysisfeatures', 'attributes', 'protocols', 'wiggle_data', 'data', 'default');
   foreach my $tempfile (@tempfile_names) {
-    $self->get_tempfiles()->{$tempfile} = File::Temp::tempfile();
+    $self->get_tempfiles()->{$tempfile} = File::Temp::tempfile( DIR => ModENCODE::Config::get_cfg()->val('cache', 'tmpdir'), SUFFIX => ".chadoxml" );
   }
 
   # Assign IDs to and write the applied protocols
@@ -277,7 +277,7 @@ sub write_applied_protocol : PRIVATE {
       $self->println("<direction>input</direction>");
       $self->println("<data_id>" . $self->write_datum($input_datum) .  "</data_id>");
       $self->println("</applied_protocol_data>");
-      $input_datum_cache->shrink();
+      $input_datum_cache->set_content($input_datum_cache->get_id);
     }
     foreach my $output_datum_cache ($applied_protocol->get_output_data()) {
       my $output_datum = $output_datum_cache->get_object; # Do this here so we only load each datum as we need it
@@ -285,7 +285,7 @@ sub write_applied_protocol : PRIVATE {
       $self->println("<direction>output</direction>");
       $self->println("<data_id>" . $self->write_datum($output_datum) .  "</data_id>");
       $self->println("</applied_protocol_data>");
-      $output_datum_cache->shrink();
+      $output_datum_cache->set_content($output_datum_cache->get_id);
     }
     $self->println("</applied_protocol>");
   }
@@ -361,6 +361,7 @@ sub write_datum : PRIVATE {
       $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
       $self->println_to('data', "</data_feature>");
       $feature_cache->shrink();
+      $feature_cache->set_content($feature_cache->get_id);
     }
 
     foreach my $wiggle_data ($datum->get_wiggle_datas(1)) {
