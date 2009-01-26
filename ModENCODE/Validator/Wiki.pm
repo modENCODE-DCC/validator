@@ -249,6 +249,13 @@ sub validate {
         $success = 0;
         next;
       }
+      my $dbxref = new ModENCODE::Chado::DBXref({
+          'db' => new ModENCODE::Chado::DB({
+              'name' => 'ModencodeWiki'
+            }),
+          'accession' => $protocol->get_object->get_description,
+        });
+      $protocol->get_object->set_termsource($dbxref) unless $protocol->get_object->get_termsource;
       my $protocol_version = $wiki_protocol_def->get_version;
       $protocol->get_object->set_version($protocol_version);
       $protocol->get_object->set_description($protocol_description);
