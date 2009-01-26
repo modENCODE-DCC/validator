@@ -220,6 +220,24 @@ sub parse
 
 		$name = $attrs{Name}->[0] || $id;
 		my $feature = $this->create_feature($id, $name, $type, $organism);
+                # Add feature properties
+                foreach my $attr_name (keys(%attrs)) {
+                    next unless $attr_name =~ m/^[a-z]/;
+                    next if $attr_name eq "gene";
+
+                    my $rank = 0;
+                    foreach my $attr_value (@{$attrs{$attr_name}}) {
+                        my $featureprop = $this->create_feature_prop(
+                                $attr_value,
+                                $rank++, 
+                                new ModENCODE::Chado::CVTerm({
+                                        name => $attr_name,
+                                        cv => new ModENCODE::Chado::CV({ name => 'GFF' }),
+                        }));
+                    }
+                }
+
+
 		## have valid seq loc
 		if ($start =~ /^\d+$/ && $end =~ /^\d+$/) {
 			my $feature_loc =
