@@ -224,6 +224,8 @@ sub parse
                 foreach my $attr_name (keys(%attrs)) {
                     next unless $attr_name =~ m/^[a-z]/;
                     next if $attr_name eq "gene";
+                    next if $attr_name eq "parental_relationship";
+                    next if $attr_name eq "normscore";
 
                     my $rank = 0;
                     foreach my $attr_value (@{$attrs{$attr_name}}) {
