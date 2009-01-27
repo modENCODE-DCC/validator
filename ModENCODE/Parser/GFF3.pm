@@ -121,6 +121,7 @@ use ModENCODE::Chado::CVTerm;
 use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Analysis;
 use ModENCODE::Chado::AnalysisFeature;
+use ModENCODE::Chado::Organism;
 use ModENCODE::Cache;
 use ModENCODE::ErrorHandler qw(log_error);
 
