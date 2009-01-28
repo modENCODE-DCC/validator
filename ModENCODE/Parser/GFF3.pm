@@ -179,6 +179,7 @@ sub parse
 		elsif ($line =~ /^\s*$/) {
 			next;
 		}
+
 		my @fields = split(/\t/, $line);
 		die "Invalid number of fields: " . scalar(@fields)
 			if scalar(@fields) != 9;
@@ -213,6 +214,7 @@ sub parse
                         $organism = $src_feature->get_object->get_organism;
                 } else {
                         # Just get the first organism from the first seqfeature
+                        die "No genome-build directive found" unless $this->{build};
                         $organism =
                         $this->create_organism(
                           [values(%{$this->{build}})]->[0]->{'organism'}
