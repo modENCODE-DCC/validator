@@ -312,7 +312,15 @@ sub validate {
     while ($group_iter->has_next()) {
       log_error "Processing GFF feature group #$group_num.", "notice", ">";
       $group_num++;
-      my @features = $group_iter->next();
+      my @features;
+      eval { @features = $group_iter->next() };
+      if ($@) {
+        my $errmsg = $@;
+        my ($message, $line) = ($errmsg =~ m/^(.*)\s+at\s+\/.*GFF3\.pm\s+line\s+\d+\s*.+line\s+(\d+)/);
+        log_error "Error parsing GFF: $message at line $line of the GFF.", "error";
+        $success = 0;
+        last;
+      }
       log_error scalar(@features) . " features found.", "notice";
       foreach my $feature (@features) {
         $datum->get_object->add_feature($feature);
