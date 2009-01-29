@@ -355,15 +355,6 @@ sub write_datum : PRIVATE {
       $self->println_to('data', "<type_id>" . $self->write_cvterm($datum->get_type(1)) . "</type_id>");
     }
 
-    foreach my $feature_cache ($datum->get_features()) {
-      my $feature = $feature_cache->get_object; # Do this here so we only load each feature as we need it
-      $self->println_to('data', "<data_feature>");
-      $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
-      $self->println_to('data', "</data_feature>");
-      $feature_cache->shrink();
-      $feature_cache->set_content($feature_cache->get_id);
-    }
-
     foreach my $wiggle_data ($datum->get_wiggle_datas(1)) {
       $self->println_to('data', "<data_wiggle_data>");
       $self->println_to('data', "<wiggle_data_id>" . $self->write_wiggle_data($wiggle_data) . "</wiggle_data_id>");
@@ -383,6 +374,17 @@ sub write_datum : PRIVATE {
     }
 
     $self->println_to('data', "</data>");
+
+    foreach my $feature_cache ($datum->get_features()) {
+      my $feature = $feature_cache->get_object; # Do this here so we only load each feature as we need it
+      $self->println_to('data', "<data_feature>");
+      $self->println_to('data', "<data_id>" . $id . "</data_id>");
+      $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
+      $self->println_to('data', "</data_feature>");
+      $feature_cache->shrink();
+      $feature_cache->set_content($feature_cache->get_id);
+    }
+
   }
   return $id;
 }
