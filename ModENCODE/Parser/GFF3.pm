@@ -447,6 +447,7 @@ sub create_analysis_feature
                   });
 		$this->{analysis}->{$source} = $analysis;
 	}
+        $score = undef if $score eq ".";
 	my $analysis_feature = new ModENCODE::Chado::AnalysisFeature({
             'analysis' => $analysis,
             'rawscore' => $score,
