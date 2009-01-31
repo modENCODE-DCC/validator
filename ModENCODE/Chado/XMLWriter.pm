@@ -212,6 +212,9 @@ sub write_chadoxml {
   foreach my $tempfile (@tempfile_names) {
     $self->get_tempfiles()->{$tempfile} = File::Temp::tempfile( DIR => ModENCODE::Config::get_cfg()->val('cache', 'tmpdir'), SUFFIX => ".chadoxml" );
   }
+  # Flush the cache
+  ModENCODE::Cache::dbh->do("END TRANSACTION");
+  ModENCODE::Cache::dbh->do("BEGIN TRANSACTION");
 
   # Assign IDs to and write the applied protocols
   log_error "Writing protocols and data.", "notice", ">";
@@ -382,7 +385,6 @@ sub write_datum : PRIVATE {
       $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
       $self->println_to('data', "</data_feature>");
       $feature_cache->shrink();
-      $feature_cache->set_content($feature_cache->get_id);
     }
 
   }
