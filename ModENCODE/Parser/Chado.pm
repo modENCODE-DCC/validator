@@ -902,6 +902,7 @@ sub get_feature_by_dbs_and_accession {
     INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id
     INNER JOIN db ON dbx.db_id = db.db_id
     WHERE db.name = ANY (?) AND dbx.accession = ? AND fdbx.is_current = TRUE
+    AND f.is_obsolete = FALSE
     ");
   $sth->execute($db, $accession);
   my ($feature_id) = $sth->fetchrow_array();
