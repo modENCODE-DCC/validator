@@ -235,14 +235,14 @@ L<http://www.modencode.org>.
 
 use strict;
 use Class::Std;
-use Carp qw(carp croak);
+use Carp qw(carp croak confess);
 use ModENCODE::ErrorHandler qw(log_error);
 
 # Attributes
 my %feature_id       :ATTR( :name<id>,                                                  :default<undef> );
 my %dirty            :ATTR( :default<1> );
 my %name             :ATTR( :get<name>,                 :init_arg<name>,                :default<undef> );
-my %uniquename       :ATTR( :get<uniquename>,           :init_arg<uniquename>,          :default<undef> );
+my %uniquename       :ATTR( :get<uniquename>,           :init_arg<uniquename> );
 my %residues         :ATTR( :get<residues>,             :init_arg<residues>,            :default<undef> );
 my %seqlen           :ATTR( :get<seqlen>,               :init_arg<seqlen>,              :default<undef> );
 my %timeaccessioned  :ATTR( :get<timeaccessioned>,      :init_arg<timeaccessioned>,     :default<undef> );
