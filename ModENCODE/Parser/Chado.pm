@@ -454,7 +454,7 @@ sub get_applied_protocol {
   $sth = $self->get_prepared_query("SELECT data_id, direction FROM applied_protocol_data WHERE applied_protocol_id = ?");
   $sth->execute($applied_protocol_id);
   my $applied_protocol = new ModENCODE::Chado::AppliedProtocol({ 
-      'id' => $applied_protocol_id,
+#      'id' => $applied_protocol_id,
       'protocol' => $protocol,
     });
   while (my $row = $sth->fetchrow_hashref()) {
@@ -476,7 +476,7 @@ sub get_protocol {
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
   my $protocol = new ModENCODE::Chado::Protocol({ 
-      'id' => $protocol_id,
+#      'id' => $protocol_id,
       'name' => $row->{'name'},
       'version' => $row->{'version'},
       'description' => $row->{'description'},
@@ -500,7 +500,7 @@ sub get_datum {
   my $type = $self->get_type($row->{'type_id'});
 
   my $datum = new ModENCODE::Chado::Data({ 
-      'id' => $datum_id,
+#      'id' => $datum_id,
       'name' => $row->{'name'},
       'heading' => $row->{'heading'},
       'value' => $row->{'value'},
@@ -599,7 +599,7 @@ sub get_feature {
 
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $feature = new ModENCODE::Chado::Feature({
-      'id' => $feature_id,
+#      'id' => $feature_id,
       'name' => $row->{'name'},
       'uniquename' => $row->{'uniquename'},
       'residues' => $row->{'residues'},
@@ -669,7 +669,7 @@ sub get_analysisfeature {
   my $feature = $self->get_feature($row->{'feature_id'});
 
   my $analysisfeature = new ModENCODE::Chado::AnalysisFeature({ 
-      'id' => $analysisfeature_id,
+#      'id' => $analysisfeature_id,
       'rawscore' => $row->{'rawscore'},
       'normscore' => $row->{'normscore'},
       'significance' => $row->{'significance'},
@@ -689,7 +689,7 @@ sub get_analysis {
 
   
   my $analysis = new ModENCODE::Chado::Analysis({ 
-      'id' => $analysis_id,
+#      'id' => $analysis_id,
       'name' => $row->{'name'},
       'description' => $row->{'description'},
       'program' => $row->{'program'},
@@ -796,7 +796,7 @@ sub get_attribute {
   my $type = $self->get_type($row->{'type_id'});
 
   my $init_args = { 
-    'id' => $attribute_id,
+#    'id' => $attribute_id,
     'name' => $row->{'name'},
     'heading' => $row->{'heading'},
     'value' => $row->{'value'},
@@ -902,7 +902,6 @@ sub get_feature_by_dbs_and_accession {
     INNER JOIN dbxref dbx ON fdbx.dbxref_id = dbx.dbxref_id
     INNER JOIN db ON dbx.db_id = db.db_id
     WHERE db.name = ANY (?) AND dbx.accession = ? AND fdbx.is_current = TRUE
-    AND f.is_obsolete = FALSE
     ");
   $sth->execute($db, $accession);
   my ($feature_id) = $sth->fetchrow_array();
