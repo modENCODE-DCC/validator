@@ -302,8 +302,10 @@ sub parse
 			}
 			my $rank = 0;
 			foreach my $object_id (@{$parents}) {
-                                $object_id = &{$this->{id_callback}}($this, $object_id) 
-                                  if ($this->{id_callback});
+                                if (!$features{$object_id}) {
+                                        $object_id = &{$this->{id_callback}}($this, $object_id) 
+                                        if ($this->{id_callback});
+                                }
 				my $object = $features{$object_id} ||
 					die "$object_id for relationship  " .
 					"with $id not found";
@@ -350,9 +352,12 @@ sub create_feature
                 log_error "  Using it because unique constraints are identical.", "debug";
                 return $feature;
           } else {
-                log_error "  Not using it because organisms (GFF: " .
-                $organism->get_object->to_string . ", existing: " .
-                $feature->get_object->get_organism(1)->to_string . ") differ.", "debug";
+                log_error "The previously seen feature \"" . $feature->get_object->get_uniquename . "\"" .
+                " of type \"" . $feature->get_object->get_type(1)->get_name() . "\"" . 
+                " was created with <i>" . $feature->get_object->get_organism(1)->to_string . "</i>" .
+                " as an organism, rather than the GFF's <i>" . $organism->get_object->to_string . "</i>" .
+                ". Assuming the original organism is correct!", "warning";
+                $organism = $feature->get_object->get_organism();
           }
         }
 
