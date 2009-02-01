@@ -1178,7 +1178,7 @@ sub save_feature {
     $queries{'feature_ins'}->execute($feature->get_name, $feature->get_uniquename, $feature->get_residues, $feature->get_seqlen, $feature->get_timeaccessioned, $feature->get_timelastmodified, $feature->get_is_analysis, $feature->get_primary_dbxref_id, $feature->get_organism_id, $feature->get_type_id);
     my $id = ModENCODE::Cache::dbh->func('last_insert_rowid');
     $feature->set_id($id);
-    log_error "Saving feature " . $feature->get_uniquename() . " with id $id.", "debug" if DEBUG;
+    log_error "Saving feature " . $feature->get_uniquename() . " with id $id and type id " . $feature->get_type(1)->get_name() . "", "debug" if DEBUG;
   } else {
     modification_notification();
     my $id = $feature->get_id();
