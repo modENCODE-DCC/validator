@@ -894,6 +894,20 @@ sub get_feature_id_by_name_and_type {
   return $found_feature_ids[0];
 }
 
+sub get_feature_by_organisms_and_uniquename {
+  my ($self, $genus, $species, $accession) = @_;
+  my $sth = $self->get_prepared_query("
+    SELECT f.feature_id FROM feature f
+    INNER JOIN organism o ON f.organism_id = o.organism_id
+    WHERE o.genus = ANY(?) AND o.species = ANY(?) AND f.uniquename = ?
+    ");
+  $sth->execute($genus, $species, $accession);
+  my ($feature_id) = $sth->fetchrow_array();
+  return unless $feature_id;
+  return $self->get_feature($feature_id);
+}
+
+
 sub get_feature_by_dbs_and_accession {
   my ($self, $db, $accession) = @_;
   my $sth = $self->get_prepared_query("

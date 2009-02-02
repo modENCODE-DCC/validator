@@ -126,6 +126,18 @@ sub validate {
 
     log_error "Checking for transcripts in the $parser_name database.", "notice";
 
+    my ($genus, $species);
+    if ($parser_name eq "FlyBase") {
+      $genus = [ "Drosophila" ];
+      $species = [ "melanogaster" ];
+    } elsif ($parser_name eq "WormBase") {
+      $genus = [ "Caenorhabditis" ];
+      $species = [ "elegans" ];
+    } else {
+      $genus = [ "Drosophila", "Caenorhabditis" ];
+      $species = [ "melanogaster", "elegans" ];
+    }
+
     while (my $ap_datum = $self->next_datum) {
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
 
@@ -138,7 +150,9 @@ sub validate {
         next;
       }
 
-      my $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession);
+
+      my $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $accession);
+      $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession) unless $feature;
       next unless $feature;
 
       if ($feature->get_object->get_type(1)->get_name ne "transcript" && $feature->get_object->get_type(1)->get_name ne "mRNA") {
