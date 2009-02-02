@@ -349,6 +349,8 @@ sub validate {
       log_error "Protocol '" . $protocol->get_object->get_name() . "' has no protocol type definition in the IDF.", "warning";
     } 
     if (scalar(@wiki_protocol_types) != scalar(@idf_protocol_types)) {
+      log_error "Protocol '" . $protocol->get_object->get_name() . "' has a different number of types in the wiki (" .
+      scalar(@wiki_protocol_types) . ") and the IDF (" . scalar(@idf_protocol_types) . "), please fix this.", "error";
       $success = 0;
       next;
     }
