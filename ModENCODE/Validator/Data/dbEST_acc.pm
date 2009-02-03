@@ -125,6 +125,7 @@ use ModENCODE::Chado::CV;
 use ModENCODE::Chado::Organism;
 use ModENCODE::Parser::Chado;
 use ModENCODE::ErrorHandler qw(log_error);
+use LWP::UserAgent;
 #use ModENCODE::Validator::TermSources;
 
 use constant ESTS_AT_ONCE => 40;
@@ -134,7 +135,25 @@ my %soap_client                 :ATTR( :get<soap_client> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;
-  $soap_client{$ident} = SOAP::Lite->service('http://www.ncbi.nlm.nih.gov/entrez/eutils/soap/eutils.wsdl');
+
+  # Cache WSDL
+  my $root_dir = ModENCODE::Config::get_root_dir();
+  my $wsdl_url = 'http://www.ncbi.nlm.nih.gov/entrez/eutils/soap/eutils.wsdl';
+  my $cache_wsdl = $root_dir . "ontology_cache/eutils.wsdl";
+  my $useragent = new LWP::UserAgent();
+  my $res = $useragent->mirror($wsdl_url, $cache_wsdl);
+  if (!$res->is_success) {
+    if ($res->code == 304) {
+      log_error "Using cached copy of NCBI EUtils WSDL for fetching ESTs; no change on server.", "notice";
+    } else {
+      log_error "Can't fetch a copy of the NCBI EUtils WSDL for fetching ESTs.", "warning";
+      if (!(-r $cache_wsdl)) {
+        log_error "Couldn't fetch a copy of NCBI EUtils WSDL found, and no cached version found.", "error";
+      }
+    }
+  }
+
+  $soap_client{$ident} = SOAP::Lite->service("file:$cache_wsdl");
   $soap_client{$ident}->serializer->envprefix('SOAP-ENV');
   $soap_client{$ident}->serializer->encprefix('SOAP-ENC');
   $soap_client{$ident}->serializer->soapversion('1.1');
