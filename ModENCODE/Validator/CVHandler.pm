@@ -396,7 +396,7 @@ sub add_cv {
     } else {
       log_error "Can't fetch or check age of canonical CV source file for '$cv' at url '" . $newcv->{'url'} . "': " . $res->status_line, "warning";
       if (!(-r $cache_filename)) {
-        log_error "Couldn't fetch canonical source file '" . $newcv->{'url'} . "', and no cached copy found.";
+        log_error "Couldn't fetch canonical source file '" . $newcv->{'url'} . "', and no cached copy found.", "error";
         return 0;
       }
     }
