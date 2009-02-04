@@ -168,7 +168,7 @@ sub init_schema {
     'CREATE TABLE dbxref (
         dbxref_id INTEGER PRIMARY KEY,
         accession VARCHAR(255),
-        version INTEGER,
+        version VARCHAR(255),
         db_id INTEGER
     )',
     'CREATE TABLE experiment (
