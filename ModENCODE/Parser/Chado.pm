@@ -1301,6 +1301,15 @@ sub get_dbh : PRIVATE {
   return $dbh{ident $self};
 }
 
+sub set_schema {
+  my ($self, $schema) = @_;
+  $schema ||= "public";
+
+  $schema =~ s/;/_/g;
+
+  $dbh{ident $self}->do("SET search_path = $schema");
+}
+
 sub str_repeat : PRIVATE {
   my ($str, $count)  = @_;
   my $newstr = "";;
