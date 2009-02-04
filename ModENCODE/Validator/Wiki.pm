@@ -449,7 +449,7 @@ sub validate {
 
     # Validate the inputs and outputs from the SDRF against the wiki for each applied protocol
     my $applied_protocol_slot_for_this_protocol = 0;
-    for (my $i = 0; $i < scalar($experiment->get_applied_protocol_slots); $i++) {
+    for (my $i = 0; $i < scalar(@{$experiment->get_applied_protocol_slots}); $i++) {
       if ($experiment->get_applied_protocol_slots->[$i]->[0]->get_protocol(1)->get_name eq $protocol->get_object->get_name) {
         $applied_protocol_slot_for_this_protocol = $i;
         last;
