@@ -258,12 +258,26 @@ my %anonymous        :ATTR( :set<anonymous>,            :init_arg<anonymous>,   
 my %termsource       :ATTR( :set<termsource>,           :init_arg<termsource>,  :default<undef> );
 my %type             :ATTR( :set<type>,                 :init_arg<type>,        :default<undef> );
 my %attributes       :ATTR( :set<attributes>,           :init_arg<attributes>,  :default<[]> );
-my %features         :ATTR( :set<features>,             :init_arg<features>,    :default<[]> );
+my %features         :ATTR( :init_arg<features>,                                :default<{}> );
 my %wiggle_datas     :ATTR( :set<wiggle_datas>,         :init_arg<wiggle_datas>, :default<[]> );
 my %organisms        :ATTR( :set<organisms>,            :init_arg<organisms>,   :default<[]> );
 
 sub new_no_cache {
   return Class::Std::new(@_);
+}
+
+sub set_features {
+  my ($self, $new_features) = @_;
+  if (ref($new_features) eq "HASH") {
+    $features{ident $self} = $new_features;
+  } elsif (ref($new_features) eq "ARRAY") {
+    $features{ident $self} = {};
+    foreach my $new_feature (@$new_features) {
+      $features{ident $self}->{$new_feature->get_id} = $new_feature;
+    }
+  } else {
+    die "Can't set_features() something that isn't a hash or array: " . ref($new_features);
+  }
 }
 
 sub new {
@@ -314,7 +328,9 @@ sub BUILD {
   }
   my $features = $args->{'features'};
   if (defined($features)) {
-    if (ref($features) ne 'ARRAY') {
+    if (ref($features) eq 'HASH') {
+      $features = [ values(%$features) ];
+    } elsif (ref($features) ne 'ARRAY' && ref($features) ne 'HASH') {
       $features = [ $features ];
     }
     foreach my $feature (@$features) {
@@ -369,14 +385,14 @@ sub get_attributes {
 
 sub get_feature_ids {
   my $self = shift;
-  return map { $_->get_id } @{$features{ident $self}}
+  return keys(%{$features{ident $self}});
 }
 
 sub get_features {
   my $self = shift;
   my $get_cached_object = shift || 0;
-  my $features = $features{ident $self};
-  return $get_cached_object ? map { $_->get_object } @$features : @$features;
+  my @features = values(%{$features{ident $self}});
+  return $get_cached_object ? map { $_->get_object } @features : @features;
 }
 
 sub get_wiggle_data_ids {
@@ -432,8 +448,7 @@ sub get_termsource {
 sub add_feature {
   my ($self, $feature) = @_;
   ($feature->get_object->isa('ModENCODE::Chado::Feature')) or croak("Can't add a " . ref($feature) . " as a feature.");
-  return if grep { $_->get_id == $feature->get_id } @{$features{ident $self}};
-  push @{$features{ident $self}}, $feature;
+  $features{ident $self}->{$feature->get_id} = $feature;
 }
 
 sub add_wiggle_data {
