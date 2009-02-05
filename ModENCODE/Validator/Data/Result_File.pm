@@ -190,7 +190,7 @@ sub validate {
         #not okay.  report the error
         $error_msg = $res->status_line;
         log_error ("Error retrieving Result File [" . $datum_obj->get_name() . "] from " . $datum_obj->get_value(), "error");
-        log_error ("HTTP Response for $filename was:  " . $error_msg , "error");
+        log_error ("HTTP Response for $filename was:  " . $error_msg , "error", "<");
         $success = 0;
         next;
       }
