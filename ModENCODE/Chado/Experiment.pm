@@ -350,6 +350,7 @@ sub add_properties {
 sub add_property {
   my ($self, $property) = @_;
   ($property->isa('ModENCODE::Cache::ExperimentProp')) or croak("Can't add a " . ref($property) . " as a property.");
+  return if grep { $_->get_id == $property->get_id } @{$properties{ident $self}};
   push @{$properties{ident $self}}, $property;
 }
 

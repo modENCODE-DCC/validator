@@ -176,12 +176,14 @@ sub BUILD {
 sub add_input_datum {
   my ($self, $input_datum) = @_;
   ($input_datum->isa('ModENCODE::Cache::Data')) or croak("Can't add a " . ref($input_datum) . " as a input_datum.");
+  return if grep { $_->get_id == $input_datum->get_id } @{$input_data{ident $self}};
   push @{$input_data{ident $self}}, $input_datum;
 }
 
 sub add_output_datum {
   my ($self, $output_datum) = @_;
   ($output_datum->isa('ModENCODE::Cache::Data')) or croak("Can't add a " . ref($output_datum) . " as a output_datum.");
+  return if grep { $_->get_id == $output_datum->get_id } @{$output_data{ident $self}};
   push @{$output_data{ident $self}}, $output_datum;
 }
 

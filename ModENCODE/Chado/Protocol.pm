@@ -224,9 +224,8 @@ sub START {
 sub add_attribute {
   my ($self, $attribute) = @_;
   ($attribute->get_object->isa('ModENCODE::Chado::Attribute')) or croak("Can't add a " . ref($attribute) . " as a attribute.");
-  if (!scalar(grep { ref($_) ? $_->get_id == $attribute->get_id : $_ == $attribute->get_id } @{$attributes{ident $self}})) {
-    push @{$attributes{ident $self}}, $attribute;
-  }
+  return if grep { $_->get_id == $attribute->get_id } @{$attributes{ident $self}};
+  push @{$attributes{ident $self}}, $attribute;
   $self->save();
 }
 

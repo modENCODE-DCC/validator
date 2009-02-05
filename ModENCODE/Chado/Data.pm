@@ -432,24 +432,28 @@ sub get_termsource {
 sub add_feature {
   my ($self, $feature) = @_;
   ($feature->get_object->isa('ModENCODE::Chado::Feature')) or croak("Can't add a " . ref($feature) . " as a feature.");
+  return if grep { $_->get_id == $feature->get_id } @{$features{ident $self}};
   push @{$features{ident $self}}, $feature;
 }
 
 sub add_wiggle_data {
   my ($self, $wiggle_data) = @_;
   ($wiggle_data->get_object->isa('ModENCODE::Chado::Wiggle_Data')) or croak("Can't add a " . ref($wiggle_data) . " as a wiggle_data.");
+  return if grep { $_->get_id == $wiggle_data->get_id } @{$wiggle_datas{ident $self}};
   push @{$wiggle_datas{ident $self}}, $wiggle_data;
 }
 
 sub add_organism {
   my ($self, $organism) = @_;
   ($organism->get_object->isa('ModENCODE::Chado::Organism')) or croak("Can't add a " . ref($organism) . " as an organism.");
+  return if grep { $_->get_id == $organism->get_id } @{$organisms{ident $self}};
   push @{$organisms{ident $self}}, $organism;
 }
 
 sub add_attribute {
   my ($self, $attribute) = @_;
   ($attribute->get_object->isa('ModENCODE::Chado::Attribute')) or croak("Can't add a " . ref($attribute) . " as a attribute.");
+  return if grep { $_->get_id == $attribute->get_id } @{$attributes{ident $self}};
   push @{$attributes{ident $self}}, $attribute;
 }
 

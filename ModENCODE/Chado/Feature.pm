@@ -430,7 +430,7 @@ sub get_dbxrefs {
 sub add_dbxref {
   my ($self, $dbxref) = @_;
   ($dbxref->get_object->isa('ModENCODE::Chado::DBXref')) or Carp::confess("Can't add a " . ref($dbxref) . " as a dbxref.");
-  return if scalar(grep { $dbxref->get_id == $_ } $self->get_dbxref_ids); # No duplicates
+  return if grep { $_->get_id == $dbxref->get_id } @{$dbxrefs{ident $self}};
   push @{$dbxrefs{ident $self}}, $dbxref;
   if (!$self->get_primary_dbxref()) {
     $self->set_primary_dbxref($dbxref);
@@ -483,12 +483,24 @@ sub set_organism {
 sub add_location {
   my ($self, $location) = @_;
   ($location->isa('ModENCODE::Chado::FeatureLoc')) or Carp::confess("Can't add a " . ref($location) . " as a location.");
+  return if grep { 
+    $_->get_srcfeature->get_id == $location->get_srcfeature->get_id &&
+    $_->get_fmin == $location->get_fmin &&
+    $_->get_fmax == $location->get_fmax &&
+    $_->get_rank == $location->get_rank &&
+    $_->get_strand == $location->get_strand
+  } @{$locations{ident $self}};
   push @{$locations{ident $self}}, $location;
 }
 
 sub add_property {
   my ($self, $property) = @_;
   ($property->isa('ModENCODE::Chado::FeatureProp')) or Carp::confess("Can't add a " . ref($property) . " as a property.");
+  return if grep { 
+    $_->get_type->get_id == $property->get_type->get_id &&
+    $_->get_value == $property->get_value &&
+    $_->get_rank == $property->get_rank
+  } @{$properties{ident $self}};
   push @{$properties{ident $self}}, $property;
 }
 
@@ -531,7 +543,7 @@ sub get_relationships {
 sub add_relationship {
   my ($self, $relationship) = @_;
   ($relationship->get_object->isa('ModENCODE::Chado::FeatureRelationship')) or Carp::confess("Can't add a " . ref($relationship) . " as a feature relationship.");
-  return if scalar(grep { $relationship->get_id == $_ } $self->get_relationship_ids); # No duplicates
+  return if grep { $_->get_id == $relationship->get_id } @{$relationships{ident $self}};
   push @{$relationships{ident $self}}, $relationship;
 }
 

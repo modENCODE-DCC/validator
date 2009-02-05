@@ -205,6 +205,7 @@ sub new {
 sub add_organism {
   my ($self, $organism) = @_;
   ($organism->isa('ModENCODE::Cache::Organism')) or croak("Can't add a " . ref($organism) . " as an organism.");
+  return if grep { $_->get_id == $organism->get_id } @{$organisms{ident $self}};
   push @{$organisms{ident $self}}, $organism;
   $self->save;
 }
