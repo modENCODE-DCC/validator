@@ -378,35 +378,35 @@ sub BUILD {
 
 
     data_file_header:                   /Result *Files?/i
-    data_file:                          data_file_header <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
+    data_file:                          data_file_header <skip:' *'> bracket_term(?) <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = $item[5][0] || 'xsd:file';
-                                            return $self->create_datum($item[1], $value, $item[3], $type, undef, $item[7], $values);
+                                            return $self->create_datum($item[1], $value, $item[3][0], $type, undef, $item[7], $values);
                                           };
                                         }
 
     array_data_file_header:             /(Derived)? *Array *Data *Files?/i
-    array_data_file:                    array_data_file_header <skip:' *'> bracket_term <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
+    array_data_file:                    array_data_file_header <skip:' *'> bracket_term(?) <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = $item[5][0] || 'xsd:file';
-                                            return $self->create_datum($item[1], $value, $item[3], $type, undef, $item[7], $values);
+                                            return $self->create_datum($item[1], $value, $item[3][0], $type, undef, $item[7], $values);
                                           };
                                         }
 
     array_matrix_data_file_header:      /Array *Matrix *Data *Files?/i
-    array_matrix_data_file:             array_matrix_data_file_header <skip:' *'> bracket_term  <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
+    array_matrix_data_file:             array_matrix_data_file_header <skip:' *'> bracket_term(?)  <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = $item[5][0] || 'xsd:file';
-                                            return $self->create_datum($item[1], $value, $item[3], $type, undef, $item[7], $values);
+                                            return $self->create_datum($item[1], $value, $item[3][0], $type, undef, $item[7], $values);
                                           };
                                         }
 
