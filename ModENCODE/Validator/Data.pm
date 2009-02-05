@@ -188,7 +188,10 @@ sub validate {
   my $file_validator = new ModENCODE::Validator::Data::Result_File({ 'experiment' => $self->get_experiment });
   foreach my $ap_datum (@all_data) {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
-    if ($datum->get_object->get_heading() =~ m/Result *Files?/i) {
+    if (
+      $datum->get_object->get_heading() =~ m/Result *Files?/i ||
+      $datum->get_object->get_heading() =~ m/Array *Data *Files?/i
+    ) {
       $file_validator->add_datum_pair($ap_datum);
     }
   }
