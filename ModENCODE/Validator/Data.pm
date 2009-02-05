@@ -190,7 +190,10 @@ sub validate {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
     if (
       $datum->get_object->get_heading() =~ m/Result *Files?/i ||
-      $datum->get_object->get_heading() =~ m/Array *Data *Files?/i
+      $datum->get_object->get_heading() =~ m/Parameter *Files?/i ||
+      $datum->get_object->get_heading() =~ m/Array *Data *Files?/i ||
+      $datum->get_object->get_heading() =~ m/Array *Matrix *Data *Files?/i ||
+      $datum->get_object->get_heading() =~ m/(Derived)? Array *Data *Files?/i
     ) {
       $file_validator->add_datum_pair($ap_datum);
     }
