@@ -211,6 +211,7 @@ sub init_schema {
         fmax INTEGER,
         rank INTEGER,
         strand INTEGER,
+        residue_info TEXT,
         srcfeature_id INTEGER
     )',
     'CREATE INDEX fl_feature_idx ON featureloc(feature_id)',
@@ -1155,7 +1156,7 @@ sub save_feature {
 
   # Featurelocs
   $queries{'del_feature_locs'} = ModENCODE::Cache::dbh->prepare('DELETE FROM featureloc WHERE feature_id = ?') unless $queries{'del_feature_locs'};
-  $queries{'add_feature_loc'} = ModENCODE::Cache::dbh->prepare('INSERT INTO featureloc (feature_id, fmin, fmax, rank, strand, srcfeature_id) VALUES(?, ?, ?, ?, ?, ?)') unless $queries{'add_feature_loc'};
+  $queries{'add_feature_loc'} = ModENCODE::Cache::dbh->prepare('INSERT INTO featureloc (feature_id, fmin, fmax, rank, strand, srcfeature_id, residue_info) VALUES(?, ?, ?, ?, ?, ?, ?)') unless $queries{'add_feature_loc'};
 
   # Featureprops
   $queries{'del_feature_props'} = ModENCODE::Cache::dbh->prepare('DELETE FROM featureprop WHERE feature_id = ?') unless $queries{'del_feature_props'};
@@ -1190,7 +1191,7 @@ sub save_feature {
   $queries{'del_feature_locs'}->execute($feature->get_id);
   foreach my $featureloc (@{$feature->get_locations}) {
     modification_notification();
-    $queries{'add_feature_loc'}->execute($feature->get_id, $featureloc->get_fmin, $featureloc->get_fmax, $featureloc->get_rank, $featureloc->get_strand, $featureloc->get_srcfeature_id);
+    $queries{'add_feature_loc'}->execute($feature->get_id, $featureloc->get_fmin, $featureloc->get_fmax, $featureloc->get_rank, $featureloc->get_strand, $featureloc->get_srcfeature_id, $featureloc->get_residue_info);
   }
 
   # Update links to feature properties
@@ -1250,7 +1251,7 @@ sub load_feature {
   }
 
   # Feature locations
-  $queries{'featurelocs_get'} = ModENCODE::Cache::dbh->prepare('SELECT fmin, fmax, rank, strand, srcfeature_id AS srcfeature FROM featureloc WHERE feature_id = ?') unless $queries{'featurelocs_get'};
+  $queries{'featurelocs_get'} = ModENCODE::Cache::dbh->prepare('SELECT fmin, fmax, rank, strand, srcfeature_id AS srcfeature, residue_info FROM featureloc WHERE feature_id = ?') unless $queries{'featurelocs_get'};
   $queries{'featurelocs_get'}->execute($feature_id);
   while (my $row = $queries{'featurelocs_get'}->fetchrow_hashref()) {
     $row->{'srcfeature'} = $cachesets{'feature'}->get_from_id_cache($row->{'srcfeature'});

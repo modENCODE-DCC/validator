@@ -488,7 +488,8 @@ sub add_location {
     $_->get_fmin == $location->get_fmin &&
     $_->get_fmax == $location->get_fmax &&
     $_->get_rank == $location->get_rank &&
-    $_->get_strand == $location->get_strand
+    $_->get_strand == $location->get_strand &&
+    $_->get_residue_info eq $location->get_residue_info
   } @{$locations{ident $self}};
   push @{$locations{ident $self}}, $location;
 }

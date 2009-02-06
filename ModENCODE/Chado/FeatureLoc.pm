@@ -141,6 +141,7 @@ my %fmin             :ATTR( :name<fmin>,                :default<undef> );
 my %fmax             :ATTR( :name<fmax>,                :default<undef> );
 my %rank             :ATTR( :name<rank>,                :default<undef> );
 my %strand           :ATTR( :name<strand>,              :default<undef> );
+my %residue_info     :ATTR( :name<residue_info>,        :default<undef> );
 
 # Relationships
 my %srcfeature       :ATTR( :init_arg<srcfeature>,           :default<undef> );

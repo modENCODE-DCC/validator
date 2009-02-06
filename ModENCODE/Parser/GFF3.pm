@@ -268,11 +268,15 @@ sub parse
 			my $target_feature = $features{$target_id} ||
 				die "No feature found for target $target_id";
 			$target_strand = "+" if !$target_strand;
+
+                        my $residue_info = $attrs{Gap}->[0] if $attrs{Gap};
+
 			my $target_feature_loc =
 				$this->create_feature_loc($target_start,
 							  $target_end,
 							  $target_strand,
-							  $target_feature);
+							  $target_feature,
+                                                          $residue_info);
 			$target_feature_loc->set_rank(1);
 			$feature->get_object->add_location($target_feature_loc);
 			$feature->get_object->set_is_analysis(1);
@@ -398,7 +402,7 @@ sub create_organism
 sub create_feature_loc
 {
 	my $this = shift;
-	my ($start, $end, $strand, $src_feature) = @_;
+	my ($start, $end, $strand, $src_feature, $residue_info) = @_;
 	if ($strand !~ /^\d+/) {
 		if ($strand eq "+") {
 			$strand = 1;
@@ -414,6 +418,7 @@ sub create_feature_loc
 	$feature_loc->set_fmin($start - 1);
 	$feature_loc->set_fmax($end);
 	$feature_loc->set_strand($strand);
+	$feature_loc->set_residue_info($residue_info);
 	$feature_loc->set_srcfeature($src_feature) if $src_feature;
 	return $feature_loc;
 }

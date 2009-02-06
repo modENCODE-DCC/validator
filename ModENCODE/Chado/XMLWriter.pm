@@ -484,6 +484,7 @@ sub write_featureloc : PRIVATE {
   $self->println_to('featurelocs', "<fmax>" . xml_escape($featureloc->get_fmax()) . "</fmax>") if length($featureloc->get_fmax());
   $self->println_to('featurelocs', "<rank>" . xml_escape($featureloc->get_rank()) . "</rank>") if length($featureloc->get_rank());
   $self->println_to('featurelocs', "<strand>" . xml_escape($featureloc->get_strand()) . "</strand>") if length($featureloc->get_strand());
+  $self->println_to('featurelocs', "<residue_info>" . xml_escape($featureloc->get_residue_info()) . "</residue_info>") if length($featureloc->get_residue_info());
   if ($featureloc->get_srcfeature()) {
     $self->println_to('featurelocs', "<srcfeature_id>" . $self->write_feature($featureloc->get_srcfeature(1)) . "</srcfeature_id>");
   }
