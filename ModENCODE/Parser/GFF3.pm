@@ -185,6 +185,11 @@ sub parse
 			if scalar(@fields) != 9;
 		my ($seqid, $source, $type, $start, $end, $score, $strand,
 			$phase, $attrs_field) = @fields;
+
+                die "Field 9 must be of the form var=val (or ID=name), not just" .
+                " a string like $attrs_field" 
+                  if (length($attrs_field) > 0 && $attrs_field !~ /=/);
+
 		my @tokens = split(/;/, $attrs_field);
 		my %attrs = ();
 		foreach my $token (@tokens) {
