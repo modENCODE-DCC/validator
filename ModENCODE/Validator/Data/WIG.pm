@@ -141,6 +141,13 @@ sub validate {
       } else {
         # Assume BED
         my ($chr, $start, $end, $value) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)\s+([-+]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*$/);
+        unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
+          || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
+        ) {
+          log_error "WIG file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum. The chromosome $chr is invalid:\n      $line";
+          $success = 0;
+          last;
+        }    
         if (!(length($chr) && length($start) && length($end) && length($value))) {
           log_error "WIG file " . $datum_obj->get_value() . " is assumed to be BED format and is not properly formatted at line $linenum:\n      $line";	    		
           $success = 0;
