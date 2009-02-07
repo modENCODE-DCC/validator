@@ -484,7 +484,14 @@ sub add_location {
   my ($self, $location) = @_;
   ($location->isa('ModENCODE::Chado::FeatureLoc')) or Carp::confess("Can't add a " . ref($location) . " as a location.");
   return if grep { 
-    $_->get_srcfeature->get_id == $location->get_srcfeature->get_id &&
+    (
+      (
+        $_->get_srcfeature && $location->get_srcfeature &&
+        $_->get_srcfeature->get_id == $location->get_srcfeature->get_id
+      ) || (
+        !$_->get_srcfeature && !$location->get_srcfeature
+      )
+    ) && 
     $_->get_fmin == $location->get_fmin &&
     $_->get_fmax == $location->get_fmax &&
     $_->get_rank == $location->get_rank &&
