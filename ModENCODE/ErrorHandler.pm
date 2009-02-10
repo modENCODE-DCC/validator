@@ -147,8 +147,6 @@ sub _log_error {
   # < means decrease indent and add newline
   # . means do not change indent, do not print spaces, and do not add newline
   # = means do not change indent, do print spaces, and do not add newline
-  $indent{ident $self}-- if ($change_indent eq "<");
-  STDERR->autoflush(1) if ($change_indent eq "." || $change_indent eq "=");
 
   # Standardize the level name
   $level = 'error' if ($level =~ m/error/i);
@@ -158,6 +156,10 @@ sub _log_error {
   $level = 'error' unless $level;
   my @seen_error = grep { $_ eq $message } @{$self->get_seen_errors()->{$level}};
   return if ($level eq 'debug' && !DEBUG);
+
+  $indent{ident $self}-- if ($change_indent eq "<");
+  STDERR->autoflush(1) if ($change_indent eq "." || $change_indent eq "=");
+
   # Only print if we haven't seen this message before or if it's a notice
   if ((!scalar(@seen_error) || $level eq 'notice' || $level eq 'debug') && length($message)) {
     my $levelprefix;
