@@ -447,15 +447,105 @@ sub validate {
       next;
     }
 
-    # Validate the inputs and outputs from the SDRF against the wiki for each applied protocol
-    my $applied_protocol_slot_for_this_protocol = 0;
+    ############################
+    # Allow multiple protocols in a single column by checking to make sure inputs and outputs are identical
+    ############################
+    my @applied_protocols_for_this_protocol;
+    my $applied_protocol_slot_for_this_protocol;
     for (my $i = 0; $i < scalar(@{$experiment->get_applied_protocol_slots}); $i++) {
-      if ($experiment->get_applied_protocol_slots->[$i]->[0]->get_protocol(1)->get_name eq $protocol->get_object->get_name) {
+      push @applied_protocols_for_this_protocol, grep { $_->get_protocol_id == $protocol->get_id } @{$experiment->get_applied_protocol_slots->[$i]};
+      if (scalar(@applied_protocols_for_this_protocol)) {
         $applied_protocol_slot_for_this_protocol = $i;
         last;
       }
     }
-    my @applied_protocols_for_this_protocol = @{$experiment->get_applied_protocol_slots->[$applied_protocol_slot_for_this_protocol]};
+    if (scalar(@applied_protocols_for_this_protocol) != scalar(@{$experiment->get_applied_protocol_slots->[$applied_protocol_slot_for_this_protocol]})) {
+      log_error "You are using multiple protocols in a single column (column " . ($applied_protocol_slot_for_this_protocol+1) . "); this is supported only if the inputs and outputs are described identically in the wiki!", "warning";
+      my %seen;
+      # Compare wiki definitions to verify that they're the same
+      my @descriptions = grep { !$seen{$_}++ } map { 
+        $_->get_protocol(1)->get_termsource() ? $_->get_protocol(1)->get_termsource(1)->get_accession : $_->get_protocol(1)->get_description() 
+      } @{$experiment->get_applied_protocol_slots->[$applied_protocol_slot_for_this_protocol]};
+
+      my @definitions = map { 
+        my $url = $_;
+        my ($input_type_defs) = grep { $_->get_name() =~ /^\s*input *types?\s*$/i } @{$protocol_defs_by_url{$url}->get_values()};
+        my ($output_type_defs) = grep { $_->get_name() =~ /^\s*output *types?\s*$/i } @{$protocol_defs_by_url{$url}->get_values()};
+
+        my @input_defs = map {
+          my ($name, $cv, $term) = (undef, split(/:/, $_));
+          if (!defined($term)) {
+            $term = $cv;
+            $cv = $input_type_defs->get_types->[0];
+          }
+          ($term, $name) = ($term =~ m/([^\[]*)(?:\[([^\]]*)\])?/);
+          $term =~ s/^\s*|\s*$//g;
+          { 'term' => $term, 'cv' => $cv, 'name' => $name }
+        } @{$input_type_defs->get_values};
+
+        my @output_defs = map {
+          my ($name, $cv, $term) = (undef, split(/:/, $_));
+          if (!defined($term)) {
+            $term = $cv;
+            $cv = $output_type_defs->get_types->[0];
+          }
+          ($term, $name) = ($term =~ m/([^\[]*)(?:\[([^\]]*)\])?/);
+          $term =~ s/^\s*|\s*$//g;
+          { 'term' => $term, 'cv' => $cv, 'name' => $name }
+        } @{$output_type_defs->get_values};
+
+        [ \@input_defs, \@output_defs, $url ];
+
+      } @descriptions;
+      foreach my $definition (@definitions) {
+        my @inputs = @{$definition->[0]};
+        my @outputs = @{$definition->[1]};
+        my $url = $definition->[3];
+        foreach my $other_definition (@definitions) {
+          my @other_inputs = @{$other_definition->[0]};
+          my @other_outputs = @{$other_definition->[1]};
+          my $other_url = $other_definition->[3];
+          if (scalar(@other_inputs) != scalar(@inputs)) {
+            log_error "Protocol at $url has " . scalar(@inputs) . " inputs, while protocol at $other_url has " . scalar(@other_inputs) . " inputs. These cannot differ for alternative treatments!", "error";
+            $success = 0;
+          } elsif (scalar(@other_outputs) != scalar(@outputs)) {
+            log_error "Protocol at $url has " . scalar(@outputs) . " outputs, while protocol at $other_url has " . scalar(@other_outputs) . " outputs. These cannot differ for alternative treatments!", "error";
+            $success = 0;
+          }
+
+          for (my $i = 0; $i < scalar(@inputs); $i++) {
+            if (
+              $inputs[$i]->{'cv'} ne $other_inputs[$i]->{'cv'} ||
+              $inputs[$i]->{'name'} ne $other_inputs[$i]->{'name'} ||
+              $inputs[$i]->{'term'} ne $other_inputs[$i]->{'term'}
+            ) {
+              log_error "Input $i for the protocol at $url is not the same as input $i for the protocol at $other_url:", "error";
+              log_error "  " . $inputs[$i]->{'cv'} . ":" . $inputs[$i]->{'term'} . " [" . $inputs[$i]->{'name'} . "] != " . 
+                        $other_inputs[$i]->{'cv'} . ":" . $other_inputs[$i]->{'term'} . " [" . $other_inputs[$i]->{'name'} . "]", "error";
+              $success = 0;
+            }
+          }
+          for (my $i = 0; $i < scalar(@outputs); $i++) {
+            if (
+              $outputs[$i]->{'cv'} ne $other_outputs[$i]->{'cv'} ||
+              $outputs[$i]->{'name'} ne $other_outputs[$i]->{'name'} ||
+              $outputs[$i]->{'term'} ne $other_outputs[$i]->{'term'}
+            ) {
+              log_error "Input $i for the protocol at $url is not the same as output $i for the protocol at $other_url:", "error";
+              log_error "  " . $outputs[$i]->{'cv'} . ":" . $outputs[$i]->{'term'} . " [" . $outputs[$i]->{'name'} . "] != " . 
+                        $other_outputs[$i]->{'cv'} . ":" . $other_outputs[$i]->{'term'} . " [" . $other_outputs[$i]->{'name'} . "]", "error";
+              $success = 0;
+            }
+          }
+          return $success unless $success;
+        }
+      }
+    }
+    ############################
+    # End block to verify that protocols in a single column have the same inputs/outputs
+    ############################
+
+    # Validate the inputs and outputs from the SDRF against the wiki for each applied protocol
     foreach my $applied_protocol (@applied_protocols_for_this_protocol) {
       # INPUTS
       # Fail if there's more than one unnamed input in the SDRF
