@@ -230,7 +230,9 @@ sub parse
 		my $feature = $this->create_feature($id, $name, $type, $organism);
                 # Add feature properties
                 foreach my $attr_name (keys(%attrs)) {
-                    next unless $attr_name =~ m/^[a-z]/;
+                    if ($attr_name ne "Note") {
+                      next unless $attr_name =~ m/^[a-z]/;
+                    }
                     next if $attr_name eq "gene";
                     next if $attr_name eq "parental_relationship";
                     next if $attr_name eq "normscore";
