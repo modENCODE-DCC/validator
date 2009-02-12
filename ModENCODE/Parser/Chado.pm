@@ -308,6 +308,7 @@ my %protocol_slots   :ATTR(                          :default<[]> );
 my %experiment       :ATTR(                          :default<undef> );
 my %prepared_queries :ATTR(                          :default<{}> );
 my %no_relationships :ATTR( :name<no_relationships>, :default<0> );
+my %schema           :ATTR( :get<schema>,            :default<'public'> );
 
 sub new {
   my $self = Class::Std::new(@_);
@@ -638,7 +639,7 @@ sub get_featureloc {
       'fmax' => $row->{'fmax'},
       'rank' => $row->{'rank'},
       'strand' => $row->{'strand'},
-      'srcfeature' => $feature || $self->get_feature($row->{'srcfeature_id'}),
+      'srcfeature' => $self->get_feature($row->{'srcfeature_id'}) || $feature,
     });
   return $featureloc;
 }
@@ -892,6 +893,19 @@ sub get_feature_id_by_name_and_type {
     log_error join(", ", @found_feature_ids), "notice";
   }
   return $found_feature_ids[0];
+}
+
+sub get_feature_by_organisms_and_name {
+  my ($self, $genus, $species, $accession) = @_;
+  my $sth = $self->get_prepared_query("
+    SELECT f.feature_id FROM feature f
+    INNER JOIN organism o ON f.organism_id = o.organism_id
+    WHERE o.genus = ANY(?) AND o.species = ANY(?) AND f.name = ?
+    ");
+  $sth->execute($genus, $species, $accession);
+  my ($feature_id) = $sth->fetchrow_array();
+  return unless $feature_id;
+  return $self->get_feature($feature_id);
 }
 
 sub get_feature_by_organisms_and_uniquename {
@@ -1307,6 +1321,7 @@ sub set_schema {
 
   $schema =~ s/;/_/g;
 
+  $schema{ident $self} = $schema;
   $dbh{ident $self}->do("SET search_path = $schema");
 }
 
