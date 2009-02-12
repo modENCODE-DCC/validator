@@ -150,8 +150,31 @@ sub validate {
         next;
       }
 
+      my $feature;
+      if ($parser_name eq "modENCODE") {
+        if ($datum_obj->get_termsource() && $datum_obj->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+          my $version = $datum_obj->get_termsource(1)->get_db(1)->get_url();
+          if ($version !~ /^\d+$/) {
+            log_error "Found a modencode_submission Term Source REF for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "], but it's $version when it should be a numeric project ID.", "error";
+            $success = 0;
+            last;
+          }
+          my $schema = "modencode_experiment_${version}_data";
+          if ($parser->get_schema() ne $schema) {
+            log_error "Setting modENCODE Chado parser schema to '$schema' for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "].", "debug";
+            $parser->set_schema($schema);
+          }
+        } else {
+          if ($parser->get_schema() ne "public") {
+            log_error "Setting modENCODE Chado parser schema to 'public' for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "].", "debug";
+            $parser->set_schema("public");
+          }
+        }
+        $feature = $parser->get_feature_by_organisms_and_name($genus, $species, $accession);
+      }
 
-      my $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $accession);
+
+      $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $accession) unless $feature;
       $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession) unless $feature;
       next unless $feature;
 
