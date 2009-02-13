@@ -417,8 +417,8 @@ sub create_feature_loc
 		}
 	}
 	my $feature_loc = new ModENCODE::Chado::FeatureLoc();
-	$feature_loc->set_fmin($start - 1);
-	$feature_loc->set_fmax($end);
+	$feature_loc->set_fmin($start - 1) if defined($start);
+	$feature_loc->set_fmax($end) if defined($end);
 	$feature_loc->set_strand($strand);
 	$feature_loc->set_residue_info($residue_info);
 	$feature_loc->set_srcfeature($src_feature) if $src_feature;
