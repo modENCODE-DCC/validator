@@ -316,8 +316,13 @@ sub validate {
       eval { @features = $group_iter->next() };
       if ($@) {
         my $errmsg = $@;
-        my ($message, $line) = ($errmsg =~ m/^(.*)\s+at\s+\/.*GFF3\.pm\s+line\s+\d+\s*.+line\s+(\d+)/);
-        log_error "Error parsing GFF: $message at line $line of the GFF. ($errmsg)", "error";
+        chomp $errmsg;
+        my ($message, $line) = ($errmsg =~ m/^(.*)\s+at\s+.*GFF3\.pm\s+line\s+\d+\s*.+line\s+(\d+)/);
+        if ($message && $line) {
+          log_error "Error parsing GFF '" . $datum_obj->get_value . "': $message at line $line of the GFF.", "error", "<";
+        } else {
+          log_error "Error parsing GFF: '$errmsg'", "error", "<";
+        }
         $success = 0;
         last;
       }
