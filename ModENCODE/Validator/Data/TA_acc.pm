@@ -227,7 +227,7 @@ sub validate {
     $success = 0;
     foreach my $missing_trace (@not_found_by_acc) {
       my $datum_obj = $missing_trace->[2]->get_object;
-      log_error "Didn't find trace " . $datum_obj->get_value() . " in search results from NCBI.", "warning";
+      log_error "Didn't find trace " . $datum_obj->get_value() . " in search results from NCBI.", "error";
     }
     log_error "Done.", "notice", "<";
   }
