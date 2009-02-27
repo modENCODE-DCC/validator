@@ -130,9 +130,11 @@ sub validate {
           'definition' => $cv_obj->get_definition || undef,
         });
       $cv = ModENCODE::Cache::update_cv($cv_obj, $new_cv->get_object);
-      log_error "Updated CV " . $cv_obj->get_name . " with canonical name $canonical_cvname.", "debug";
+      log_error "Updated CV " . $cv_obj->get_name . " with canonical name $canonical_cvname.", "notice";
+      exit;
       $cv_obj = $cv->get_object;
     }
+    next;
 
     # Check that this CVTerm has a DBXref
     if ($cvterm_obj->get_dbxref()) {
@@ -163,7 +165,6 @@ sub validate {
       $cvterm->get_object->set_dbxref($dbxref);
     }
   }
-
 
   my @all_dbxrefs = ModENCODE::Cache::get_all_objects('dbxref');
 
@@ -219,7 +220,6 @@ sub validate {
       log_error "Didn't canonicalize DB " . $db_obj->get_name . "; no CV with the same name.", "notice";
     }
   }
-
 
   return $success;
 }

@@ -337,9 +337,11 @@ sub add_cv {
       return 0;
     } elsif ($cvurltype && !$cvurl) {
       log_error "Found a putative URL type ($cvurltype) but not a URL ($cvurl) for controlled vocabulary $cv. Assuming this is a CV we're not meant to check.", "warning";
-      my $newcv = {};
-      $newcv->{'names'} = [ $cv ];
-      $cvs{ident $self}->{$cvurl} = $newcv;
+      my $newcv = {
+        'urltype' => $cvurltype,
+        'names' => [ $cv ],
+      };
+      $cvs{ident $self}->{$cv} = $newcv;
       return 1;
     }   
   }
@@ -376,6 +378,7 @@ sub add_cv {
     $cvs{ident $self}->{$cvurl} = $newcv;
     return 1;
   }
+
 
   # Have we already fetched this URL?
   my $root_dir = ModENCODE::Config::get_root_dir();
@@ -654,11 +657,21 @@ sub get_db_object_by_cv_name {
 
 sub get_cv_by_name {
   my ($self, $cvname) = @_;
+  if ($cvname eq "FlyBase development CV") {
+    use Data::Dumper;
+    foreach my $cv_url (keys(%{$cvs{ident $self}})) {
+      print STDERR "$cv_url\n";
+      my $cv = $cvs{ident $self}->{$cv_url};
+      print STDERR "  " . join(", ", @{$cv->{'names'}}) . "\n";
+      print STDERR "  " . $cv->{'urltype'} . "\n";
+    }
+  }
   foreach my $cvurl (keys(%{$cvs{ident $self}})) {
     my @names = @{$cvs{ident $self}->{$cvurl}->{'names'}};
     if (scalar(grep{ lc($_) eq lc($cvname) } @names)) {
-#    if (scalar(grep { $_ eq $cvname } @names)) {
-      return $cvs{ident $self}->{$cvurl};
+      if ($cvurl) {
+        return $cvs{ident $self}->{$cvurl};
+      }
     }
   }
   return undef;

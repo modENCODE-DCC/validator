@@ -160,14 +160,34 @@ sub validate {
           foreach my $formvalues (@{$result_data->get_values()}) {
             my $rank = 0;
             foreach my $formvalue (@{$formvalues->get_values()}) {
-              my ($cv, $term, $name) = ModENCODE::Validator::CVHandler::parse_term($formvalue);
+              next unless scalar(@{$formvalues->get_types()});
+              my ($cv, $term, $name) = ModENCODE::Config::get_cvhandler()->parse_term($formvalue);
               my $type = new ModENCODE::Chado::CVTerm({
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
                 });
-              if (!length($term) && length($cv)) {
+              if (length($term) && length($cv)) {
+                if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
+                  my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+                  $type = new ModENCODE::Chado::CVTerm({
+                      'name' => $term,
+                      'cv' => new ModENCODE::Chado::CV({ 'name' => $canonical_cvname }),
+                    });
+                } else {
+                  my $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv);
+                  if (!$canonical_cv) {
+                    ModENCODE::Config::get_cvhandler()->add_cv($cv, undef, "database");
+                  } else {
+                    $cv = $canonical_cv->{'names'}->[0]
+                  }
+                  $type = new ModENCODE::Chado::CVTerm({
+                      'name' => $term,
+                      'cv' => new ModENCODE::Chado::CV({ 'name' => $cv }),
+                    });
+                }
+              } elsif (!length($term) && length($cv)) {
                 $term = $cv;
-                $cv = $result_data->get_types()->[0];
+                $cv = $formvalues->get_types()->[0];
                 if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
                   my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
                   $type = new ModENCODE::Chado::CVTerm({
