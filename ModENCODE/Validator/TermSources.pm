@@ -130,8 +130,7 @@ sub validate {
           'definition' => $cv_obj->get_definition || undef,
         });
       $cv = ModENCODE::Cache::update_cv($cv_obj, $new_cv->get_object);
-      log_error "Updated CV " . $cv_obj->get_name . " with canonical name $canonical_cvname.", "notice";
-      exit;
+      log_error "Updated CV " . $cv_obj->get_name . " with canonical name $canonical_cvname.", "debug";
       $cv_obj = $cv->get_object;
     }
     next;
