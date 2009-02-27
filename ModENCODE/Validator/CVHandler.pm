@@ -657,15 +657,6 @@ sub get_db_object_by_cv_name {
 
 sub get_cv_by_name {
   my ($self, $cvname) = @_;
-  if ($cvname eq "FlyBase development CV") {
-    use Data::Dumper;
-    foreach my $cv_url (keys(%{$cvs{ident $self}})) {
-      print STDERR "$cv_url\n";
-      my $cv = $cvs{ident $self}->{$cv_url};
-      print STDERR "  " . join(", ", @{$cv->{'names'}}) . "\n";
-      print STDERR "  " . $cv->{'urltype'} . "\n";
-    }
-  }
   foreach my $cvurl (keys(%{$cvs{ident $self}})) {
     my @names = @{$cvs{ident $self}->{$cvurl}->{'names'}};
     if (scalar(grep{ lc($_) eq lc($cvname) } @names)) {
