@@ -1323,6 +1323,9 @@ sub set_schema {
 
   $schema{ident $self} = $schema;
   $dbh{ident $self}->do("SET search_path = $schema");
+
+  my ($experiment_name) = $dbh{ident $self}->selectrow_array("SELECT uniquename FROM experiment");
+  return $experiment_name;
 }
 
 sub str_repeat : PRIVATE {
