@@ -138,6 +138,8 @@ sub validate {
       $species = [ "melanogaster", "elegans" ];
     }
 
+    my $experiment_name;
+
     while (my $ap_datum = $self->next_datum) {
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
 
@@ -161,13 +163,15 @@ sub validate {
           }
           my $schema = "modencode_experiment_${version}_data";
           if ($parser->get_schema() ne $schema) {
-            log_error "Setting modENCODE Chado parser schema to '$schema' for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "].", "debug";
-            $parser->set_schema($schema);
+            log_error "Setting modENCODE Chado parser schema to '$schema' for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "].", "notice";
+            $experiment_name = $parser->set_schema($schema);
+            log_error "Experiment name is $experiment_name.", "notice";
           }
         } else {
           if ($parser->get_schema() ne "public") {
             log_error "Setting modENCODE Chado parser schema to 'public' for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "].", "debug";
             $parser->set_schema("public");
+            $experiment_name = undef;
           }
         }
         $feature = $parser->get_feature_by_organisms_and_name($genus, $species, $accession);
@@ -175,6 +179,7 @@ sub validate {
 
 
       $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $accession) unless $feature;
+      $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $experiment_name . "." . $accession) unless ($feature || !$experiment_name);
       $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession) unless $feature;
       next unless $feature;
 
