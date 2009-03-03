@@ -180,8 +180,7 @@ sub validate {
         log_error("$filename found locally...overwriting...", "notice");
       }
 
-      unlink($filename) if (-e $filename);
-      my $res = $ua->request($req, $filename);
+      my $res = $ua->mirror($url, $filename);
       if ($res->is_success) {
         my $filesize = -s $filename;
         #set the datum to have the local filename
