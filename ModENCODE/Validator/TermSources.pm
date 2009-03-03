@@ -133,7 +133,6 @@ sub validate {
       log_error "Updated CV " . $cv_obj->get_name . " with canonical name $canonical_cvname.", "debug";
       $cv_obj = $cv->get_object;
     }
-    next;
 
     # Check that this CVTerm has a DBXref
     if ($cvterm_obj->get_dbxref()) {
