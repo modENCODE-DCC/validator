@@ -38,6 +38,7 @@ my $db_tempfile;
 my %queries;
 my %cachesets;
 my $query_count = 0;
+my $paused;
 
 sub dbh {
   unless ($dbh) {
@@ -1409,6 +1410,14 @@ sub load_feature_relationship {
 }
 ############# /FEATURE RELATIONSHIP ######### }
 
+
+sub set_paused {
+  $paused = shift;
+}
+
+sub get_paused {
+  return $paused;
+}
 
 sub modification_notification {
   if ($query_count++ % 20000 == 0) {

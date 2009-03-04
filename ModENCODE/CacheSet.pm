@@ -111,6 +111,7 @@ sub move_in_cache {
 sub add_to_cache {
   my $self = shift;
   my $obj = shift;
+  return $obj if ModENCODE::Cache::get_paused();
   my $curcache = $cacheobjs{ident $self};
   while (scalar(@_)) {
     my $key = shift;
