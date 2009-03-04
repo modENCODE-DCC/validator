@@ -79,7 +79,7 @@ sub validate {
       next if $line =~ m/^\s*$/; # Skip blank lines
 
       # handle the track header - you can have this more than once
-      if ($line =~ m/track type\=wiggle_0/) { #header
+      if ($line =~ m/track.+type\=wiggle_0/) { #header
         my ($header) = $line;
         $wiggle_data .= "$header";
         next;
