@@ -344,7 +344,7 @@ sub validate {
 my $gff_counter = 1;
 sub id_callback {
   my ($parser, $id, $name, $seqid, $source, $type, $start, $end, $score, $strand, $phase) = @_;
-  $id ||= $name || "gff_" . sprintf("ID%.6d", ++$gff_counter);
+  $id ||= "gff_" . sprintf("ID%.6d", ++$gff_counter);
   if ($type !~ /^(gene|transcript|CDS|EST|chromosome|chromosome_arm)$/) {
     $id = $parser->{'gff_submission_name'} . "." . $id;
   }
