@@ -124,7 +124,7 @@ sub validate {
       next;
     }
 
-    log_error "Checking for transcripts in the $parser_name database.", "notice";
+    log_error "Checking for transcripts in the $parser_name database.", "notice", ">";
 
     my ($genus, $species);
     if ($parser_name eq "FlyBase") {
@@ -140,6 +140,7 @@ sub validate {
 
     my $experiment_name;
 
+    my $found_transcripts = 0;
     while (my $ap_datum = $self->next_datum) {
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
 
@@ -177,7 +178,6 @@ sub validate {
         $feature = $parser->get_feature_by_organisms_and_name($genus, $species, $accession);
       }
 
-
       $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $accession) unless $feature;
       $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $experiment_name . "." . $accession) unless ($feature || !$experiment_name);
       $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession) unless $feature;
@@ -188,6 +188,8 @@ sub validate {
         next;
       }
 
+      $found_transcripts++;
+
       # Don't need to revalidate if we've found it
       $self->remove_current_datum;
 
@@ -195,6 +197,7 @@ sub validate {
       $datum->get_object->add_feature($feature);
     }
     $self->rewind();
+    log_error "Done. $found_transcripts found.", "notice", "<";
   }
   if ($self->num_data) {
     # Some transcripts weren't found in any parser
