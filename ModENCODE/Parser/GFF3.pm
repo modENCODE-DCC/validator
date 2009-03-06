@@ -245,6 +245,10 @@ sub parse
                                 new ModENCODE::Chado::CVTerm({
                                         name => $attr_name,
                                         cv => new ModENCODE::Chado::CV({ name => 'GFF' }),
+                                        dbxref => new ModENCODE::Chado::DBXref({ 
+                                            accession => $attr_name, 
+                                            db => new ModENCODE::Chado::DB({ 'name' => 'GFF' }),
+                                          })
                         }));
                     }
                 }
