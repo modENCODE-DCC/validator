@@ -196,22 +196,24 @@ sub validate {
       if (!ModENCODE::Config::get_cvhandler()->is_valid_accession($canonical_dbname, $dbxref_obj->get_accession)) {
         # Not currently an accession, do we actually have a term instead of an accession,
         # and if so, can we find the actual accession?
-        my $new_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($canonical_dbname, $dbxref_obj->get_accession);
-        if ($new_accession) {
-          if ($new_accession ne $dbxref_obj->get_accession) {
-            my $new_dbxref = new ModENCODE::Chado::DBXref({
-                'accession' => $new_accession,
-                'version' => $dbxref_obj->get_version,
-                'db' => $dbxref_obj->get_db,
-              });
-            $dbxref = ModENCODE::Cache::update_dbxref($dbxref_obj, $new_dbxref->get_object);
-            log_error "Updated DBXref " . $dbxref_obj->get_accession . " with real accession $new_accession.", "debug";
-            $dbxref_obj = $dbxref->get_object;
+        if ($dbxref_obj->get_db(1)->get_description ne "database") {
+          my $new_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($canonical_dbname, $dbxref_obj->get_accession);
+          if ($new_accession) {
+            if ($new_accession ne $dbxref_obj->get_accession) {
+              my $new_dbxref = new ModENCODE::Chado::DBXref({
+                  'accession' => $new_accession,
+                  'version' => $dbxref_obj->get_version,
+                  'db' => $dbxref_obj->get_db,
+                });
+              $dbxref = ModENCODE::Cache::update_dbxref($dbxref_obj, $new_dbxref->get_object);
+              log_error "Updated DBXref " . $dbxref_obj->get_accession . " with real accession $new_accession.", "debug";
+              $dbxref_obj = $dbxref->get_object;
+            }
+          } else {
+            # Couldn't find a valid accession
+            log_error $dbxref_obj->get_accession . " is not a valid accession in the database $canonical_dbname.", "error";
+            $success = 0;
           }
-        } else {
-          # Couldn't find a valid accession
-          log_error $dbxref_obj->get_accession . " is not a valid accession in the database $canonical_dbname.", "error";
-          $success = 0;
         }
       }
     } else {
