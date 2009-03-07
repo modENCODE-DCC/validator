@@ -556,10 +556,10 @@ sub get_accession_for_term {
         }
         return $accession;
       } else {
-        log_error "Unable to find accession for $term in $cvname";
+        log_error "Unable to find accession for $term in $cvname", "warning";
       }
     } else {
-      log_error "Unable to find accession for $term in $cvname";
+      log_error "Unable to find accession for $term in $cvname", "warning";
     }
   } elsif ($cv->{'urltype'} =~ m/^URL/i) {
     if ($self->is_valid_term($cvname, $term)) {
@@ -570,7 +570,7 @@ sub get_accession_for_term {
   }
   my ($matching_node) = grep { $_->name =~ m/^(.*:)?\Q$term\E$/ || $_->acc =~ m/^(.*:)?\Q$term\E$/ } @{$cv->{'nodes'}};
   if (!$matching_node) {
-    log_error "Unable to find accession for $term in $cvname" unless $matching_node;
+    log_error "Unable to find accession for $term in $cvname", "warning" unless $matching_node;
     return;
   }
   my $accession = $matching_node->acc;
