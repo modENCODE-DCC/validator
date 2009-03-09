@@ -196,7 +196,7 @@ sub validate {
       if (!ModENCODE::Config::get_cvhandler()->is_valid_accession($canonical_dbname, $dbxref_obj->get_accession)) {
         # Not currently an accession, do we actually have a term instead of an accession,
         # and if so, can we find the actual accession?
-        if ($dbxref_obj->get_db(1)->get_description ne "database") {
+        if ($dbxref_obj->get_db(1)->get_description =~ "OBO") {
           my $new_accession = ModENCODE::Config::get_cvhandler()->get_accession_for_term($canonical_dbname, $dbxref_obj->get_accession);
           if ($new_accession) {
             if ($new_accession ne $dbxref_obj->get_accession) {
@@ -217,7 +217,7 @@ sub validate {
         }
       }
     } else {
-      log_error "Didn't canonicalize DB " . $db_obj->get_name . "; no CV with the same name.", "notice";
+      log_error "Didn't canonicalize DB " . $db_obj->get_name . "; no CV with the same name.", "warning";
     }
   }
 
