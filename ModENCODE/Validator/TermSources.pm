@@ -122,6 +122,11 @@ sub validate {
     my $cv_obj = $cv->get_object;
 
     # Check that CV names are consistent
+    my $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv_obj->get_name);
+    if (!$canonical_cv) {
+      log_error "Cannot find CV for " . $cv_obj->get_name;
+      return 0;
+    }
     my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv_obj->get_name)->{'names'}->[0];
     if ($cv_obj->get_name ne $canonical_cvname) {
       # Update CV with new CV name
