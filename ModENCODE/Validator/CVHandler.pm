@@ -331,7 +331,10 @@ sub add_cv {
     my $res = $useragent{ident $self}->request(new HTTP::Request('GET' => $url));
     if (!$res->is_success) { log_error "Couldn't connect to canonical URL source ($url): " . $res->status_line; return 0; }
     ($cvurl) = ($res->content =~ m/<canonical_url>\s*(.*)\s*<\/canonical_url>/) unless $cvurl;
-    ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/) unless ($cvurltype && $cvurltype ne "database");
+    ($cvurltype) = ($res->content =~ m/<canonical_url_type>\s*(.*)\s*<\/canonical_url_type>/) unless $cvurltype; # && $cvurltype ne "database");
+    unless ($cvurltype =~ /^OBO$|^OWL$|^URL_.*/) {
+      $cvurl = undef;
+    }
     if ($cvurl && !$cvurltype) {
       log_error "Found a URL ($cvurl) but not a URL type ($cvurltype), for controlled vocabulary $cv. Please check DBFieldsConf.php", "error";
       return 0;
