@@ -320,6 +320,8 @@ sub parse
 			}
 			my $rank = 0;
 			foreach my $object_id (@{$parents}) {
+				my $rel_type = $relationships{$object_id} ||
+					"part_of";
                                 if (!$features{$object_id}) {
                                         $object_id = &{$this->{id_callback}}($this, $object_id) 
                                         if ($this->{id_callback});
@@ -327,8 +329,6 @@ sub parse
 				my $object = $features{$object_id} ||
 					die "$object_id for relationship  " .
 					"with $id not found";
-				my $rel_type = $relationships{$object_id} ||
-					"part_of";
 				my $feature_relationship =
 					$this->create_feature_relationship(
 						$feature,
