@@ -298,17 +298,18 @@ use ModENCODE::Chado::Organism;
 use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %dbh              :ATTR(                          :default<undef> );
-my %host             :ATTR( :name<host>,             :default<undef> );
-my %port             :ATTR( :name<port>,             :default<undef> );
-my %dbname           :ATTR( :name<dbname>,           :default<undef> );
-my %username         :ATTR( :name<username>,         :default<''> );
-my %password         :ATTR( :name<password>,         :default<''> );
-my %protocol_slots   :ATTR(                          :default<[]> );
-my %experiment       :ATTR(                          :default<undef> );
-my %prepared_queries :ATTR(                          :default<{}> );
-my %no_relationships :ATTR( :name<no_relationships>, :default<0> );
-my %schema           :ATTR( :get<schema>,            :default<'public'> );
+my %dbh                 :ATTR(                                :default<undef> );
+my %host                :ATTR( :name<host>,                   :default<undef> );
+my %port                :ATTR( :name<port>,                   :default<undef> );
+my %dbname              :ATTR( :name<dbname>,                 :default<undef> );
+my %username            :ATTR( :name<username>,               :default<''> );
+my %password            :ATTR( :name<password>,               :default<''> );
+my %protocol_slots      :ATTR(                                :default<[]> );
+my %experiment          :ATTR(                                :default<undef> );
+my %prepared_queries    :ATTR(                                :default<{}> );
+my %no_relationships    :ATTR( :name<no_relationships>,       :default<0> );
+my %child_relationships :ATTR( :name<child_relationships>,    :default<0> );
+my %schema              :ATTR( :get<schema>,                  :default<'public'> );
 
 sub new {
   my $self = Class::Std::new(@_);
@@ -582,6 +583,12 @@ sub get_feature {
     while (my $fr_row = $sth->fetchrow_hashref()) {
       push @relationships, $fr_row->{'feature_relationship_id'};
     }
+  } elsif ($self->get_child_relationships()) {
+    $sth = $self->get_prepared_query("SELECT fr.feature_relationship_id FROM feature_relationship fr INNER JOIN cvterm cvt ON fr.type_id = cvt.cvterm_id WHERE fr.object_id = ? AND (cvt.name = 'part_of' OR cvt.name = 'part of')");
+    $sth->execute($feature_id);
+    while (my $fr_row = $sth->fetchrow_hashref()) {
+      push @relationships, $fr_row->{'feature_relationship_id'};
+    }
   }
 
   my @dbxrefs;
@@ -623,7 +630,7 @@ sub get_feature {
     $feature->get_object->add_location($self->get_featureloc($location_id, $feature));
   }
   foreach my $relationship_id (@relationships) {
-    $feature->get_object->add_relationship($self->get_feature_relationship($relationship_id));
+    $feature->get_object->add_relationship($self->get_feature_relationship($relationship_id, $feature, $feature_id));
   }
   return $feature;
 }
@@ -645,16 +652,25 @@ sub get_featureloc {
 }
 
 sub get_feature_relationship {
-  my ($self, $feature_relationship_id) = @_;
+  my ($self, $feature_relationship_id, $calling_feature, $calling_feature_id) = @_;
   my $sth = $self->get_prepared_query("SELECT rank, subject_id, object_id, type_id FROM feature_relationship WHERE feature_relationship_id = ?");
   $sth->execute($feature_relationship_id);
   my $row = $sth->fetchrow_hashref();
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+
+  my $subject = undef;
+  $subject = $calling_feature if ($calling_feature_id == $row->{'subject_id'});
+  $subject ||= $self->get_feature($row->{'subject_id'});
+
+  my $object = undef;
+  $object = $calling_feature if ($calling_feature_id == $row->{'object_id'});
+  $object ||= $self->get_feature($row->{'object_id'});
+
   my $feature_relationship = new ModENCODE::Chado::FeatureRelationship({
       'rank' => $row->{'rank'},
       'type' => $self->get_type($row->{'type_id'}),
-      'subject' => $self->get_feature($row->{'subject_id'}),
-      'object' => $self->get_feature($row->{'object_id'}),
+      'subject' => $subject,
+      'object' => $object,
     });
   return $feature_relationship;
 }
@@ -1023,8 +1039,8 @@ sub get_tsv {
   foreach my $column (@$columns) {
     if (scalar(@$column) != $expected_length) {
       log_error "Cannot print_tsv a \@columns array that is not a rectangular array of arrays: column " . $column->[0] . " has " . scalar(@$column) . " rows, when $expected_length were expected";
-      print join("\n", map { $_->[0] . str_repeat(".", (120-(length($_->[0])))) . scalar(@$_) } @$columns);
-      print "\n";
+      print STDERR join("\n", map { $_->[0] . str_repeat(".", (120-(length($_->[0])))) . scalar(@$_) } @$columns);
+      print STDERR "\n";
       return;
     }
   }

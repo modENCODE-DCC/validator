@@ -146,6 +146,7 @@ sub validate {
 
       my $datum_obj = $datum->get_object;
       my $accession = $datum_obj->get_value;
+      log_error "Trying to find transcript by $accession in $parser_name.", "debug";
 
       if (!length($accession)) {
         log_error "Empty value for EST accession in column " . $datum_obj->get_heading . " [" . $datum_obj->get_name . "].", "warning";
@@ -193,7 +194,7 @@ sub validate {
       # Don't need to revalidate if we've found it
       $self->remove_current_datum;
 
-      log_error "Found transcript $accession in $parser_name.", "debug";
+      log_error "Found transcript $accession in $parser_name.", "notice";
       $datum->get_object->add_feature($feature);
     }
     $self->rewind();
@@ -227,6 +228,7 @@ sub get_flybase_chado_parser : PROTECTED {
     });
   return undef unless $parser;
   $parser->set_no_relationships(1);
+  $parser->set_child_relationships(1);
   return $parser;
 }
 
@@ -242,6 +244,7 @@ sub get_wormbase_chado_parser : PROTECTED {
     });
   return undef unless $parser;
   $parser->set_no_relationships(1);
+  $parser->set_child_relationships(1);
   return $parser;
 }
 
@@ -257,6 +260,7 @@ sub get_modencode_chado_parser : PROTECTED {
     });
   return undef unless $parser;
   $parser->set_no_relationships(1);
+  $parser->set_child_relationships(1);
   return $parser;
 }
 
