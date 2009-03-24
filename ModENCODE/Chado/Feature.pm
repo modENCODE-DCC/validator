@@ -499,6 +499,7 @@ sub add_location {
     $_->get_residue_info eq $location->get_residue_info
   } @{$locations{ident $self}};
   push @{$locations{ident $self}}, $location;
+  $self->dirty();
 }
 
 sub add_property {
@@ -510,6 +511,7 @@ sub add_property {
     $_->get_rank == $property->get_rank
   } @{$properties{ident $self}};
   push @{$properties{ident $self}}, $property;
+  $self->dirty();
 }
 
 sub add_analysisfeature {
@@ -521,18 +523,23 @@ sub add_analysisfeature {
     # Duplicate, so update the existing one if necessary
     if ($analysisfeature->get_rawscore() && !$existing_af->get_rawscore()) {
       $existing_af->set_rawscore($analysisfeature->get_rawscore);
+      $self->dirty();
     }
     if ($analysisfeature->get_normscore() && !$existing_af->get_normscore()) {
       $existing_af->set_normscore($analysisfeature->get_normscore);
+      $self->dirty();
     }
     if ($analysisfeature->get_significance() && !$existing_af->get_significance()) {
       $existing_af->set_significance($analysisfeature->get_significance);
+      $self->dirty();
     }
     if ($analysisfeature->get_identity() && !$existing_af->get_identity()) {
       $existing_af->set_identity($analysisfeature->get_identity);
+      $self->dirty();
     }
   } else {
     push @{$analysisfeatures{ident $self}}, $analysisfeature;
+    $self->dirty();
   }
 }
 
@@ -553,6 +560,7 @@ sub add_relationship {
   ($relationship->get_object->isa('ModENCODE::Chado::FeatureRelationship')) or Carp::confess("Can't add a " . ref($relationship) . " as a feature relationship.");
   return if grep { $_->get_id == $relationship->get_id } @{$relationships{ident $self}};
   push @{$relationships{ident $self}}, $relationship;
+  $self->dirty();
 }
 
 sub to_string {
