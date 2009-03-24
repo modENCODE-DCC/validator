@@ -30,6 +30,7 @@ use ModENCODE::Chado::Protocol;
 use ModENCODE::Chado::Analysis;
 use ModENCODE::Chado::AnalysisFeature;
 use ModENCODE::Chado::FeatureLoc;
+use ModENCODE::Chado::FeatureProp;
 
 use constant DEBUG => 0;
 
