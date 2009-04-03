@@ -91,6 +91,7 @@ use strict;
 my %name             :ATTR( :name<name> );
 my %types            :ATTR( :name<types>, :default<[]> );
 my %values           :ATTR( :get<values>, :init_arg<values>, :default<[]> );
+my %brackets         :ATTR( :name<brackets>, :default<undef> );
 
 sub BUILD {
   my ($self, $ident, $args) = @_;

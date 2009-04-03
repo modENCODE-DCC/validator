@@ -197,6 +197,9 @@ sub validate {
               } elsif (!length($term)) {
                 $term = $formvalue;
               }
+              if (!$formvalues->get_types()->[0] || $formvalues->get_brackets() eq "off") {
+                $term = $formvalue;
+              }
               my $new_attribute = new ModENCODE::Chado::DatumAttribute({
                   'heading' => $formvalues->get_name(),
                   'value' => $term,

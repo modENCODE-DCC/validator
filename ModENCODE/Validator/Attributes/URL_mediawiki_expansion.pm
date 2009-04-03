@@ -197,6 +197,10 @@ sub validate {
               } elsif (!length($term)) {
                 $term = $formvalue;
               }
+              if (!$formvalues->get_types()->[0] || $formvalues->get_brackets() eq "off") {
+                $term = $formvalue;
+              }
+
               my $new_attribute;
               if ($attribute->get_object->isa('ModENCODE::Chado::ProtocolAttribute')) {
                 $new_attribute = new ModENCODE::Chado::ProtocolAttribute({
