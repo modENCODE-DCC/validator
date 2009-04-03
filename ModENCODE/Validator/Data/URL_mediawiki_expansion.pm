@@ -160,7 +160,6 @@ sub validate {
           foreach my $formvalues (@{$result_data->get_values()}) {
             my $rank = 0;
             foreach my $formvalue (@{$formvalues->get_values()}) {
-              next unless scalar(@{$formvalues->get_types()});
               my ($cv, $term, $name) = ModENCODE::Config::get_cvhandler()->parse_term($formvalue);
               my $type = new ModENCODE::Chado::CVTerm({
                   'name' => 'string',
