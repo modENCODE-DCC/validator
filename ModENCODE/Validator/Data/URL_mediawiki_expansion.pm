@@ -170,6 +170,7 @@ sub validate {
                     'name' => 'anyURI',
                     'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
                   });
+                $term = $formvalue;
               } elsif (length($term) && length($cv)) {
                 if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
                   my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
