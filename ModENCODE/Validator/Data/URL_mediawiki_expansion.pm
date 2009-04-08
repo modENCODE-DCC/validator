@@ -165,7 +165,12 @@ sub validate {
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
                 });
-              if (length($term) && length($cv)) {
+              if ($cv =~ /http.?:/) {
+                my $type = new ModENCODE::Chado::CVTerm({
+                    'name' => 'anyURI',
+                    'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
+                  });
+              } elsif (length($term) && length($cv)) {
                 if (ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
                   my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
                   $type = new ModENCODE::Chado::CVTerm({
