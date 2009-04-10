@@ -263,6 +263,7 @@ sub parse
 				$this->create_feature_loc($start, $end, $strand,
 						$src_feature);
 			$feature->get_object->add_location($feature_loc);
+                        $feature->get_object->dirty();
 		}
 		## have a hit
 		if (my $target = $attrs{Target}->[0]) {
@@ -288,6 +289,7 @@ sub parse
                                                           $residue_info);
 			$target_feature_loc->set_rank(1);
 			$feature->get_object->add_location($target_feature_loc);
+                        $feature->get_object->dirty();
 			$feature->get_object->set_is_analysis(1);
 			my $analysis_feature =
 				$this->create_analysis_feature($score,
@@ -297,6 +299,7 @@ sub parse
                           $analysis_feature->set_normscore($attrs{'normscore'}->[0]);
                         }
 			$feature->get_object->add_analysisfeature($analysis_feature);
+                        $feature->get_object->dirty();
 		} elsif ($score ne '.') {
                         my $analysis_feature =
                                 $this->create_analysis_feature($score, 
@@ -306,6 +309,7 @@ sub parse
                           $analysis_feature->set_normscore($attrs{'normscore'}->[0]);
                         }
 			$feature->get_object->add_analysisfeature($analysis_feature);
+                        $feature->get_object->dirty();
                 }
 		my $parents = $attrs{Parent};
 		if ($parents) {
@@ -335,8 +339,10 @@ sub parse
 						$object, $rel_type, \$rank);
 				$feature->get_object->add_relationship(
 					$feature_relationship);
+                                $feature->get_object->dirty();
 				$object->get_object->add_relationship(
 					$feature_relationship);
+                                $object->get_object->dirty();
 			}
 		}
                 if (my $prediction_status = $attrs{'prediction_status'}->[0]) {
@@ -505,6 +511,7 @@ sub get_src_feature
 			$this->create_feature_loc($build_data->{start},
 			$build_data->{end}, 1);
 		$src_feature->get_object->add_location($feature_loc);
+                $src_feature->get_object->dirty();
 	}
 	return $src_feature;
 }

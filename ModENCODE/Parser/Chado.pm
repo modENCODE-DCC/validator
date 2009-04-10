@@ -632,6 +632,7 @@ sub get_feature {
   foreach my $relationship_id (@relationships) {
     $feature->get_object->add_relationship($self->get_feature_relationship($relationship_id, $feature, $feature_id));
   }
+  $feature->get_object->dirty();
   return $feature;
 }
 

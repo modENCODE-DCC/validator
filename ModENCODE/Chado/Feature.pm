@@ -270,7 +270,8 @@ sub set_locations { my ($self, $locations) = @_; $self->dirty(); $locations{iden
 sub set_properties { my ($self, $properties) = @_; $self->dirty(); $properties{ident $self} = $properties; }
 
 sub dirty {
-  $dirty{ident shift} = 1;
+  my $self = shift;
+  $dirty{$self} = 1;
 }
 
 sub clean {
@@ -365,8 +366,14 @@ sub START {
   my ($self, $ident, $args) = @_;
 
   # Make sure the primary DBXref is in the list of DBXrefs
-  if ($self->get_primary_dbxref) {
-    $self->set_primary_dbxref($self->get_primary_dbxref);
+  my $dbxref = $self->get_primary_dbxref;
+  if ($dbxref) {
+    my ($matching_dbxref) = grep { $dbxref->get_id == $_->get_id } $self->get_dbxrefs;
+    if (!$matching_dbxref) {
+      $self->add_dbxref($dbxref);
+      $matching_dbxref = $dbxref;
+      $self->dirty();
+    }
   }
 
   # Set the primary_dbxref if one hasn't yet been
@@ -499,7 +506,6 @@ sub add_location {
     $_->get_residue_info eq $location->get_residue_info
   } @{$locations{ident $self}};
   push @{$locations{ident $self}}, $location;
-  $self->dirty();
 }
 
 sub add_property {
@@ -511,7 +517,6 @@ sub add_property {
     $_->get_rank == $property->get_rank
   } @{$properties{ident $self}};
   push @{$properties{ident $self}}, $property;
-  $self->dirty();
 }
 
 sub add_analysisfeature {
@@ -523,23 +528,18 @@ sub add_analysisfeature {
     # Duplicate, so update the existing one if necessary
     if ($analysisfeature->get_rawscore() && !$existing_af->get_rawscore()) {
       $existing_af->set_rawscore($analysisfeature->get_rawscore);
-      $self->dirty();
     }
     if ($analysisfeature->get_normscore() && !$existing_af->get_normscore()) {
       $existing_af->set_normscore($analysisfeature->get_normscore);
-      $self->dirty();
     }
     if ($analysisfeature->get_significance() && !$existing_af->get_significance()) {
       $existing_af->set_significance($analysisfeature->get_significance);
-      $self->dirty();
     }
     if ($analysisfeature->get_identity() && !$existing_af->get_identity()) {
       $existing_af->set_identity($analysisfeature->get_identity);
-      $self->dirty();
     }
   } else {
     push @{$analysisfeatures{ident $self}}, $analysisfeature;
-    $self->dirty();
   }
 }
 
@@ -560,7 +560,6 @@ sub add_relationship {
   ($relationship->get_object->isa('ModENCODE::Chado::FeatureRelationship')) or Carp::confess("Can't add a " . ref($relationship) . " as a feature relationship.");
   return if grep { $_->get_id == $relationship->get_id } @{$relationships{ident $self}};
   push @{$relationships{ident $self}}, $relationship;
-  $self->dirty();
 }
 
 sub to_string {
