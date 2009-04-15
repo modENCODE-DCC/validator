@@ -210,9 +210,17 @@ sub parse
 		die "Duplicate id $id found" if $this->{$id}++;
 
 
+                my $orig_seqid = $seqid;
                 my $seqid_uniq = &{$this->{id_callback}}($this, $seqid, $seqid, $seqid, $source) if ($this->{id_callback});
                 $seqid = $seqid_uniq if ($seqid_uniq eq $id);
-                my $src_feature = ($seqid ne $id) ? $this->get_src_feature($seqid) : undef;
+                my $src_feature = undef;
+                my $add_as_srcfeature = 0;
+                if ($seqid ne $id) { 
+                  $src_feature = $this->get_src_feature($seqid);
+                } else {
+                  # Self-located features can be used as source features later
+                  $add_as_srcfeature = 1;
+                }
 
                 my $organism;
                 if ($src_feature && $src_feature->get_object->get_organism()) {
@@ -228,6 +236,10 @@ sub parse
 
 		$name = $attrs{Name}->[0] || $id;
 		my $feature = $this->create_feature($id, $name, $type, $organism);
+                if ($add_as_srcfeature) {
+                  # Self-located features can be used as source features later
+                  $this->{src_features}->{$orig_seqid} = $feature;
+                }
                 # Add feature properties
                 foreach my $attr_name (keys(%attrs)) {
                     if ($attr_name ne "Note") {
@@ -319,6 +331,7 @@ sub parse
 			if ($parental_relationship) {
 				foreach my $r (@{$parental_relationship}) {
 					my ($rel, $parent) = split('/', $r);
+                                        die "Malformed parental relationship" unless ($rel && $parent);
 					$relationships{$parent} = $rel;
 				}
 			}
@@ -490,9 +503,10 @@ sub get_src_feature
 	my $this = shift;
 	my $id = shift;
 	my $build = $this->{build} || die "No genome-build directive found";
-	my $build_data = $build->{$id} || die "No build info for $id found";
 	my $src_feature = $this->{src_features}->{$id};
 	if (!$src_feature) {
+                my $build_data = $build->{$id} || die "No build info for $id found";
+                die "No source feature created for $id, and no build data" if $build_data == 1;
                 if (!$build_data->{type}) {
                   use Data::Dumper;
                   print Dumper($build_data);
