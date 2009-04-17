@@ -271,7 +271,7 @@ sub set_properties { my ($self, $properties) = @_; $self->dirty(); $properties{i
 
 sub dirty {
   my $self = shift;
-  $dirty{$self} = 1;
+  $dirty{ident $self} = 1;
 }
 
 sub clean {
