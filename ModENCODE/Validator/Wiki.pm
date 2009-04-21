@@ -570,8 +570,14 @@ sub validate {
         scalar(grep { $_->{'name'} eq '' } @wiki_input_definitions) == 1
       ) {
         my ($missing_type) = grep { $_->{'name'} eq '' } @wiki_input_definitions;
-        log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra input column that is not shown in the SDRF.", "warning";
-        next;
+        if ($applied_protocol_slot_for_this_protocol == 0) {
+          log_error "You can't have an anonymous implied input to the first protocol with no column for it in the SDRF; check the wiki for inputs of type " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . ".", "error";
+          $success = 0;
+          next;
+        } else {
+          log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra input column that is not shown in the SDRF.", "warning";
+          next;
+        }
       }
 
       # Fail if the number of inputs in the SDRF is not equal to the number in the wiki
