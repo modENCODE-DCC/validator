@@ -178,13 +178,13 @@ sub set_values {
       foreach my $value (@$set_values) {
         if (ref($value) eq 'ModENCODE::Validator::Wiki::FormValues') {
           foreach my $val (@{$value->get_values()}) {
-            $self->add_value($value->get_name(), [], $val);
+            $self->add_value($value->get_name(), [], $val, $value->get_brackets());
           }
         } elsif (ref($value) eq 'FormValues') {
           bless($value, 'HASH');
           $value = new ModENCODE::Validator::Wiki::FormValues($value);
           foreach my $val (@{$value->get_values()}) {
-            $self->add_value($value->get_name(), $value->get_types(), $val);
+            $self->add_value($value->get_name(), $value->get_types(), $val, $value->get_brackets());
           }
         } else {
           croak "Can't add a " . ref($value) . " as a FormValues object";
@@ -205,7 +205,7 @@ sub set_values {
 }
 
 sub add_value {
-  my ($self, $valuekey, $types, $value) = @_;
+  my ($self, $valuekey, $types, $value, $brackets) = @_;
   my $found = 0;
   foreach my $formvalues (@{$self->get_values()}) {
     if ($formvalues->get_name eq $valuekey) {
@@ -220,6 +220,7 @@ sub add_value {
   if (!$found) {
     my $newFormValues = new ModENCODE::Validator::Wiki::FormValues({
         'name' => $valuekey,
+        'brackets' => $brackets,
         'values' => [ $value ],
       });
     foreach my $type (@$types) {
