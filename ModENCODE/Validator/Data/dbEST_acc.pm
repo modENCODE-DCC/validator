@@ -295,7 +295,7 @@ sub validate {
 
       if (scalar(@$false_positives)) {
         # TODO: Do more here?
-        log_error "Found " . scalar(@$false_positives) . " false positives at GenBank.", "warning";
+        log_error "Found " . scalar(@$false_positives) . " false positives at GenBank: [" . join(", ", map { $_ } @$false_positives) .  "] ", "warning";
       }
 
       # Keep track of $not_found and to pass on to next segment
