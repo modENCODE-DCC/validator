@@ -469,6 +469,11 @@ sub validate {
 
       my @definitions = map { 
         my $url = $_;
+        if (!$protocol_defs_by_url{$url}) {
+          log_error "Couldn't find protocol/experiment definition on wiki at URL $url", "error";
+          $success = 0;
+          last;
+        }
         my ($input_type_defs) = grep { $_->get_name() =~ /^\s*input *types?\s*$/i } @{$protocol_defs_by_url{$url}->get_values()};
         my ($output_type_defs) = grep { $_->get_name() =~ /^\s*output *types?\s*$/i } @{$protocol_defs_by_url{$url}->get_values()};
 
