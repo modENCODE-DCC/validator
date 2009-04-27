@@ -384,6 +384,7 @@ sub write_datum : PRIVATE {
       $self->println_to('data', "<data_id>" . $id . "</data_id>");
       $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
       $self->println_to('data', "</data_feature>");
+      $feature->clean();
       $feature_cache->shrink();
     }
 
