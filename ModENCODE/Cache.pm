@@ -1287,6 +1287,7 @@ sub load_feature {
     $feature->add_relationship($cachesets{'feature_relationship'}->get_from_id_cache($relationship_id));
   }
 
+  $feature->clean();
   return $feature;
 }
 
