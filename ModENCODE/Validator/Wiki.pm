@@ -556,7 +556,7 @@ sub validate {
       # Fail if there's more than one unnamed input in the SDRF
       my @anonymous_data = grep { $_->is_anonymous() } $applied_protocol->get_input_data(1);
       if (scalar(grep { !defined($_->get_name()) || length($_->get_name()) <= 0 } $applied_protocol->get_input_data(1)) - scalar(@anonymous_data) > 1) {
-        log_error "Cannot have more than one un-named input parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } @{$applied_protocol->get_input_data()}) . ") for protocol " . $protocol->get_object->get_name() . " in the SDRF.";
+        log_error "Cannot have more than one un-named input parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } $applied_protocol->get_input_data(1)) . ") for protocol " . $protocol->get_object->get_name() . " in the SDRF.";
         $success = 0;
         next;
       }
@@ -648,7 +648,7 @@ sub validate {
       # Fail if there's more than one unnamed output in the SDRF
       @anonymous_data = grep { $_->is_anonymous() } $applied_protocol->get_output_data(1);
       if (scalar(grep { !defined($_->get_name()) || length($_->get_name()) <= 0 } $applied_protocol->get_output_data(1)) - scalar(@anonymous_data) > 1) {
-        log_error "Cannot have more than one un-named output parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } $applied_protocol->get_output_data) . ") for protocol " . $protocol->get_object->get_name() . " in the SDRF.";
+        log_error "Cannot have more than one un-named output parameter (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } $applied_protocol->get_output_data(1)) . ") for protocol " . $protocol->get_object->get_name() . " in the SDRF.";
         $success = 0;
         next;
       }
