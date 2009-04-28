@@ -195,6 +195,10 @@ sub validate {
       }
 
       my $fetch_results = parse_traceXML($trace_xml);
+      if (!$fetch_results) {
+	  $success = 0;
+	  return;
+      }
       log_error "Retrieved " . scalar(@$fetch_results) . " traces. Verifying.", "notice";
 
       my ($not_found, $false_positives) = handle_search_results($fetch_results, @batch_query);
@@ -283,7 +287,13 @@ sub parse_traceXML : PRIVATE {
     my $count = 0;
     $data = '<wrapper>' . $data . '</wrapper>';
     my $parser = XML::XPath->new(xml => $data);
-    my $nodeset = $parser->findnodes('/wrapper/trace'); #each record is wrapped in a trace-identifier 
+    #each record is wrapped in a trace-identifier  
+    my $nodeset;
+    eval { $nodeset = $parser->findnodes('/wrapper/trace'); };  
+    if ( $@ ) {
+	log_error "There was an error parsing your records from the trace archive.  They appear to be poorly formatted. \n " . $@ , "error"; 
+	return;
+    }
     log_error "Parsing " . $nodeset->size . " trace records", "debug", ">";
     my @trace_data;
     foreach my $node ($nodeset->get_nodelist) {
