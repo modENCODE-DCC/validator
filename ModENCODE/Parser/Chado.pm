@@ -989,6 +989,17 @@ sub get_feature_by_genbank_id {
   return $feature;
 }
 
+sub get_datum_id_by_value {
+  my ($self, $value) = @_;
+  return undef unless $value;
+  my $sth = $self->get_prepared_query("SELECT data_id FROM data WHERE value = ?");
+  $sth->execute($value);
+  my $row = $sth->fetchrow_hashref();
+  return undef if (!$row || !$row->{'data_id'});
+  my $datum = $self->get_datum($row->{'data_id'});
+  return $datum;
+}
+
 sub get_normalized_protocol_slots {
   my ($self) = @_;
   if (!scalar(@{$protocol_slots{ident $self}})) {
