@@ -118,7 +118,7 @@ sub validate {
   my $success = 1;
 
   # Get out the EST IDs we need to validate
-  log_error "Validating presence of " . $self->num_data . " GEO submission", "notice", ">";
+  log_error "Validating presence of " . $self->num_data . " GEO submission(s).", "notice", ">";
   
   log_error "Checking Chado databases...", "notice", ">";
   foreach my $parse (
@@ -194,7 +194,7 @@ sub validate {
     
     my $fetch_query = join(",", map { $_->[2]->get_object->get_value } @batch_query);
     if (scalar(@batch_query) < 10) {
-	log_error ("Fetching GEO ids: " .  $fetch_query . "\n", "notice", ">");
+	log_error ("Fetching GEO ids: " .  $fetch_query . ".", "notice", ">");
     } else {
     log_error "Fetching batch of " . scalar(@batch_query) . " GEO accessions.", "notice", ">";
     }
