@@ -167,7 +167,7 @@ sub validate {
           if ($parser->get_schema() ne $schema) {
             log_error "Setting modENCODE Chado parser schema to '$schema' for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "].", "notice";
             $experiment_name = $parser->set_schema($schema);
-            log_error "Experiment name is $experiment_name.", "notice";
+            log_error "Experiment name is \"$experiment_name\".", "notice";
           }
         } else {
           if ($parser->get_schema() ne "public") {
