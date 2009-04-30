@@ -123,6 +123,7 @@ use ModENCODE::Validator::Data::SO_protein;
 use ModENCODE::Validator::Data::GEO_lite;
 use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
+use ModENCODE::Validator::Data::ReferencedData;
 
 use Class::Std;
 use Carp qw(croak carp);
@@ -206,7 +207,6 @@ sub validate {
     $success = 0 unless $file_validator->validate();
   }
 
-
   # For any data field with a cvterm of type where there exists a validator module
   foreach my $ap_datum (@all_data) {
 
@@ -248,6 +248,22 @@ sub validate {
       return 0;
     }
   }
+
+  # Check for data referenced in other submissions
+  my $referenced_datum_validator = new ModENCODE::Validator::Data::ReferencedData({ 'experiment' => $self->get_experiment });
+  foreach my $ap_datum (@all_data) {
+    my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+      $referenced_datum_validator->add_datum_pair($ap_datum);
+    }
+  }
+  if ($referenced_datum_validator->num_data) {
+    $success = 0 unless $referenced_datum_validator->validate();
+  }
+
+
+
+
   log_error "Done.", "notice", "<";
   return $success;
 }
