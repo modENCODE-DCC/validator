@@ -63,6 +63,9 @@ my $feature_types = {};
 sub id_callback {
   my ($parser, $id, $name, $seqid, $source, $type, $start, $end, $score, $strand, $phase) = @_;
   $id ||= "gff_" . sprintf("ID%.6d", ++$gff_counter);
+  if ($end < $start) {
+      die "Your end coord $end is less than your start coord $start.\n  This is not allowed "
+  }
   if ($type =~ m/\S+/) {
     if (!exists  $feature_types->{ $type }) {
         print STDERR $type . " feature type found\n";
@@ -93,7 +96,6 @@ while ($group_iter->has_next()) {
     $group_num++;
     my @features = $group_iter->next();
     print STDERR scalar(@features) . " features found.\n";
-    
 }
 while ( my ($key, $value) = each(%$feature_types) ) {
         print STDERR "Processed $value $key features.\n";
