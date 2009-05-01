@@ -156,8 +156,9 @@ sub validate {
 
       my $feature;
       if ($parser_name eq "modENCODE") {
+        my $version;
         if ($datum_obj->get_termsource() && $datum_obj->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
-          my $version = $datum_obj->get_termsource(1)->get_db(1)->get_url();
+          $version = $datum_obj->get_termsource(1)->get_db(1)->get_url();
           if ($version !~ /^\d+$/) {
             log_error "Found a modencode_submission Term Source REF for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "], but it's $version when it should be a numeric project ID.", "error";
             $success = 0;
@@ -177,6 +178,19 @@ sub validate {
           }
         }
         $feature = $parser->get_feature_by_organisms_and_name($genus, $species, $accession);
+        if ($feature && $version) {
+          $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
+                'datum' => $datum,
+                'heading' => 'modENCODE Reference',
+                'value' => $version,
+                'type' => new ModENCODE::Chado::CVTerm({
+                    'name' => 'reference',
+                    'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
+                  }),
+                'termsource' => $datum_obj->get_termsource
+              })
+          );
+        }
       }
 
       $feature = $parser->get_feature_by_organisms_and_uniquename($genus, $species, $accession) unless $feature;

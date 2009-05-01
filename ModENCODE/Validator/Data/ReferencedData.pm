@@ -55,6 +55,18 @@ sub validate {
       foreach my $attribute ($new_datum_obj->get_attributes()) {
         $datum_obj->add_attribute($attribute);
       }
+      $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
+            'datum' => $datum,
+            'heading' => 'modENCODE Reference',
+            'value' => $version,
+            'type' => new ModENCODE::Chado::CVTerm({
+                'name' => 'reference',
+                'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
+              }),
+            'termsource' => $datum_obj->get_termsource
+          })
+      );
+
       $datum_obj->set_termsource($new_datum_obj->get_termsource);
     } else {
       log_error "Couldn't find referenced datum \"" . $datum_obj->get_value . "\" in #$version - \"$experiment_name\".", "error";
