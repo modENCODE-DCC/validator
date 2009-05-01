@@ -378,14 +378,11 @@ sub write_datum : PRIVATE {
 
     $self->println_to('data', "</data>");
 
-    foreach my $feature_cache ($datum->get_features()) {
-      my $feature = $feature_cache->get_object; # Do this here so we only load each feature as we need it
+    foreach my $feature ($datum->get_features()) {
       $self->println_to('data', "<data_feature>");
       $self->println_to('data', "<data_id>" . $id . "</data_id>");
       $self->println_to('data', "<feature_id>" . $self->write_feature($feature) . "</feature_id>");
       $self->println_to('data', "</data_feature>");
-      $feature->clean();
-      $feature_cache->shrink();
     }
 
   }
@@ -393,9 +390,10 @@ sub write_datum : PRIVATE {
 }
 
 sub write_feature : PRIVATE {
-  my ($self, $feature) = @_;
-  my $id = "feature_" . $feature->get_id();
+  my ($self, $feature_cache) = @_;
+  my $id = "feature_" . $feature_cache->get_id();
   if (!$seen_ids{ident $self}->{$id}++) {
+    my $feature = $feature_cache->get_object();
     $self->println_to('features', "<feature id=\"$id\">");
     $self->println_to('features', "<name>" . xml_escape($feature->get_name()) . "</name>");
     $self->println_to('features', "<uniquename>" . xml_escape($feature->get_uniquename()) . "</uniquename>");
@@ -436,6 +434,8 @@ sub write_feature : PRIVATE {
     foreach my $feature_property (@{$feature->get_properties()}) {
       $self->write_featureprop($feature_property, $id);
     }
+    $feature->clean();
+    $feature_cache->shrink();
   }
   return $id;
 }
@@ -444,15 +444,15 @@ sub write_feature_relationship : PRIVATE {
   my ($self, $feature_relationship) = @_;
 
   # Make sure the features are written before we start recursing feature_relationship->object->feature_relationship
-  $self->write_feature($feature_relationship->get_subject(1));
-  $self->write_feature($feature_relationship->get_object(1));
+  $self->write_feature($feature_relationship->get_subject());
+  $self->write_feature($feature_relationship->get_object());
 
   my $id = "feature_relationship_" . $feature_relationship->get_id();
   if (!$seen_ids{ident $self}->{$id}++) {
     $self->println_to('feature_relationships', "<feature_relationship>");
     $self->println_to('feature_relationships', "<rank>" . xml_escape($feature_relationship->get_rank()) . "</rank>") if length($feature_relationship->get_rank());
-    $self->println_to('feature_relationships', "<subject_id>" . $self->write_feature($feature_relationship->get_subject(1)) . "</subject_id>");
-    $self->println_to('feature_relationships', "<object_id>" . $self->write_feature($feature_relationship->get_object(1)) . "</object_id>");
+    $self->println_to('feature_relationships', "<subject_id>" . $self->write_feature($feature_relationship->get_subject()) . "</subject_id>");
+    $self->println_to('feature_relationships', "<object_id>" . $self->write_feature($feature_relationship->get_object()) . "</object_id>");
     if ($feature_relationship->get_type()) {
       $self->println_to('feature_relationships', "<type_id>" . $self->write_cvterm($feature_relationship->get_type(1)) . "</type_id>");
     }
@@ -476,7 +476,7 @@ sub write_featureloc : PRIVATE {
   my ($self, $featureloc, $feature_id) = @_;
   if ($featureloc->get_srcfeature()) {
     # Make sure this feature is written before we start recursing featureloc->srcfeature->featureloc
-    $self->write_feature($featureloc->get_srcfeature(1));
+    $self->write_feature($featureloc->get_srcfeature());
   }
 
   $self->println_to('featurelocs', "<featureloc>");
@@ -487,7 +487,7 @@ sub write_featureloc : PRIVATE {
   $self->println_to('featurelocs', "<strand>" . xml_escape($featureloc->get_strand()) . "</strand>") if length($featureloc->get_strand());
   $self->println_to('featurelocs', "<residue_info>" . xml_escape($featureloc->get_residue_info()) . "</residue_info>") if length($featureloc->get_residue_info());
   if ($featureloc->get_srcfeature()) {
-    $self->println_to('featurelocs', "<srcfeature_id>" . $self->write_feature($featureloc->get_srcfeature(1)) . "</srcfeature_id>");
+    $self->println_to('featurelocs', "<srcfeature_id>" . $self->write_feature($featureloc->get_srcfeature()) . "</srcfeature_id>");
   }
   $self->println_to('featurelocs', "</featureloc>");
 }
