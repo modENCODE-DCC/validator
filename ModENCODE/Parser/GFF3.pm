@@ -431,6 +431,9 @@ sub create_feature_loc
 {
 	my $this = shift;
 	my ($start, $end, $strand, $src_feature, $residue_info) = @_;
+        if ($start && $end && ($end < $start)) {
+          die "Start ($start) is less than end ($end)";
+        }
 	if ($strand !~ /^\d+/) {
 		if ($strand eq "+") {
 			$strand = 1;
