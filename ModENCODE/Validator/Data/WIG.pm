@@ -87,18 +87,23 @@ sub validate {
 
       # handle the chrom header
       if ($line =~ m/chrom/) {
+
+        $line =~ s/chrom=chr/chrom=/; # Strip preceding "chr" for compatibility with UCSC
+
         my ($stepType) = $line =~ /^(variableStep|fixedStep)/;
         my ($chr)      = $line =~ /chrom=(\S+)/;
         my ($start)    = $line =~ /start=(\d+)/;
         my ($step)     = $line =~ /step=(\d+)/;
         my ($span)     = $line =~ /span=(\d+)/;
+
+
         unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
           || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
         ) {
           log_error "WIG file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum. The chromosome $chr is invalid:\n      $line";
           $success = 0;
           last;
-        }    
+        }
         if (!(length($chr) && length($stepType))) {
           log_error "WIG file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum. Perhaps the chromosome or stepType is invalid:\n      $line";
           $success = 0;
@@ -141,6 +146,9 @@ sub validate {
       } else {
         # Assume BED
         my ($chr, $start, $end, $value) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)\s+([-+]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*$/);
+
+        $chr =~ s/^chr//; # Strip preceding "chr" for compatibility with UCSC
+
         unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
           || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
         ) {
