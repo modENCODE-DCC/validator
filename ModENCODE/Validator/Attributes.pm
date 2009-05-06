@@ -160,8 +160,9 @@ sub validate {
 
     my $attribute = $attribute_cacheobj->get_object;
     # For any attribute with a termsource for which there exists a validator module
+    my $attribute_termsource_type;
     if ($attribute->get_termsource() && $attribute->get_termsource(1)->get_db()) {
-      my $attribute_termsource_type = $attribute->get_termsource(1)->get_db(1)->get_description();
+      $attribute_termsource_type = $attribute->get_termsource(1)->get_db(1)->get_description();
       my $validator = $termsource_validators{ident $self}->{$attribute_termsource_type};
       if (!$validator) {
         log_error "No validator for attribute " . $attribute->get_heading() . " [" . $attribute->get_name() . "] with term source type $attribute_termsource_type.", "warning";
@@ -169,6 +170,13 @@ sub validate {
       }
       log_error "Adding attribute " . $attribute->get_heading . " [" . $attribute->get_name . "] to validator " . ref($validator) . " because of term source.", "debug";
       $validator->add_attribute($attribute_cacheobj);
+    }
+
+    # Throw a warning if a field looks like a wiki URL but doesn't have an appropriate termsource
+    if ($attribute->get_value =~ /oldid=/ && $attribute_termsource_type ne 'URL_mediawiki_expansion') {
+      log_error "It looks like you meant to provide a reference to a wiki URL " . $attribute->get_value . " in the " . 
+      $attribute->get_heading . " [" . $attribute->get_name . "] field in the SDRF, but it doesn't have a Term Source REF " .
+      "of type URL_mediawiki_expansion!", "warning";
     }
 
     # For any attribute with a type for which there exists a validator module

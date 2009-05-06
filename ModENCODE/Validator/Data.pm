@@ -220,11 +220,19 @@ sub validate {
       $validator = $self->get_validator_for_type($datum_type);
     }
 
+
     my $datum_termsource_type;
     if (!$validator && $datum->get_object->get_termsource) {
       # Fall back to validating by term source
       $datum_termsource_type = $datum->get_object->get_termsource(1)->get_db(1)->get_description();
       $validator =  $termsource_validators{ident $self}->{$datum_termsource_type};
+    }
+
+    # Throw a warning if a field looks like a wiki URL but doesn't have an appropriate termsource
+    if ($datum->get_object->get_value =~ /oldid=/ && $datum_termsource_type ne 'URL_mediawiki_expansion') {
+      log_error "It looks like you meant to provide a reference to a wiki URL " . $datum->get_object->get_value . " in the " . 
+      $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "] field in the SDRF, but it doesn't have a Term Source REF " .
+      "of type URL_mediawiki_expansion!", "warning";
     }
 
     # If there wasn't a specified validator for this data type, continue
