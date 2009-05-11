@@ -162,6 +162,9 @@ sub parse
 	my %features = ();
 	$this->cleanup_cache();
 	while (my $line = <$gff3>) {
+                if ($. % 10000 == 0) {
+                  log_error "Reading line #$..", "notice";
+                }
 		chomp $line;
 		last if $line eq "###";
 		if ($line =~ /^##genome-build\s+(\w+)\s+(\w+)/) {
@@ -292,6 +295,9 @@ sub parse
 			$target_strand = "+" if !$target_strand;
 
                         my $residue_info = $attrs{Gap}->[0] if $attrs{Gap};
+                        if (!($target_start =~ /^\d+$/ && $target_end =~ /^\d+$/)) {
+                          die "Provided a target missing a start and/or end: $target";
+                        }
 
 			my $target_feature_loc =
 				$this->create_feature_loc($target_start,
