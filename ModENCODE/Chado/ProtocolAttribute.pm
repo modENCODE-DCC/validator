@@ -7,6 +7,7 @@ my %protocol         :ATTR( :set<protocol>,            :init_arg<protocol> );
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::ProtocolAttribute({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_attribute = ModENCODE::Cache::get_cached_protocol_attribute($temp);
 
   if ($cached_attribute) {

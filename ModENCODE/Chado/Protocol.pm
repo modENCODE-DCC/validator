@@ -174,6 +174,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::Protocol({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_protocol = ModENCODE::Cache::get_cached_protocol($temp);
 
   if ($cached_protocol) {

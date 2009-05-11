@@ -282,6 +282,7 @@ sub set_features {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::Data({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_datum = ModENCODE::Cache::get_cached_datum($temp);
 
   if ($cached_datum) {

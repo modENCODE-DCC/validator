@@ -237,6 +237,7 @@ use strict;
 use Class::Std;
 use Carp qw(carp croak confess);
 use ModENCODE::ErrorHandler qw(log_error);
+use ModENCODE::Cache::Feature;
 
 # Attributes
 my %feature_id       :ATTR( :name<id>,                                                  :default<undef> );
@@ -288,6 +289,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::Feature({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_feature = ModENCODE::Cache::get_cached_feature($temp);
 
   if ($cached_feature) {

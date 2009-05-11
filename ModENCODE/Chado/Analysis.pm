@@ -174,6 +174,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::Analysis({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_analysis = ModENCODE::Cache::get_cached_analysis($temp);
 
   if ($cached_analysis) {

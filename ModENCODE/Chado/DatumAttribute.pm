@@ -7,6 +7,7 @@ my %datum         :ATTR( :set<datum>,            :init_arg<datum> );
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::DatumAttribute({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_attribute = ModENCODE::Cache::get_cached_datum_attribute($temp);
 
   if ($cached_attribute) {

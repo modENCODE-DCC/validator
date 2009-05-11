@@ -160,6 +160,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::ExperimentProp({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_experimentprop = ModENCODE::Cache::get_cached_experimentprop($temp);
 
   if ($cached_experimentprop) {

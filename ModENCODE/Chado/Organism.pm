@@ -120,6 +120,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::Organism({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_organism = ModENCODE::Cache::get_cached_organism($temp);
 
   if ($cached_organism) {

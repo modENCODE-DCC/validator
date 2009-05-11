@@ -150,6 +150,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::FeatureRelationship({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_feature = ModENCODE::Cache::get_cached_feature_relationship($temp);
 
   if ($cached_feature) {

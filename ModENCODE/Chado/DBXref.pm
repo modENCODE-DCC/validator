@@ -148,6 +148,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::DBXref({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_dbxref = ModENCODE::Cache::get_cached_dbxref($temp);
 
   if ($cached_dbxref) {

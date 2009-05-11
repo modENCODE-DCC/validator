@@ -153,6 +153,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::CVTerm({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_cvterm = ModENCODE::Cache::get_cached_cvterm($temp);
 
   if ($temp->get_name =~ /^\s*$/) {

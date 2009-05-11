@@ -118,6 +118,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::DB({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_db = ModENCODE::Cache::get_cached_db($temp);
   if ($cached_db) {
     # Update any cached DB

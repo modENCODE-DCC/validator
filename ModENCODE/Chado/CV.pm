@@ -110,6 +110,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::CV({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_cv = ModENCODE::Cache::get_cached_cv($temp);
   if ($cached_cv) {
     # Update any cached CV

@@ -223,6 +223,7 @@ sub new_no_cache {
 
 sub new {
   my $temp = Class::Std::new(@_);
+  return new ModENCODE::Cache::Wiggle_Data({'content' => $temp }) if ModENCODE::Cache::get_paused();
   my $cached_wiggle_data = ModENCODE::Cache::get_cached_wiggle_data($temp);
 
   if ($cached_wiggle_data) {
