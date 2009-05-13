@@ -775,6 +775,13 @@ sub validate {
       $success = 0;
       log_error "No experiment description found on wiki page at URL " . $experiment_description->get_object->get_value . ".", "error";
     } else {
+      my $dbxref = new ModENCODE::Chado::DBXref({
+          'db' => new ModENCODE::Chado::DB({
+              'name' => 'ModencodeWiki'
+            }),
+          'accession' => $experiment_description->get_object->get_value,
+        });
+      $experiment_description->get_object->set_termsource($dbxref);
       $experiment_description->get_object->set_value($description);
       log_error "Setting experiment description from wiki.", "notice";
     }
