@@ -81,6 +81,7 @@ sub id_callback {
 
 open(GFF, "$gff_file_name") or die "Couldn't open GFF file $gff_file_name";
 
+ModENCODE::Cache::set_paused(1);
 my $parser = new ModENCODE::Parser::GFF3({
     'gff3' => \*GFF,
     'builds' => $build_config,
