@@ -238,7 +238,7 @@ sub validate {
     # If there wasn't a specified validator for this data type, continue
     if (!$validator && !$datum->get_object->is_anonymous) {
       my $message = "No validator for";
-      $message .= " datum type " . (($datum_type) ?  $datum_type->get_name . ":" . $datum_type->get_cv(1)->get_name : "(no type)");
+      $message .= " datum type " . (($datum_type) ?  $datum_type->get_cv(1)->get_name . ":" . $datum_type->get_name : "(no type)");
       $message .= " with termsource " . (($datum_termsource_type) ? $datum_termsource_type : "(no termsource)");
       $message .= " " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "].";
       log_error $message, "warning";
