@@ -165,7 +165,7 @@ sub validate {
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
                 });
-              if ($cv =~ /http.?:/) {
+              if ($cv =~ /^https?$/) {
                 my $type = new ModENCODE::Chado::CVTerm({
                     'name' => 'anyURI',
                     'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
@@ -181,7 +181,8 @@ sub validate {
                 } else {
                   my $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv);
                   if (!$canonical_cv) {
-                    ModENCODE::Config::get_cvhandler()->add_cv($cv, undef, "database");
+                    ModENCODE::Config::get_cvhandler()->add_cv($cv); #, undef, "database");
+                    $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
                   } else {
                     $cv = $canonical_cv->{'names'}->[0]
                   }

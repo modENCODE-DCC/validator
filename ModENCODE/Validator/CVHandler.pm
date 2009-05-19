@@ -324,7 +324,6 @@ sub add_cv {
   if (!$cvurl || !$cvurltype) {
 
     my $existing_cv = $self->get_cv_by_name($cv);
-    return 1 if ($existing_cv && !$cvurl);
 
     # Fetch canonical URL
     my $url = ModENCODE::Config::get_cfg()->val('wiki', 'cvterm_validator_url') . URI::Escape::uri_escape($cv);
@@ -335,6 +334,7 @@ sub add_cv {
     unless ($cvurltype =~ /^OBO$|^OWL$|^URL_.*/) {
       $cvurl = undef;
     }
+    return 1 if ($existing_cv && !$cvurl);
     if ($cvurl && !$cvurltype) {
       log_error "Found a URL ($cvurl) but not a URL type ($cvurltype), for controlled vocabulary $cv. Please check DBFieldsConf.php", "error";
       return 0;
