@@ -274,6 +274,17 @@ sub validate {
     }
   }
 
+  # Also check to make sure that the Experimental Factor Name is in the SDRF
+  my ($exp_factor_name) = grep { $_->get_name eq "Experimental Factor Name" } ($self->get_idf_experiment->get_properties(1));
+  if (!(
+      grep { 
+        grep { $_ eq $exp_factor_name->get_value } @$_;
+      } values(%named_fields)
+  )) {
+    log_error "Unable to find the \"" . $exp_factor_name->get_value . "\" column in the SDRF which has been referenced in the Experimental Factor Name field of the IDF.";
+    $success = 0;
+  }
+
   # Term sources
   # Collect unique term source databases from Protocols, Attributes, Datas in the SDRF
   my @sdrf_term_source_dbs;
