@@ -261,6 +261,8 @@ sub validate {
   my $referenced_datum_validator = new ModENCODE::Validator::Data::ReferencedData({ 'experiment' => $self->get_experiment });
   foreach my $ap_datum (@all_data) {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    my $type_name = $datum->get_object->get_type(1)->get_cv(1)->get_name . ":" . $datum->get_object->get_type(1)->get_name;
+    next if $type_name eq "SO:transcript"; # Custom handler for transcripts
     if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
       $referenced_datum_validator->add_datum_pair($ap_datum);
     }
