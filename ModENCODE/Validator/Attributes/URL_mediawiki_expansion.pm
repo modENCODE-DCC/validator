@@ -165,7 +165,7 @@ sub validate {
                   'name' => 'string',
                   'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }),
                 });
-              if ($cv =~ /^https?$/) {
+              if ($cv =~ /^https?|ftp$/) {
                 my $cv = new ModENCODE::Chado::CV({ 'name' => 'xsd' });
                 my $type = new ModENCODE::Chado::CVTerm({
                     'name' => 'anyURI',
@@ -183,14 +183,22 @@ sub validate {
                   my $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv);
                   if (!$canonical_cv) {
                     ModENCODE::Config::get_cvhandler()->add_cv($cv); #, undef, "database");
-                    $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+                    $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv);
+                    if ($canonical_cv) {
+                      $cv = $canonical_cv->{'names'}->[0];
+                    } else {
+                      $cv = undef;
+                      $term = $formvalue;
+                    }
                   } else {
                     $cv = $canonical_cv->{'names'}->[0]
                   }
-                  $type = new ModENCODE::Chado::CVTerm({
-                      'name' => $term,
-                      'cv' => new ModENCODE::Chado::CV({ 'name' => $cv }),
-                    });
+                  if ($cv) { 
+                    $type = new ModENCODE::Chado::CVTerm({
+                        'name' => $term,
+                        'cv' => new ModENCODE::Chado::CV({ 'name' => $cv }),
+                      });
+                  }
                 }
               } elsif (!length($term) && length($cv)) {
                 $term = $cv;

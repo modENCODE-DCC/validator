@@ -186,7 +186,7 @@ sub validate {
       my $attribute_type_source = $attribute->get_type(1)->get_cv(1)->get_name();
       my $validator = $type_validators{ident $self}->{$attribute_type_source};
       if (!$validator) {
-        log_error "No validator for attribute of in CV $attribute_type_source.", "warning";
+        log_error "No validator for attribute in CV $attribute_type_source.", "warning";
         next;
       }
       log_error "Adding attribute " . $attribute->get_heading . " [" . $attribute->get_name . "] to validator " . ref($validator) . " because of type.", "debug";
