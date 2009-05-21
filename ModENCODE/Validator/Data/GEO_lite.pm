@@ -265,8 +265,8 @@ sub handle_summary_results {
     $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
           'value' => $url,
           'type' => new ModENCODE::Chado::CVTerm({'name' => 'anyURI', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
-          'name' => 'URL',
-          'heading' => 'GEO record link',
+          'name' => $genbank_acc,
+          'heading' => 'data_url',
           'datum' => $datum,
 	 })
 	);
