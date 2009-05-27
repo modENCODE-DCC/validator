@@ -580,7 +580,7 @@ sub validate {
           $success = 0;
           next;
         } else {
-          log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra input column that is not shown in the SDRF.", "warning";
+          log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra input column that is not named in the SDRF.", "warning";
           next;
         }
       }
@@ -667,7 +667,7 @@ sub validate {
         scalar(grep { $_->{'name'} eq '' } @wiki_output_definitions) == 1
       ) {
         my ($missing_type) = grep { $_->{'name'} eq '' } @wiki_output_definitions;
-        log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra output column that is not shown in the SDRF.", "warning";
+        log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra output column that is not named in the SDRF.", "warning";
         next;
       }
       # Fail if the number of outputs in the SDRF is not equal to the number in the wiki
