@@ -166,27 +166,27 @@ sub new {
   if ($cached_experimentprop) {
     # Update any cached experimentprop
     my $need_save = 0;
-    if ($temp->get_value && !($cached_experimentprop->get_value())) {
-      $cached_experimentprop->set_value($temp->get_value);
+    if ($temp->get_value && !($cached_experimentprop->get_object->get_value())) {
+      $cached_experimentprop->get_object->set_value($temp->get_value);
       $need_save = 1;
     } 
-    if ($temp->get_rank && !($cached_experimentprop->get_rank())) {
-      $cached_experimentprop->set_rank($temp->get_rank);
+    if ($temp->get_rank && !($cached_experimentprop->get_object->get_rank())) {
+      $cached_experimentprop->get_object->set_rank($temp->get_rank);
       $need_save = 1;
     }
-    if ($temp->get_termsource && !($cached_experimentprop->get_termsource())) {
-      $cached_experimentprop->set_termsource($temp->get_termsource);
+    if ($temp->get_termsource && !($cached_experimentprop->get_object->get_termsource())) {
+      $cached_experimentprop->get_object->set_termsource($temp->get_termsource);
       $need_save = 1;
     }
-    if ($temp->get_type && !($cached_experimentprop->get_type())) {
-      $cached_experimentprop->set_type($temp->get_type);
+    if ($temp->get_type && !($cached_experimentprop->get_object->get_type())) {
+      $cached_experimentprop->get_object->set_type($temp->get_type);
       $need_save = 1;
     }
-    if ($temp->get_experiment && !($cached_experimentprop->get_experiment())) {
-      $cached_experimentprop->set_experiment($temp->get_experiment);
+    if ($temp->get_experiment && !($cached_experimentprop->get_object->get_experiment())) {
+      $cached_experimentprop->get_object->set_experiment($temp->get_experiment);
       $need_save = 1;
     }
-    ModENCODE::Cache::save_experimentprop($cached_experimentprop) if $need_save; # For update
+    ModENCODE::Cache::save_experimentprop($cached_experimentprop->get_object) if $need_save; # For update
     return $cached_experimentprop;
   }
 

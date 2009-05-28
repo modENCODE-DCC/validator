@@ -275,25 +275,26 @@ sub validate {
   }
 
   # Also check to make sure that the Experimental Factor Name is in the SDRF
-  my ($exp_factor_name) = grep { $_->get_name eq "Experimental Factor Name" } ($self->get_idf_experiment->get_properties(1));
-  my @exp_factor_column = grep { grep { $_ eq $exp_factor_name->get_value } @$_; } values(%named_fields);
-  if (!scalar(@exp_factor_column)) {
-    # Check attributes since we didn't find a matching datum
-    foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
-      foreach my $applied_protocol (@$applied_protocol_slots) {
-        foreach my $datum ($applied_protocol->get_input_data(1), $applied_protocol->get_output_data(1)) {
-          foreach my $datum_attribute ($datum->get_attributes(1)) {
-            if ($datum_attribute->get_name() && $datum_attribute->get_name() eq $exp_factor_name->get_value) {
-              push @exp_factor_column, $datum_attribute;
+  my @exp_factor_names = grep { $_->get_name eq "Experimental Factor Name" } ($self->get_idf_experiment->get_properties(1));
+  foreach my $exp_factor_name (@exp_factor_names) {
+    my @exp_factor_column = grep { grep { $_ eq $exp_factor_name->get_value } @$_; } values(%named_fields);
+    if (!scalar(@exp_factor_column)) {
+      # Check attributes since we didn't find a matching datum
+      foreach my $applied_protocol_slots (@{$sdrf_experiment->get_applied_protocol_slots()}) {
+        foreach my $applied_protocol (@$applied_protocol_slots) {
+          foreach my $datum ($applied_protocol->get_input_data(1), $applied_protocol->get_output_data(1)) {
+            foreach my $datum_attribute ($datum->get_attributes(1)) {
+              if ($datum_attribute->get_name() && $datum_attribute->get_name() eq $exp_factor_name->get_value) {
+                push @exp_factor_column, $datum_attribute;
+              }
             }
           }
         }
       }
     }
-  }
-  if (!scalar(@exp_factor_column)) {
-    log_error "Unable to find the \"" . $exp_factor_name->get_value . "\" column in the SDRF which has been referenced in the Experimental Factor Name field of the IDF.";
-    $success = 0;
+    if (!scalar(@exp_factor_column)) {
+      log_error "Unable to find the \"" . $exp_factor_name->get_value . "\" column in the SDRF which has been referenced in the Experimental Factor Name field of the IDF. Hoping to find it in an expanded attribute column.", "warning";
+    }
   }
 
   # Term sources

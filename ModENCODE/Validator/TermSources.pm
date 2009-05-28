@@ -107,12 +107,9 @@ use ModENCODE::Chado::DBXref;
 use ModENCODE::Chado::DB;
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %experiment                  :ATTR( :name<experiment> );
-
 sub validate {
   my $self = shift;
   my $success = 1;
-  my $experiment = $self->get_experiment;
 
   my @all_cvterms = ModENCODE::Cache::get_all_objects('cvterm');
 

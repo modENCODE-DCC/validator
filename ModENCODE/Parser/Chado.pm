@@ -584,7 +584,7 @@ sub get_feature {
       push @relationships, $fr_row->{'feature_relationship_id'};
     }
   } elsif ($self->get_child_relationships()) {
-    $sth = $self->get_prepared_query("SELECT fr.feature_relationship_id FROM feature_relationship fr INNER JOIN cvterm cvt ON fr.type_id = cvt.cvterm_id WHERE fr.object_id = ? AND (cvt.name = 'part_of' OR cvt.name = 'part of')");
+    $sth = $self->get_prepared_query("SELECT fr.feature_relationship_id FROM feature_relationship fr INNER JOIN cvterm cvt ON fr.type_id = cvt.cvterm_id WHERE fr.object_id = ? AND (cvt.name = 'part_of' OR cvt.name = 'part of' OR cvt.name = 'partof')");
     $sth->execute($feature_id);
     while (my $fr_row = $sth->fetchrow_hashref()) {
       push @relationships, $fr_row->{'feature_relationship_id'};
@@ -1364,6 +1364,29 @@ sub str_repeat : PRIVATE {
   }
   return $newstr;
 }
+
+sub get_experiment_props_by_name {
+  my ($self, $experiment_prop_name) = @_;
+  my @exp_props;
+  my $experiment_prop_sth = $self->get_prepared_query("SELECT name, type_id, dbxref_id, value, rank FROM experiment_prop WHERE name = ?");
+  $experiment_prop_sth->execute($experiment_prop_name);
+  while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
+    map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+    my $property = new ModENCODE::Chado::ExperimentProp({
+        'experiment' => $experiment{ident $self},
+        'name' => $row->{'name'},
+        'value' => $row->{'value'},
+        'rank' => $row->{'rank'},
+      });
+    my $termsource = $self->get_termsource($row->{'dbxref_id'});
+    $property->get_object->set_termsource($termsource) if $termsource;
+    my $type = $self->get_type($row->{'type_id'});
+    $property->get_object->set_type($type) if $type;
+    push @exp_props, $property;
+  }
+  return @exp_props;
+}
+
 
 
 1;
