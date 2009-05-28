@@ -21,6 +21,7 @@ use ModENCODE::Validator::ModENCODE_Dates;
 use ModENCODE::Validator::Wiki;
 use ModENCODE::Validator::Attributes;
 use ModENCODE::Validator::Data;
+use ModENCODE::Validator::ExperimentalFactorName;
 use ModENCODE::Validator::TermSources;
 use ModENCODE::Chado::XMLWriter;
 use Getopt::Long;
@@ -127,6 +128,15 @@ if (!$data_validator->validate()) {
   exit;
 }
 $data_validator = undef;
+log_error "Done.", "notice", "<";
+
+log_error "Validating Experimental Factor Name, if present.", "notice", ">";
+my $factor_name_validator = new ModENCODE::Validator::ExperimentalFactorName({ 'experiment' => $experiment });
+if (!$factor_name_validator->validate()) {
+  log_error "Failed.", "error", "<";
+  exit;
+}
+$factor_name_validator = undef;
 log_error "Done.", "notice", "<";
 
 log_error "Validating CVTerms and DBXrefs.", "notice", ">";
