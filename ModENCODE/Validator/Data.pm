@@ -113,6 +113,7 @@ use strict;
 use ModENCODE::Validator::Data::CEL;
 use ModENCODE::Validator::Data::BED;
 use ModENCODE::Validator::Data::WIG;
+use ModENCODE::Validator::Data::SAM;
 use ModENCODE::Validator::Data::dbEST_acc;
 use ModENCODE::Validator::Data::dbEST_acc_list;
 use ModENCODE::Validator::Data::Result_File;
@@ -141,6 +142,7 @@ sub START {
   $type_validators{$ident}->{'modencode:transcriptional_fragment_map'} = new ModENCODE::Validator::Data::BED({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:Sequence_Alignment/Map (SAM)'} = new ModENCODE::Validator::Data::SAM({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:Signal_Graph_File'} = new ModENCODE::Validator::Data::WIG({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GFF3 (parse only)'} = new ModENCODE::Validator::Data::GFF3_parse_only({ 'experiment' => $self->get_experiment });
