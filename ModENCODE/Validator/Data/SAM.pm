@@ -27,7 +27,7 @@ use base qw(ModENCODE::Validator::Data::Data);
 use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
 
-my %cached_wig_files            :ATTR( :default<{}> );
+my %cached_sam_files            :ATTR( :default<{}> );
 my %seen_data           :ATTR( :default<{}> );       
 
 
@@ -45,8 +45,6 @@ sub validate {
     next if $seen_data{$datum->get_id}++; # Don't re-update the same datum
     my $datum_obj = $datum->get_object;
 
-    my $wig_type = "none";
-
     if (!length($datum_obj->get_value())) {
       log_error "No SAM file for " . $datum->get_heading(), 'warning';
       next;
@@ -54,7 +52,7 @@ sub validate {
       log_error "Cannot find SAM file " . $datum_obj->get_value() . " for column " . $datum_obj->get_heading() . " [" . $datum_obj->get_name . "].", "error";
       $success = 0;
       next;
-    } elsif ($cached_wig_files{ident $self}->{$datum_obj->get_value()}++) {
+    } elsif ($cached_sam_files{ident $self}->{$datum_obj->get_value()}++) {
       log_error "Referring to the same SAM file (" . $datum_obj->get_value . ") in two different data columns!", "error";
       $success = 0;
       next;
@@ -66,11 +64,6 @@ sub validate {
 
     # Build Wiggle object
     my ($filename) = ($datum_obj->get_value() =~ m/([^\/]+)$/);
-    my $wiggle = new ModENCODE::Chado::Wiggle_Data({
-        'name' => $filename,
-        'datum' => $datum,
-      });
-    $datum->get_object->add_wiggle_data($wiggle);
 
     # Get genome builds
     # Need to verify the SAM header against known genome info
@@ -93,7 +86,6 @@ sub validate {
     }
 
     log_error "Validating SAM file: $filename", 'notice' ;
-    my $wiggle_data = "";
     my @modencode_header = ();
     
     while (defined(my $line = <FH>)) {
@@ -149,7 +141,6 @@ sub validate {
 		$success = 0;
 	    }
 
-	    $wiggle_data .= "$header\n";  
 
 	    if ((($organism ne "") && ($build ne "") && ($chrom ne "") && ($chrom_end ne "")) || ($success==0)) {
 		#if each of these are filled in and no errors, add to the header array
@@ -163,15 +154,13 @@ sub validate {
 	$fa_organism = $organism;
         next;
       } 
-      $line =~ s/chr//;
-      $wiggle_data .= "$line";
       $read_count++;
     }
     close FH;
 
     if ((@modencode_header == 0) || ($success==0)) {
 	#throw an error if there's no header at all
-	log_error "You do not have the header required by modencode.  Please see our documentation at http://wiki.modencode.org/project/index.php/SAM for instructions", "error";
+	log_error "You do not have the header required by modENCODE.  Please see our documentation at http://wiki.modencode.org/project/index.php/SAM for instructions", "error";
 	$success = 0;
     }
     return if ($success==0);
@@ -216,13 +205,32 @@ sub validate {
 	return 0;
     }
 
-    unlink("$filename.bam") || die ("Cannot delete temp file $filename.bam");
-    unlink("$filename.bam.sorted.bam") || die ("Cannot delete temp file $filename.bam.sorted.bam");
-    unlink("$filename.bam.sorted.bam.bai") || die ("Cannot delete temp file $filename.bam.sorted.bam.bai");
+#    unlink("$filename.bam") || die ("Cannot delete temp file $filename.bam");
+#    unlink("$filename.bam.sorted.bam") || die ("Cannot delete temp file $filename.bam.sorted.bam");
+#    unlink("$filename.bam.sorted.bam.bai") || die ("Cannot delete temp file $filename.bam.sorted.bam.bai");
+    $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
+          'datum' => $datum,
+          'heading' => 'BAM File',
+          'value' => "$filename.bam",
+          'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
+        })
+    );
+    $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
+          'datum' => $datum,
+          'heading' => 'Sorted BAM File',
+          'value' => "$filename.sorted.bam",
+          'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
+        })
+    );
+    $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
+          'datum' => $datum,
+          'heading' => 'Sorted BAM File Index',
+          'value' => "$filename.sorted.bam.bai",
+          'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
+        })
+    );
     log_error "SAM file verified.", "notice", "<";
 
-    $wiggle->get_object->set_data($wiggle_data);
-    $wiggle->get_object->set_type("SAM");
   }
 
   log_error "Done.", "notice", "<";
