@@ -193,6 +193,7 @@ L<http://www.modencode.org>.
 
 use strict;
 use Class::Std;
+use File::Temp qw();
 use Carp qw(croak carp);
 
 # Attributes
@@ -212,13 +213,57 @@ my %yLineMark         :ATTR( :name<yLineMark>,           :default<0.0> );
 my %yLineOnOff        :ATTR( :name<yLineOnOff>,          :default<0> );
 my %windowingFunction :ATTR( :name<windowingFunction>,   :default<'maximum'> );
 my %smoothingWindow   :ATTR( :name<smoothingWindow>,     :default<1> );
-my %data              :ATTR( :name<data>,                :default<''> );
+my %data              :ATTR( :init_arg<data>,            :default<''> );
+my %file_data         :ATTR( :default<0> );
 
 # Relationships
 my %datum             :ATTR( :set<datum>,                :init_arg<datum> );
 
 sub new_no_cache {
   return Class::Std::new(@_);
+}
+
+sub set_data {
+  my ($self, $data) = @_;
+  if (length($data) > 150 * 1048576) {
+    # 150MB
+    $data{ident $self} = File::Temp->new(
+      DIR => ModENCODE::Config::get_cfg()->val('cache', 'tmpdir'), 
+      SUFFIX => ".wiggle_data"
+    );
+    print { $data{ident $self} } $data;
+    $file_data{ident $self} = 1;
+  } else {
+    # Smaller
+    $data{ident $self} = $data;
+    $file_data{ident $self} = 0;
+  }
+}
+
+sub get_data_fh {
+  my $self = shift;
+  my $var_fh;
+  if ($file_data{ident $self}) {
+    print STDERR "FILEHANDLE\n";
+    $var_fh = $data{ident $self}
+  } else {
+    print STDERR "FAKE FILEHANDLE\n";
+    open $var_fh, "<", \$data{ident $self};
+  }
+  seek($var_fh, 0, 0);
+  return $var_fh;
+}
+
+sub get_data {
+  my $self = shift;
+  return $data{ident $self} unless $file_data{ident $self};
+  my $data = '';
+  {
+    $/ = undef;
+    seek($data{ident $self}, 0, 0);
+    $data = <{$data{ident $self}}>;
+  }
+  return $data;
 }
 
 sub new {

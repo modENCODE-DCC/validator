@@ -555,7 +555,15 @@ sub write_wiggle_data : PRIVATE {
     $self->println_to('wiggle_data', "<yLineOnOff>" . $wiggle_data->get_yLineOnOff() . "</yLineOnOff>");
     $self->println_to('wiggle_data', "<windowingFunction>" . $wiggle_data->get_windowingFunction() . "</windowingFunction>");
     $self->println_to('wiggle_data', "<smoothingWindow>" . $wiggle_data->get_smoothingWindow() . "</smoothingWindow>");
-    $self->println_to('wiggle_data', "<data>" . $wiggle_data->get_data() . "</data>");
+
+    # $self->println_to('wiggle_data', "<data>" . $wiggle_data->get_data() . "</data>");
+    $self->print_to('wiggle_data', $self->indent_txt . "<data>");
+    my $data_fh = $wiggle_data->get_data_fh();
+    my $buf;
+    while (read($data_fh, $buf, 8192)) {
+      $self->print_to('wiggle_data', $buf);
+    }
+    $self->print_to('wiggle_data', "</data>\n");
     $self->println_to('wiggle_data', "</wiggle_data>");
   }
   return $id;
@@ -673,6 +681,12 @@ sub println_to {
   for (my $i = 0; $i < $diffincs; $i++) {
     $self->inc_indent();
   }
+}
+
+sub print_to {
+  my ($self, $tempfile, $text) = @_;
+  my $tmpfh = $self->get_tempfiles()->{$tempfile};
+  print $tmpfh $text;
 }
 
 sub indent_txt : PRIVATE {
