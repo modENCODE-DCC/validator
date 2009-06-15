@@ -244,10 +244,8 @@ sub get_data_fh {
   my $self = shift;
   my $var_fh;
   if ($file_data{ident $self}) {
-    print STDERR "FILEHANDLE\n";
     $var_fh = $data{ident $self}
   } else {
-    print STDERR "FAKE FILEHANDLE\n";
     open $var_fh, "<", \$data{ident $self};
   }
   seek($var_fh, 0, 0);
