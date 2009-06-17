@@ -26,6 +26,7 @@ use Carp qw(croak carp);
 use base qw(ModENCODE::Validator::Data::Data);
 use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
+use File::Temp qw();
 
 my %cached_sam_files            :ATTR( :default<{}> );
 my %seen_data           :ATTR( :default<{}> );       
@@ -87,11 +88,19 @@ sub validate {
 
     log_error "Validating SAM file: $filename", 'notice' ;
     my @modencode_header = ();
+
+    my $temp_file = new File::Temp(
+      DIR => ModENCODE::Config::get_cfg()->val('cache', 'tmpdir'), 
+      SUFFIX => ".sam_data"
+    );
     
     while (defined(my $line = <FH>)) {
       $linenum++;
-      next if $line =~ m/^\s*#/; # Skip comments
-      next if $line =~ m/^\s*$/; # Skip blank lines
+      # Skip comments and blank lines
+      if ($line =~ m/^\s*#/ || $line =~ m/^\s*$/) {
+        print $temp_file $line;
+        next;
+      }
 
       # verify that there is a modencode-specific header
       if ($line =~ m/^\s*@/) { #header
@@ -150,13 +159,26 @@ sub validate {
 		$success = 0;
 	    }
 	}
+        print $temp_file "$header\n";
 	last if ($success == 0);
 	$fa_organism = $organism;
         next;
-      } 
+      } else {
+        $line =~ s/^(([^\t]*\t){2})chr/\1/; # Get rid of "chr" prefix
+        print $temp_file $line;
+      }
       $read_count++;
     }
     close FH;
+
+    # Copy back over temp file
+    open FH, '>', $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for reading; fatal error";
+    seek($temp_file, 0, 0);
+    while (my $tmp_line = <$temp_file>) {
+      print FH $tmp_line;
+    }
+    close FH;
+
 
     if ((@modencode_header == 0) || ($success==0)) {
 	#throw an error if there's no header at all
@@ -218,14 +240,14 @@ sub validate {
     $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
           'datum' => $datum,
           'heading' => 'Sorted BAM File',
-          'value' => "$filename.sorted.bam",
+          'value' => "$filename.bam.sorted.bam",
           'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
         })
     );
     $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
           'datum' => $datum,
           'heading' => 'Sorted BAM File Index',
-          'value' => "$filename.sorted.bam.bai",
+          'value' => "$filename.bam.sorted.bam.bai",
           'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
         })
     );
