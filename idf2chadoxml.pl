@@ -2,6 +2,7 @@
 
 use strict;
 
+
 my $root_dir;
 BEGIN {
   $root_dir = $0;
@@ -23,6 +24,7 @@ use ModENCODE::Validator::Attributes;
 use ModENCODE::Validator::Data;
 use ModENCODE::Validator::ExperimentalFactorName;
 use ModENCODE::Validator::TermSources;
+use ModENCODE::Validator::FeatureExistence;
 use ModENCODE::Chado::XMLWriter;
 use Getopt::Long;
 
@@ -145,7 +147,16 @@ if (!$termsource_validator->validate()) {
   log_error "Failed.", "error", "<";
   exit;
 }
+$termsource_validator = undef;
+log_error "Done.", "notice", "<";
 
+log_error "Checking that features were created.", "notice", ">";
+my $feature_existence_validator = new ModENCODE::Validator::FeatureExistence({ 'experiment' => $experiment });
+if (!$feature_existence_validator->validate()) {
+  log_error "Failed.", "error", "<";
+  exit;
+}
+$feature_existence_validator = undef;
 log_error "Done.", "notice", "<";
 
 log_error "Validated successfully!", "notice", "<";
