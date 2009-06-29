@@ -268,6 +268,7 @@ sub parse
                                               }),
                                           })
                         }));
+                        $feature->get_object->add_property($featureprop);
                     }
                 }
 
