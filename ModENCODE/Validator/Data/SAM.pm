@@ -172,7 +172,7 @@ sub validate {
     close FH;
 
     # Copy back over temp file
-    open FH, '>', $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for reading; fatal error";
+    open FH, '>', $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for writing; fatal error";
     seek($temp_file, 0, 0);
     while (my $tmp_line = <$temp_file>) {
       print FH $tmp_line;
