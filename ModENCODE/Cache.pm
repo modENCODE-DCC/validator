@@ -824,7 +824,7 @@ sub add_protocol_attribute_to_cache {
   $protocol_attribute->save unless $protocol_attribute->get_id;
   my $attr_id = $protocol_attribute->get_id;
   my $protocol_id = $protocol_attribute->get_protocol_id;
-  my $cached_attr = $cachesets{'protocol_attribute'}->add_to_cache(new ModENCODE::Cache::ProtocolAttribute({'content' => $protocol_attribute }), $protocol_attribute->get_protocol_id, $protocol_attribute->get_heading, $protocol_attribute->get_name, $protocol_attribute->get_rank);
+  my $cached_attr = $cachesets{'protocol_attribute'}->add_to_cache(new ModENCODE::Cache::ProtocolAttribute({'content' => $protocol_attribute }), $protocol_attribute->get_protocol_id, $protocol_attribute->get_heading, $protocol_attribute->get_name, $protocol_attribute->get_rank, $protocol_attribute->get_termsource_id);
   $cachesets{'protocol_attribute'}->add_to_id_cache($cached_attr, $protocol_id, $attr_id);
   $protocol_attribute->save;
   return $cached_attr;
@@ -848,7 +848,7 @@ sub save_protocol_attribute {
 
 sub get_cached_protocol_attribute {
   my $obj = shift;
-  return $cachesets{'protocol_attribute'}->get_from_cache($obj->get_protocol_id, $obj->get_heading, $obj->get_name, $obj->get_rank);
+  return $cachesets{'protocol_attribute'}->get_from_cache($obj->get_protocol_id, $obj->get_heading, $obj->get_name, $obj->get_rank, $obj->get_termsource_id);
 }
 
 sub load_protocol_attribute {
@@ -885,7 +885,7 @@ sub add_datum_attribute_to_cache {
   # Ugly hack to index by datum & attribute
   my $attr_id = $datum_attribute->get_id;
   my $datum_id = $datum_attribute->get_datum_id;
-  my $cached_attr = $cachesets{'datum_attribute'}->add_to_cache(new ModENCODE::Cache::DatumAttribute({'content' => $datum_attribute }), $datum_attribute->get_datum_id, $datum_attribute->get_heading, $datum_attribute->get_name, $datum_attribute->get_rank);
+  my $cached_attr = $cachesets{'datum_attribute'}->add_to_cache(new ModENCODE::Cache::DatumAttribute({'content' => $datum_attribute }), $datum_attribute->get_datum_id, $datum_attribute->get_heading, $datum_attribute->get_name, $datum_attribute->get_rank, $datum_attribute->get_termsource_id);
   $cachesets{'datum_attribute'}->add_to_id_cache($cached_attr, $datum_id, $attr_id);
   return $cached_attr;
 }
@@ -908,7 +908,7 @@ sub save_datum_attribute {
 
 sub get_cached_datum_attribute {
   my $obj = shift;
-  return $cachesets{'datum_attribute'}->get_from_cache($obj->get_datum_id, $obj->get_heading, $obj->get_name, $obj->get_rank);
+  return $cachesets{'datum_attribute'}->get_from_cache($obj->get_datum_id, $obj->get_heading, $obj->get_name, $obj->get_rank, $obj->get_termsource_id);
 }
 
 sub load_datum_attribute {

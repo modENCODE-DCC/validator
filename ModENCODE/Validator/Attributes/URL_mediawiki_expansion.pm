@@ -225,6 +225,7 @@ sub validate {
                     'rank' => $rank,
                     'type' => $type,
                     'protocol' => $attribute->get_object->get_protocol,
+                    'termsource' => $attribute->get_object->get_termsource(),
                   });
                 $attribute->get_object->get_protocol(1)->add_attribute($new_attribute);
               } elsif ($attribute->get_object->isa('ModENCODE::Chado::DatumAttribute')) {
@@ -234,6 +235,7 @@ sub validate {
                     'rank' => $rank,
                     'type' => $type,
                     'datum' => $attribute->get_object->get_datum,
+                    'termsource' => $attribute->get_object->get_termsource(),
                   });
                 $attribute->get_object->get_datum(1)->add_attribute($new_attribute);
               } else {
