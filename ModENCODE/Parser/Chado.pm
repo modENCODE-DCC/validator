@@ -790,14 +790,19 @@ sub get_type {
   #XXX: Rename SO:so terms to SO:mRNA
   $row->{'name'} = "mRNA" if $row->{'name'} eq "so";
 
+  my $cv = new ModENCODE::Chado::CV({ 
+      'name' => $row->{'cvname'}, 
+      'definition' => $row->{'definition'} 
+    });
+  # Make sure our CV will validate; we're assuming it's good since
+  # it's already in Chado somewhere
+  ModENCODE::Config::get_cvhandler()->add_cv($cv->get_object->get_name(), undef, "Exists in Chado");
+
   my $cvterm = new ModENCODE::Chado::CVTerm({
       'name' => $row->{'name'},
       'definition' => $row->{'definition'},
       'is_obsolete' => $row->{'is_obsolete'},
-      'cv' => new ModENCODE::Chado::CV({ 
-          'name' => $row->{'cvname'}, 
-          'definition' => $row->{'definition'} 
-        }),
+      'cv' => $cv,
     });
   my $termsource = $self->get_termsource($row->{'dbxref_id'});
   $cvterm->get_object->set_dbxref($termsource) if $termsource;
@@ -1226,7 +1231,7 @@ sub denormalize_applied_protocol : PRIVATE {
   return @these_protocols;
 }
 
-sub get_prepared_query : PRIVATE {
+sub get_prepared_query : RESTRICTED {
   my ($self, $query) = @_;
   if ($self->get_dbh()) {
     if (!defined($prepared_queries{ident $self}->{$query})) {
@@ -1322,7 +1327,7 @@ sub flatten_attribute : PRIVATE {
   return @columns;
 }
 
-sub get_dbh : PRIVATE {
+sub get_dbh : RESTRICTED {
   my ($self, $suppress_warnings) = @_;
   
   if (!defined($dbh{ident $self}) || !$dbh{ident $self} || ($dbh{ident $self} && !($dbh{ident $self}->{Active}))) {
