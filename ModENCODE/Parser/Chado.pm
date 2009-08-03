@@ -606,6 +606,12 @@ sub get_feature {
   }
 
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+  my $type = $self->get_type($row->{'type_id'});
+  if ($type->get_object->get_name eq "chromosome_arm") {
+    # Hack to deal with FlyBase, which names their chromosome_arms 
+    # after the chromosome (e.g. 2 instead of 2R)
+    $row->{'name'} = $row->{'uniquename'};
+  }
   my $feature = new ModENCODE::Chado::Feature({
 #      'id' => $feature_id,
       'name' => $row->{'name'},
@@ -615,7 +621,7 @@ sub get_feature {
       'timeaccessioned' => $row->{'timeaccessioned'},
       'timelastmodified' => $row->{'timelastmodified'},
       'is_analysis' => $row->{'is_analysis'},
-      'type' => $self->get_type($row->{'type_id'}),
+      'type' => $type,
       'organism' => $self->get_organism($row->{'organism_id'}),
       'primary_dbxref' => $self->get_termsource($row->{'primary_dbxref_id'}),
     });
