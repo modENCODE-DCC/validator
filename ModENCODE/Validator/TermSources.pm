@@ -121,7 +121,7 @@ sub validate {
     # Check that CV names are consistent
     my $canonical_cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv_obj->get_name);
     if (!$canonical_cv) {
-      log_error "Cannot find CV for " . $cv_obj->get_name;
+      log_error "Cannot find CV named '" . $cv_obj->get_name . "'.";
       return 0;
     }
     my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv_obj->get_name)->{'names'}->[0];
