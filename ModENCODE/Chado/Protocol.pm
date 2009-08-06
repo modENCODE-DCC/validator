@@ -260,7 +260,7 @@ sub to_string {
   my $string = "'" . $self->get_name() . "." . $self->get_version() . "'";
   $string .= "\n      Description:     " . substr($self->get_description, 0, 50) if $self->get_description();
   $string .= "\n      Attributes:      <" . join(", ", map { $_->to_string() } $self->get_attributes(1)) . ">" if scalar($self->get_attributes());
-  $string .= "\n      Term Source REF: " . $self->get_termsource()->to_string() if ($self->get_termsource());
+  $string .= "\n      Term Source REF: " . $self->get_termsource(1)->to_string() if ($self->get_termsource());
   return $string;
 }
 
