@@ -115,8 +115,8 @@ sub validate {
     next if $seen_data{$datum->get_id}++; # Don't re-update the same datum
     if ($seen_filenames{ident $self}->{$filename}) {
       # A different datum, but the same filename (different column)
-      log_error "Referring to the same file in two different data columns!", "error";
-      $success = 0;
+      log_error "Referring to the same file in two different data columns! (Duplicating data...)", "warning";
+      #$success = 0;
       next;
     }
 
