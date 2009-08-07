@@ -696,6 +696,8 @@ sub BUILD {
                                                 'accession' => '__ignore',
 #                                                'version' => $term_source_version,
                                               });
+                                              # Add a CV so we can validate any Term Source REFfed fields from the SDRF
+                                              ModENCODE::Config::get_cvhandler()->add_cv($term_source_name, $term_source_file, $term_source_type);
 
                                               push @dbxrefs, $term_obj;
                                             }
