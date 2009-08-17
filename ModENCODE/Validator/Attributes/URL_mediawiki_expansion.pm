@@ -248,6 +248,19 @@ sub validate {
           $pages{$attribute->get_object->get_value()} = \@new_attributes; # Array of merged 
         }
       }
+    } else {
+      # Already discovered this one, same attribute on a different datum or protocol
+      if ($attribute->get_object->isa('ModENCODE::Chado::ProtocolAttribute')) {
+        foreach my $new_attribute (@{$pages{$attribute->get_object->get_value()}}) {
+          $attribute->get_object->get_protocol(1)->add_attribute($new_attribute);
+        }
+      } elsif ($attribute->get_object->isa('ModENCODE::Chado::DatumAttribute')) {
+        foreach my $new_attribute (@{$pages{$attribute->get_object->get_value()}}) {
+          $attribute->get_object->get_datum(1)->add_attribute($new_attribute);
+        }
+      } else {
+        croak "Unknown attribute type: " . ref($attribute);
+      }
     }
 
     if (!($pages{$attribute->get_object->get_value()})) {
