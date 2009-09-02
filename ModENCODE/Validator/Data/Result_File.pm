@@ -95,6 +95,7 @@ use LWP::UserAgent;
 use ModENCODE::ErrorHandler qw(log_error);
 
 my %seen_filenames      :ATTR( :default<{}> );
+my %seen_url_filenames  :ATTR( :default<{}> );
 my %seen_data           :ATTR( :default<{}> );       
 
 sub validate {
@@ -130,6 +131,13 @@ sub validate {
       my @filename = split(/\//, $url);
       my $f_length = @filename;
       $filename = @filename[$f_length-1];
+      # Watch out for different URLs with the same filename component
+      my $unique_filename = $filename;
+      my $uniqid = 1;
+      while ($seen_url_filenames{ident $self}->{$unique_filename}) {
+        $unique_filename = $filename . $uniqid++;
+      }
+      $filename = $unique_filename;
 
       log_error ("URL ($url) found for Result File [" . $datum_obj->get_name() . "]; saving as " . $filename . ".", "notice", ">");
 
