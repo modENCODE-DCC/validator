@@ -135,9 +135,11 @@ sub validate {
       my $unique_filename = $filename;
       my $uniqid = 1;
       while ($seen_url_filenames{ident $self}->{$unique_filename}) {
-        $unique_filename = $filename . $uniqid++;
+        $unique_filename = $uniqid . "_" . $filename;
+        $uniqid++;
       }
       $filename = $unique_filename;
+      $seen_url_filenames{ident $self}->{$filename} = 1;
 
       log_error ("URL ($url) found for Result File [" . $datum_obj->get_name() . "]; saving as " . $filename . ".", "notice", ">");
 
