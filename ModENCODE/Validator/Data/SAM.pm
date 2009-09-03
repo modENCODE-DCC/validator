@@ -27,6 +27,7 @@ use base qw(ModENCODE::Validator::Data::Data);
 use ModENCODE::Chado::Wiggle_Data;
 use ModENCODE::ErrorHandler qw(log_error);
 use File::Temp qw();
+use PerlIO::gzip;
 
 my %cached_sam_files            :ATTR( :default<{}> );
 my %seen_data           :ATTR( :default<{}> );       
@@ -60,7 +61,16 @@ sub validate {
     }
 
     # Read the file
-    open FH, '<', $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for reading; fatal error";
+    if ($datum_obj->get_value() =~ /\.(gz|gzip)/) {
+	#file is gzipped
+	open FH, "<:gzip", $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for reading; fatal error";
+	#my $tmp = "zcat " . $datum_obj->get_value() . " |";
+	#open FH, '<', $tmp or croak "Couldn't open file " . $tmp . " for reading; fatal error $!"; 
+    } else {
+	#file is not zipped
+	open FH, '<', $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for reading; fatal error";
+    }
+
     my $linenum = 0;
 
     # Build Wiggle object
@@ -104,6 +114,7 @@ sub validate {
 
       # verify that there is a modencode-specific header
       if ($line =~ m/^\s*@/) { #header
+	$line =~ s/^\s*//;
         my ($header) = $line;
 	my ($organism,$build,$chrom,$chrom_end,$source);
 	$organism = $build = $chrom = $chrom_end = $source = "";
@@ -172,7 +183,14 @@ sub validate {
     close FH;
 
     # Copy back over temp file
-    open FH, '>', $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for writing; fatal error";
+    if ($datum_obj->get_value() =~ /\.(gz|gzip)/) {
+	#orig file is gzipped
+	open FH, ">:gzip", $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for writing; fatal error";
+    } else {
+	#file is not zipped
+	open FH, '>', $datum_obj->get_value() or croak "Couldn't open file " . $datum_obj->get_value . " for writing; fatal error";
+    }
+
     seek($temp_file, 0, 0);
     while (my $tmp_line = <$temp_file>) {
       print FH $tmp_line;
