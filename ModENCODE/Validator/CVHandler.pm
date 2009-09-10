@@ -382,6 +382,11 @@ sub add_cv {
     return 1;
   }
 
+  # referring to old submission
+  if ($cvurltype =~ /modencode_submission/) {
+      $cvs{ident $self}->{$cvurl} = $newcv;
+      return 1;
+  }
 
   # Have we already fetched this URL?
   my $root_dir = ModENCODE::Config::get_root_dir();
