@@ -261,7 +261,7 @@ sub handle_summary_results {
     if ($genbank_acc =~ /^SR[AXRS]\d+/) {
 	log_error "Creating a url attribute for $genbank_acc", "notice";
 	my $sra_id = $genbank_acc;
-	$sra_id =~ s/\.\d+//;  #can find individual reads this way, need to use the full read set
+	$sra_id =~ s/\.\S+//;  #can find individual reads this way, need to use the full read set
 	$url .= "&term=" . $sra_id;
 	$datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
 	    'value' => $url,
