@@ -18,8 +18,8 @@ sub validate {
 
   my $parser = $self->get_modencode_chado_parser();
   if (!$parser) {
-    log_error "Can't check data against existing data in the modENCODE database; skipping.", "warning";
-    next;
+    log_error "Can't check data against existing data in the modENCODE database. $!", "error";
+    return 0;
   }
 
   my $experiment_name;
