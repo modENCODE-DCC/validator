@@ -182,6 +182,8 @@ sub validate {
     }
     close FH;
 
+    return 0 if ($success == 0);
+
     # Copy back over temp file
     if ($datum_obj->get_value() =~ /\.(gz|gzip)/) {
 	#orig file is gzipped
