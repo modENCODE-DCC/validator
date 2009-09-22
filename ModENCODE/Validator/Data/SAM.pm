@@ -176,7 +176,7 @@ sub validate {
         next;
       } else {
         $line =~ s/^(([^\t]*\t){2})chr/\1/; # Get rid of "chr" prefix
-        print $temp_file $line;
+        print $temp_file $line or die "Cannot write to temp file.  Please tell the DCC to cleanup the temp directory on this machine.";
       }
       $read_count++;
     }
