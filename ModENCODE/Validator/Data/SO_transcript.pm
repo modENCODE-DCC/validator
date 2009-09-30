@@ -243,6 +243,7 @@ sub get_flybase_chado_parser : PROTECTED {
   return undef unless $parser;
   $parser->set_no_relationships(1);
   $parser->set_child_relationships(1);
+  $parser->set_no_long_residues(1);
   return $parser;
 }
 
@@ -259,6 +260,7 @@ sub get_wormbase_chado_parser : PROTECTED {
   return undef unless $parser;
   $parser->set_no_relationships(1);
   $parser->set_child_relationships(1);
+  $parser->set_no_long_residues(1);
   return $parser;
 }
 
@@ -275,6 +277,7 @@ sub get_modencode_chado_parser : PROTECTED {
   return undef unless $parser;
   $parser->set_no_relationships(1);
   $parser->set_child_relationships(1);
+  $parser->set_no_long_residues(1);
   return $parser;
 }
 

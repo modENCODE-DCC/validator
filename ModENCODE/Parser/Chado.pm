@@ -309,6 +309,7 @@ my %experiment          :ATTR(                                :default<undef> );
 my %prepared_queries    :ATTR(                                :default<{}> );
 my %no_relationships    :ATTR( :name<no_relationships>,       :default<0> );
 my %child_relationships :ATTR( :name<child_relationships>,    :default<0> );
+my %no_long_residues    :ATTR( :name<no_long_residues>,       :default<0> );
 my %schema              :ATTR( :get<schema>,                  :default<'public'> );
 
 sub new {
@@ -560,12 +561,24 @@ sub get_termsource {
 sub get_feature {
   my ($self, $feature_id) = @_;
   return undef unless($feature_id);
-  my $sth = $self->get_prepared_query("SELECT 
-    f.name, f.uniquename, f.residues, f.seqlen, f.organism_id, f.type_id, 
-    f.timeaccessioned, f.timelastmodified, f.is_analysis,
-    f.dbxref_id as primary_dbxref_id
-    FROM feature f 
-    WHERE f.feature_id = ?");
+  my $sth;
+  if ($self->get_no_long_residues()) {
+    $sth = $self->get_prepared_query("SELECT 
+      f.name, f.uniquename,
+      (CASE WHEN LENGTH(f.residues) <= 50 THEN residues ELSE '' END) AS residues,
+      f.seqlen, f.organism_id, f.type_id, 
+      f.timeaccessioned, f.timelastmodified, f.is_analysis,
+      f.dbxref_id as primary_dbxref_id
+      FROM feature f 
+      WHERE f.feature_id = ?");
+  } else {
+    $sth = $self->get_prepared_query("SELECT 
+      f.name, f.uniquename, f.residues, f.seqlen, f.organism_id, f.type_id, 
+      f.timeaccessioned, f.timelastmodified, f.is_analysis,
+      f.dbxref_id as primary_dbxref_id
+      FROM feature f 
+      WHERE f.feature_id = ?");
+  }
   $sth->execute($feature_id);
   my $row = $sth->fetchrow_hashref();
 
@@ -926,9 +939,10 @@ sub get_feature_id_by_name_and_type {
 sub get_feature_by_organisms_and_name {
   my ($self, $genus, $species, $accession) = @_;
   my $sth = $self->get_prepared_query("
-    SELECT f.feature_id FROM feature f
-    INNER JOIN organism o ON f.organism_id = o.organism_id
-    WHERE o.genus = ANY(?) AND o.species = ANY(?) AND f.name = ?
+    SELECT f.feature_id FROM feature f WHERE f.organism_id IN (
+      SELECT o.organism_id FROM organism o 
+      WHERE o.genus = ANY(?) AND o.species = ANY(?)
+    ) AND f.name = ?
     ");
   $sth->execute($genus, $species, $accession);
   my ($feature_id) = $sth->fetchrow_array();
@@ -939,9 +953,10 @@ sub get_feature_by_organisms_and_name {
 sub get_feature_by_organisms_and_uniquename {
   my ($self, $genus, $species, $accession) = @_;
   my $sth = $self->get_prepared_query("
-    SELECT f.feature_id FROM feature f
-    INNER JOIN organism o ON f.organism_id = o.organism_id
-    WHERE o.genus = ANY(?) AND o.species = ANY(?) AND f.uniquename = ?
+    SELECT f.feature_id FROM feature f WHERE f.organism_id IN (
+      SELECT o.organism_id FROM organism o 
+      WHERE o.genus = ANY(?) AND o.species = ANY(?)
+    ) AND f.uniquename = ?
     ");
   $sth->execute($genus, $species, $accession);
   my ($feature_id) = $sth->fetchrow_array();
