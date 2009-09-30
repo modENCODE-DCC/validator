@@ -611,13 +611,6 @@ sub get_feature {
     push @dbxrefs, $dbx_row->{'dbxref_id'};
   }
 
-  my @locations;
-  $sth = $self->get_prepared_query("SELECT featureloc_id FROM featureloc WHERE feature_id = ?");
-  $sth->execute($feature_id);
-  while (my $dbx_row = $sth->fetchrow_hashref()) {
-    push @locations, $dbx_row->{'featureloc_id'};
-  }
-
   map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
   my $type = $self->get_type($row->{'type_id'});
   if ($type->get_object->get_name eq "chromosome_arm") {
@@ -625,6 +618,17 @@ sub get_feature {
     # after the chromosome (e.g. 2 instead of 2R)
     $row->{'name'} = $row->{'uniquename'};
   }
+
+  my @locations;
+  if ($type->get_object->get_name !~ /chromosome(_arm)?/) {
+    # Chromosomes don't have locations, they ARE locations
+    $sth = $self->get_prepared_query("SELECT featureloc_id FROM featureloc WHERE feature_id = ?");
+    $sth->execute($feature_id);
+    while (my $dbx_row = $sth->fetchrow_hashref()) {
+      push @locations, $dbx_row->{'featureloc_id'};
+    }
+  }
+
   my $feature = new ModENCODE::Chado::Feature({
 #      'id' => $feature_id,
       'name' => $row->{'name'},
