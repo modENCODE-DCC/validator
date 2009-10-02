@@ -57,8 +57,8 @@ sub validate {
       }
       $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
             'datum' => $datum,
-            'heading' => 'modENCODE Reference',
-            'value' => $version,
+            'heading' => 'modENCODE Reference for ' . $version,
+            'value' => $version . ":" . $datum_obj->get_value(),
             'type' => new ModENCODE::Chado::CVTerm({
                 'name' => 'reference',
                 'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
