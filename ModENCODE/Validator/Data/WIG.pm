@@ -39,6 +39,14 @@ sub validate {
 
   log_error "Validating attached WIG file(s).", "notice", ">";
 
+  my @all_chromosomes;
+  my $config = ModENCODE::Config::get_cfg();
+  my @build_config_strings = $config->GroupMembers('genome_build');
+  foreach my $build_config_string (@build_config_strings) {
+    push @all_chromosomes, split(/, */, $config->val($build_config_string, 'chromosomes'));
+  }
+
+
   while (my $ap_datum = $self->next_datum) {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
     next if $seen_data{$datum->get_id}++; # Don't re-update the same datum
@@ -97,9 +105,10 @@ sub validate {
         my ($span)     = $line =~ /span=(\d+)/;
 
 
-        unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
-          || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
-        ) {
+#        unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
+#          || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
+#        ) {
+        unless ( grep { $chr eq $_ } @all_chromosomes) {
           log_error "WIG file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum. The chromosome $chr is invalid:\n      $line";
           $success = 0;
           last;
@@ -149,9 +158,10 @@ sub validate {
 
         $chr =~ s/^chr//; # Strip preceding "chr" for compatibility with UCSC
 
-        unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
-          || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
-        ) {
+#        unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
+#          || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
+#        ) {
+        unless ( grep { $chr eq $_ } @all_chromosomes) {
           log_error "WIG file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum. The chromosome $chr is invalid:\n      $line";
           $success = 0;
           last;
