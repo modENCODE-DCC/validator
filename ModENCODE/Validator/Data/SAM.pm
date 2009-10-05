@@ -206,8 +206,14 @@ sub validate {
 	$success = 0;
     }
     return if ($success==0);
-    log_error "Processed $read_count reads in SAM file", "notice";
-    
+    if ($read_count == 0) {
+	#throw an error if there's no reads in the file
+	log_error "There are no reads in your file \"$filename\"", "error";
+	return 0;
+    } else {
+	log_error "Processed $read_count reads in SAM file", "notice";
+    }
+
     #now validate it
     
     #try to make the bam file, using import, sort and index functionality in samtools
