@@ -198,6 +198,7 @@ sub validate {
       print FH $tmp_line;
     }
     close FH;
+    File::Temp::unlink0($temp_file, $temp_file->filename);
 
 
     if ((@modencode_header == 0) || ($success==0)) {
