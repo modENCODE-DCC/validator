@@ -123,6 +123,7 @@ use ModENCODE::Validator::Data::SO_transcript;
 use ModENCODE::Validator::Data::SO_protein;
 use ModENCODE::Validator::Data::GEO_lite;
 use ModENCODE::Validator::Data::SRA_lite;
+use ModENCODE::Validator::Data::SRA_list_lite;
 use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
 use ModENCODE::Validator::Data::ReferencedData;
@@ -154,6 +155,7 @@ sub START {
   $type_validators{$ident}->{'modencode:TraceArchive_record'} = new ModENCODE::Validator::Data::TA_acc({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GEO_record'} = new ModENCODE::Validator::Data::GEO_lite({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID (SRA)'} = new ModENCODE::Validator::Data::SRA_lite({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID_list (SRA)'} = new ModENCODE::Validator::Data::SRA_list_lite({ 'experiment' => $self->get_experiment });
   $termsource_validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'experiment' => $self->get_experiment });
 }
 

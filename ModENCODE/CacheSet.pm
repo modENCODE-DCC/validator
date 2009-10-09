@@ -7,7 +7,7 @@ use ModENCODE::Cache::CachedObject;
 use ModENCODE::ErrorHandler qw(log_error);
 
 use constant CACHE_SIZE => 300000;
-use constant CACHE_SHRINK_AT => 500000;
+use constant CACHE_SHRINK_AT => 1000000;
 use constant DEBUG => 1;
 
 my %name                :ATTR( :name<name> );

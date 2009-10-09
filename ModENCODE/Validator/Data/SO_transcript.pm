@@ -198,7 +198,7 @@ sub validate {
       $feature = $parser->get_feature_by_dbs_and_accession($dbnames, $accession) unless $feature;
       next unless $feature;
 
-      if ($feature->get_object->get_type(1)->get_name ne "transcript" && $feature->get_object->get_type(1)->get_name ne "mRNA") {
+      if ($feature->get_object->get_type(1)->get_name ne "transcript" && $feature->get_object->get_type(1)->get_name ne "mRNA" && $feature->get_object->get_type(1)->get_name ne "pseudogene") {
         log_error "Found a feature for $accession in $parser_name, but it is a " . $feature->get_object->get_type(1)->get_name . ", not a transcript. Skipping.", "warning";
         next;
       }
