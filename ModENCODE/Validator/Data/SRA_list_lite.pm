@@ -262,11 +262,15 @@ sub handle_summary_results {
   my ($fetch_results, $datum, @accessions) = @_;
   my @ests_not_found;
   my @unmatched_result_accs = @accessions;
+  my $acc_num = 0;
   foreach my $genbank_acc (@accessions) {
 
     my $url = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=sra&report=full";
     if ($genbank_acc =~ /^SR[AXRS]\d+/) {
-	log_error "Creating a url attribute for $genbank_acc", "notice";
+        $acc_num++;
+        if ($acc_num % 20 == 0) {
+          log_error "Created $acc_num attributes.", "notice";
+        }
 	my $sra_id = $genbank_acc;
 	$sra_id =~ s/\.\S+//;  #can find individual reads this way, need to use the full read set
 	$url .= "&term=" . $sra_id;
