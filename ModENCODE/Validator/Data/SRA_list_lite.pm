@@ -268,7 +268,7 @@ sub handle_summary_results {
     my $url = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=sra&report=full";
     if ($genbank_acc =~ /^SR[AXRS]\d+/) {
         $acc_num++;
-        if ($acc_num % 20 == 0) {
+        if ($acc_num % 40 == 0) {
           log_error "Created $acc_num attributes.", "notice";
         }
 	my $sra_id = $genbank_acc;
