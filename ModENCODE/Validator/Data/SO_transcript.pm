@@ -121,7 +121,7 @@ sub validate {
     my ($parser_name, $parser, $dbnames) = @$parse;
     if (!$parser) {
       log_error "Can't check transcripts against the $parser_name database; using anyway.", "warning";
-      #next;
+      next;
     }
 
     log_error "Checking for transcripts in the $parser_name database.", "notice", ">";
@@ -199,8 +199,8 @@ sub validate {
       next unless $feature;
 
       if ($feature->get_object->get_type(1)->get_name ne "transcript" && $feature->get_object->get_type(1)->get_name ne "mRNA" && $feature->get_object->get_type(1)->get_name ne "pseudogene") {
-        log_error "Found a feature for $accession in $parser_name, but it is a " . $feature->get_object->get_type(1)->get_name . ", not a transcript. Skipping.", "warning";
-        next;
+        log_error "Found a feature for $accession in $parser_name, but it is a " . $feature->get_object->get_type(1)->get_name . ", not a transcript. Using anyway.", "warning";
+        #next;
       }
 
       $found_transcripts++;
