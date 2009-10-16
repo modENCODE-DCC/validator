@@ -120,8 +120,8 @@ sub validate {
   ) {
     my ($parser_name, $parser, $dbnames) = @$parse;
     if (!$parser) {
-      log_error "Can't check transcripts against the $parser_name database; skipping.", "warning";
-      next;
+      log_error "Can't check transcripts against the $parser_name database; using anyway.", "warning";
+      #next;
     }
 
     log_error "Checking for transcripts in the $parser_name database.", "notice", ">";
