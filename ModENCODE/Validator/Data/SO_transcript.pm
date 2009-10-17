@@ -221,8 +221,9 @@ sub validate {
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
       push @accessions, $datum->get_object->get_value;
     }
-    $success = 0;
+#    $success = 0;
     log_error "Couldn't find transcripts (" . join(", ", sort(@accessions)) . ") in any database.", "error";
+    log_error "Despite this error, we're continuing, since this transcript may have dissapeared from FlyBase.", "error";
   }
 
   log_error "Done.", "notice", "<";
