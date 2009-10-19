@@ -167,7 +167,8 @@ sub validate {
     if ($attribute->get_value =~ /oldid=/ && $attribute_termsource_type ne 'URL_mediawiki_expansion') {
       log_error "It looks like you meant to provide a reference to a wiki URL " . $attribute->get_value . " in the " . 
       $attribute->get_heading . " [" . $attribute->get_name . "] field in the SDRF, but it (" . $attribute->to_string() . ") doesn't have a Term Source REF " .
-      "of type URL_mediawiki_expansion!", "warning";
+      "of type URL_mediawiki_expansion!", "error";
+      $success = 0;
     }
 
     # TODO: Don't show this warning every time

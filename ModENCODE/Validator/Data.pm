@@ -238,7 +238,8 @@ sub validate {
     if ($datum->get_object->get_value =~ /oldid=/ && $datum_termsource_type ne 'URL_mediawiki_expansion') {
       log_error "It looks like you meant to provide a reference to a wiki URL " . $datum->get_object->get_value . " in the " . 
       $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "] field in the SDRF, but it doesn't have a Term Source REF " .
-      "of type URL_mediawiki_expansion!", "warning";
+      "of type URL_mediawiki_expansion!", "error";
+      $success = 0;
     }
 
     # If there wasn't a specified validator for this data type, continue
