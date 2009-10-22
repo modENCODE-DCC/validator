@@ -87,7 +87,7 @@ sub validate {
       next if $line =~ m/^\s*$/; # Skip blank lines
 
       # handle the track header - you can have this more than once
-      if ($line =~ m/track.+type\=wiggle_0/) { #header
+      if ($line =~ m/track.+type\=\"?wiggle_0\"?/) { #header
         my ($header) = $line;
         $wiggle_data .= "$header";
         next;
@@ -120,10 +120,10 @@ sub validate {
         }
         if (!(length($span))) {
           # Span is optional
-          log_error "WIG file " . $datum_obj->get_value() . " does not seem to have a windowsize (span) indicated at line $linenum: \n      $line", 'notice';
+          #log_error "WIG file " . $datum_obj->get_value() . " does not seem to have a windowsize (span) indicated at line $linenum: \n      $line", 'notice';
         }
         $wig_type = $stepType;  #set the current wig type
-        log_error "Data section for chr $chr found at line $linenum", 'notice';	    
+        #log_error "Data section for chr $chr found at line $linenum", 'notice';	    
         $wiggle_data .= "$line";
         next;
       }
