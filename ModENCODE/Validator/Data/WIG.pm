@@ -55,7 +55,7 @@ sub validate {
     my $wig_type = "none";
 
     if (!length($datum_obj->get_value())) {
-      log_error "No WIG file for " . $datum->get_heading(), 'warning';
+      log_error "No WIG file for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "].", 'warning';
       next;
     } elsif (!-r $datum_obj->get_value()) {
       log_error "Cannot find WIG file " . $datum_obj->get_value() . " for column " . $datum_obj->get_heading() . " [" . $datum_obj->get_name . "].", "error";
