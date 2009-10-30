@@ -282,13 +282,13 @@ sub BUILD {
                                         }
 
     parameter_file_header:              /Parameter *Files?/i
-    parameter_file:                     parameter_file_header <skip:' *'> bracket_term(?) <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> attribute(s?)
+    parameter_file:                     parameter_file_header <skip:' *'> bracket_term(?) <skip:' *'> paren_term(?) <skip:'[ "]*\t[ "]*'> term_source(?) attribute(s?)
                                         { 
                                           $return = sub {
                                             my ($self, $values) = @_;
                                             my $value = shift(@$values);
                                             my $type = $item[5][0] || 'xsd:file';
-                                            return $self->create_datum($item[1], $value, $item[3][0], $type, undef, $item[7], $values);
+                                            return $self->create_datum($item[1], $value, $item[3][0], $type, $item[7], $item[8], $values);
                                           };
                                         }
 

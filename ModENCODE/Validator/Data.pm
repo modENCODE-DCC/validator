@@ -127,6 +127,7 @@ use ModENCODE::Validator::Data::SRA_list_lite;
 use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
 use ModENCODE::Validator::Data::ReferencedData;
+use ModENCODE::Validator::Data::ReferencedFile;
 
 use Class::Std;
 use Carp qw(croak carp);
@@ -199,14 +200,19 @@ sub validate {
   my $file_validator = new ModENCODE::Validator::Data::Result_File({ 'experiment' => $self->get_experiment });
   foreach my $ap_datum (@all_data) {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
-    if (
-      $datum->get_object->get_heading() =~ m/Result *Files?/i ||
-      $datum->get_object->get_heading() =~ m/Parameter *Files?/i ||
-      $datum->get_object->get_heading() =~ m/Array *Data *Files?/i ||
-      $datum->get_object->get_heading() =~ m/Array *Matrix *Data *Files?/i ||
-      $datum->get_object->get_heading() =~ m/(Derived)? Array *Data *Files?/i
-    ) {
-      $file_validator->add_datum_pair($ap_datum);
+    if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+      log_error "Not checking for local presence of referenced file " . $datum->get_object->get_value()  . ".", "notice";
+    } else {
+      log_error "Yes checking for local presence of referenced file " . $datum->get_object->get_value()  . ".", "notice";
+      if (
+        $datum->get_object->get_heading() =~ m/Result *Files?/i ||
+        $datum->get_object->get_heading() =~ m/Parameter *Files?/i ||
+        $datum->get_object->get_heading() =~ m/Array *Data *Files?/i ||
+        $datum->get_object->get_heading() =~ m/Array *Matrix *Data *Files?/i ||
+        $datum->get_object->get_heading() =~ m/(Derived)? Array *Data *Files?/i
+      ) {
+        $file_validator->add_datum_pair($ap_datum);
+      }
     }
   }
   if ($file_validator->num_data) {
@@ -253,7 +259,9 @@ sub validate {
     } elsif (!$validator) {
       next;
     }
-    $validator->add_datum_pair($ap_datum);
+    unless ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+      $validator->add_datum_pair($ap_datum);
+    }
   }
   log_error "Done adding applied_protocol/data pairs to validators.", "debug", "<" if DEBUG;
 
@@ -266,12 +274,23 @@ sub validate {
 
   # Check for data referenced in other submissions
   my $referenced_datum_validator = new ModENCODE::Validator::Data::ReferencedData({ 'experiment' => $self->get_experiment });
+  my $referenced_file_validator = new ModENCODE::Validator::Data::ReferencedFile({ 'experiment' => $self->get_experiment });
   foreach my $ap_datum (@all_data) {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
     my $type_name = $datum->get_object->get_type(1)->get_cv(1)->get_name . ":" . $datum->get_object->get_type(1)->get_name;
     next if $type_name eq "SO:transcript"; # Custom handler for transcripts
     if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
-      $referenced_datum_validator->add_datum_pair($ap_datum);
+      if (
+        $datum->get_object->get_heading() =~ m/Result *Files?/i ||
+        $datum->get_object->get_heading() =~ m/Parameter *Files?/i ||
+        $datum->get_object->get_heading() =~ m/Array *Data *Files?/i ||
+        $datum->get_object->get_heading() =~ m/Array *Matrix *Data *Files?/i ||
+        $datum->get_object->get_heading() =~ m/(Derived)? Array *Data *Files?/i
+      ) {
+        $referenced_file_validator->add_datum_pair($ap_datum);
+      } else {
+        $referenced_datum_validator->add_datum_pair($ap_datum);
+      }
     }
   }
   if ($referenced_datum_validator->num_data) {
