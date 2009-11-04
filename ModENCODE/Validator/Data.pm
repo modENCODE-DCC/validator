@@ -205,7 +205,6 @@ sub validate {
     if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
       log_error "Not checking for local presence of referenced file " . $datum->get_object->get_value()  . ".", "notice";
     } else {
-      log_error "Yes checking for local presence of referenced file " . $datum->get_object->get_value()  . ".", "notice";
       if (
         $datum->get_object->get_heading() =~ m/Result *Files?/i ||
         $datum->get_object->get_heading() =~ m/Parameter *Files?/i ||
