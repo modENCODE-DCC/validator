@@ -222,7 +222,7 @@ sub validate {
 
     my $fa_file = "";
     #will need to change these if we allow different versions of builds
-    $fa_file = $fasta_path . "elegans.WS180.dna.fa.fai" if ($fa_organism eq "Caenorhabditis elegans");
+    $fa_file = $fasta_path . "elegans.WS190.dna.fa.fai" if ($fa_organism eq "Caenorhabditis elegans");
     $fa_file =  $fasta_path . "dmel.r5.9.dna.fa.fai" if ($fa_organism eq "Drosophila melanogaster");
     log_error "Testing SAM->BAM conversion", "notice";
 
