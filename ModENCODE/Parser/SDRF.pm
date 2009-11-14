@@ -793,7 +793,7 @@ sub create_protocol_attribute {
             'name' => $cv,
           }),
       });
-    $attribute->set_type($type);
+    $attribute->get_object->set_type($type);
   } else {
     $type = new ModENCODE::Chado::CVTerm({
         'name' => 'string',
