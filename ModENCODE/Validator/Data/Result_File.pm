@@ -126,8 +126,25 @@ sub validate {
     if ($datum_obj->get_value() =~ m'(http|ftp)s?://') {
       # If this datum's value is a URL, pull it down and replace the current
       # datum with a pointer to the local file
+      my $ua = LWP::UserAgent->new();
 
       my $url = $datum_obj->get_value();
+      # For FASTQ, just check if it exists, but don't fetch
+      # Happily enough, LWP::UserAgent supports faking a HEAD request for FTP URLs.
+      if ($datum_obj->get_type(1)->get_name() eq "FASTQ") {
+        my $req = HTTP::Request->new('HEAD', $url);
+        my $res = $ua->request($req);
+        log_error("Checking to see if " . $datum_obj->get_type(1)->get_name() . " file at $url exists.", "notice", ">");
+        if ($res->is_success) {
+          log_error("Yes, saving.", "notice");
+        } else {
+          log_error("No, can't find file at URL $url using HTTP HEAD request!", "error");
+          $success = 0;
+        }
+        log_error("Done.", "notice", "<");
+        next;
+      }
+
       my @filename = split(/\//, $url);
       my $f_length = @filename;
       $filename = @filename[$f_length-1];
@@ -182,8 +199,6 @@ sub validate {
       my $fetch_success = 0;
       my $error_msg = "Stick in the GET reply here.";
 
-      my $req = HTTP::Request->new('GET', $url);
-      my $ua = LWP::UserAgent->new();
       log_error ("Fetching remote file from $url...", "notice");
 
       if (-r $filename) {
