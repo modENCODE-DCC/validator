@@ -278,6 +278,10 @@ sub validate {
   my $referenced_file_validator = new ModENCODE::Validator::Data::ReferencedFile({ 'experiment' => $self->get_experiment });
   foreach my $ap_datum (@all_data) {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
+    unless ($datum->get_object->get_type(1)) {
+      log_error "No type defined in wiki for " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "]!", "error";
+      return 0;
+    }
     my $type_name = $datum->get_object->get_type(1)->get_cv(1)->get_name . ":" . $datum->get_object->get_type(1)->get_name;
     next if $type_name eq "SO:transcript"; # Custom handler for transcripts
     if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
