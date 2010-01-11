@@ -997,7 +997,13 @@ sub get_feature_by_genbank_id {
     INNER JOIN cv ON cvt.cv_id = cv.cv_id
     WHERE 
     db.name = 'GB' 
-    AND o.genus = 'Drosophila' AND o.species = 'melanogaster'
+    AND o.genus = 'Drosophila' AND (
+      o.species = 'melanogaster' 
+      OR o.species = 'pseudoobscura pseudoobscura'
+      OR o.species = 'simulans'
+      OR o.species = 'sechellia'
+      OR o.species = 'persimilis'
+      )
     AND cv.name IN('SO', 'sequence') AND cvt.name != 'gene'
     AND dbx.accession = ?
     LIMIT 1

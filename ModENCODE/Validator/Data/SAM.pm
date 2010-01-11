@@ -136,7 +136,7 @@ sub validate {
 		$header =~ s/SN:chr/SN:/;
 		$chrom =~ s/chr//;
 	    }	  
-	    if (($organism ne "Drosophila melanogaster") && ($organism ne "Caenorhabditis elegans")) {
+	    if (($organism !~ /Drosophila (melanogaster|pseudoobscura pseudoobscura|simulans|sechellia|persimilis)/) && ($organism ne "Caenorhabditis elegans")) {
 		log_error "You have specified an invalid species of \"$organism\" at line $linenum", "error";
 		$success = 0;
 	    }
@@ -224,6 +224,10 @@ sub validate {
     #will need to change these if we allow different versions of builds
     $fa_file = $fasta_path . "elegans.WS190.dna.fa.fai" if ($fa_organism eq "Caenorhabditis elegans");
     $fa_file =  $fasta_path . "dmel.r5.9.dna.fa.fai" if ($fa_organism eq "Drosophila melanogaster");
+    $fa_file =  $fasta_path . "dpse.r2.6.dna.fa.fai" if ($fa_organism eq "Drosophila pseudoobscura pseudoobscura");
+    $fa_file =  $fasta_path . "dsim.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila simulans");
+    $fa_file =  $fasta_path . "dsec.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila sechellia");
+    $fa_file =  $fasta_path . "dper.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila persimilis");
     log_error "Testing SAM->BAM conversion", "notice";
 
     my $output = `$samtools_path/samtools import $fa_file $filename $filename.bam 2>&1`;

@@ -128,13 +128,13 @@ sub validate {
     my ($genus, $species);
     if ($parser_name eq "FlyBase") {
       $genus = [ "Drosophila" ];
-      $species = [ "melanogaster" ];
+      $species = [ "melanogaster", "pseudoobscura pseudoobscura", "simulans", "sechellia", "persimilis" ];
     } elsif ($parser_name eq "WormBase") {
       $genus = [ "Caenorhabditis" ];
       $species = [ "elegans" ];
     } else {
       $genus = [ "Drosophila", "Caenorhabditis" ];
-      $species = [ "melanogaster", "elegans" ];
+      $species = [ "melanogaster", "elegans", "pseudoobscura pseudoobscura", "simulans", "sechellia", "persimilis" ];
     }
 
     my $experiment_name;
