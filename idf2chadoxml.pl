@@ -36,6 +36,7 @@ ModENCODE::Cache::init();
 my $submission_name;
 my $options = GetOptions(
   "submission_name|n=s" => sub { ModENCODE::Config::set_submission_pipeline_name($_[1]); },
+  "embargo_date|d=s" => sub { ModENCODE::Config::set_embargo_date($_[1]); },
 );
 
 log_error "Validating submission...", "notice", ">";
@@ -84,6 +85,17 @@ log_error "Done.", "notice", "<";
 if (ModENCODE::Config::get_submission_pipeline_name) {
   $experiment->set_uniquename(ModENCODE::Config::get_submission_pipeline_name);
   log_error "Set submission name to \"" . ModENCODE::Config::get_submission_pipeline_name . "\".", "notice";
+}
+
+if (ModENCODE::Config::get_embargo_date) {
+  $experiment->add_property(new ModENCODE::Chado::ExperimentProp({
+        'experiment' => $experiment,
+        'name' => 'Embargo Date',
+        'type' => new ModENCODE::Chado::CVTerm({'name' => 'date', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+        'value' => ModENCODE::Config::get_embargo_date(),
+      })
+  );
+  log_error "Set embargo date to \"" . ModENCODE::Config::get_embargo_date . "\".", "notice";
 }
 
 log_error "Validating presence of valid ModENCODE project/subproject names...", "notice", ">";

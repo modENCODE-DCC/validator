@@ -131,6 +131,7 @@ my $config_object;
 my $cvhandler;
 my $root_dir;
 my $submission_pipeline_name;
+my $embargo_date;
 
 BEGIN {
   $root_dir = abs_path($0);
@@ -146,6 +147,15 @@ sub get_submission_pipeline_name {
 sub set_submission_pipeline_name {
   ($submission_pipeline_name) = @_;
   return $submission_pipeline_name;
+}
+
+sub get_embargo_date {
+  return $embargo_date;
+}
+
+sub set_embargo_date {
+  ($embargo_date) = @_;
+  return $embargo_date;
 }
 
 sub get_root_dir {
