@@ -40,11 +40,16 @@ sub validate {
   log_error "Validating attached WIG file(s).", "notice", ">";
 
   my @all_chromosomes;
-  my $config = ModENCODE::Config::get_cfg();
-  my @build_config_strings = $config->GroupMembers('genome_build');
+  my $config = ModENCODE::Config::get_genome_builds();
+  my @build_config_strings = keys(%$config);
   foreach my $build_config_string (@build_config_strings) {
-    push @all_chromosomes, split(/, */, $config->val($build_config_string, 'chromosomes'));
+    push @all_chromosomes, split(/, */, $config->{$build_config_string}->{'chromosomes'});
   }
+#  my $config = ModENCODE::Config::get_cfg();
+#  my @build_config_strings = $config->GroupMembers('genome_build');
+#  foreach my $build_config_string (@build_config_strings) {
+#    push @all_chromosomes, split(/, */, $config->val($build_config_string, 'chromosomes'));
+#  }
 
 
   while (my $ap_datum = $self->next_datum) {

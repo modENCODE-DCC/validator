@@ -278,23 +278,40 @@ sub validate {
     }
 
     # Get genome builds
-    my $config = ModENCODE::Config::get_cfg();
-    my @build_config_strings = $config->GroupMembers('genome_build');
+    my $config = ModENCODE::Config::get_genome_builds();
+    my @build_config_strings = keys(%$config);
     my $build_config = {};
     foreach my $build_config_string (@build_config_strings) {
       my (undef, $source, $build) = split(/ +/, $build_config_string);
       $build_config->{$source} = {} unless $build_config->{$source};
       $build_config->{$source}->{$build} = {} unless $build_config->{$source}->{$build};
-      my @chromosomes = split(/, */, $config->val($build_config_string, 'chromosomes'));
-      my $type = $config->val($build_config_string, 'type');
+      my @chromosomes = split(/, */, $config->{$build_config_string}->{'chromosomes'});
+      my $type = $config->{$build_config_string}->{'type'};
       foreach my $chr (@chromosomes) {
         $build_config->{$source}->{$build}->{$chr}->{'seq_id'} = $chr;
         $build_config->{$source}->{$build}->{$chr}->{'type'} = $type;
-        $build_config->{$source}->{$build}->{$chr}->{'start'} = $config->val($build_config_string, $chr . '_start');
-        $build_config->{$source}->{$build}->{$chr}->{'end'} = $config->val($build_config_string, $chr . '_end');
-        $build_config->{$source}->{$build}->{$chr}->{'organism'} = $config->val($build_config_string, 'organism');
+        $build_config->{$source}->{$build}->{$chr}->{'start'} = $config->{$build_config_string}->{$chr . '_start'};
+        $build_config->{$source}->{$build}->{$chr}->{'end'} = $config->{$build_config_string}->{$chr . '_end'};
+        $build_config->{$source}->{$build}->{$chr}->{'organism'} = $config->{$build_config_string}->{'organism'};
       }
     }
+#    my $config = ModENCODE::Config::get_cfg();
+#    my @build_config_strings = $config->GroupMembers('genome_build');
+#    my $build_config = {};
+#    foreach my $build_config_string (@build_config_strings) {
+#      my (undef, $source, $build) = split(/ +/, $build_config_string);
+#      $build_config->{$source} = {} unless $build_config->{$source};
+#      $build_config->{$source}->{$build} = {} unless $build_config->{$source}->{$build};
+#      my @chromosomes = split(/, */, $config->val($build_config_string, 'chromosomes'));
+#      my $type = $config->val($build_config_string, 'type');
+#      foreach my $chr (@chromosomes) {
+#        $build_config->{$source}->{$build}->{$chr}->{'seq_id'} = $chr;
+#        $build_config->{$source}->{$build}->{$chr}->{'type'} = $type;
+#        $build_config->{$source}->{$build}->{$chr}->{'start'} = $config->val($build_config_string, $chr . '_start');
+#        $build_config->{$source}->{$build}->{$chr}->{'end'} = $config->val($build_config_string, $chr . '_end');
+#        $build_config->{$source}->{$build}->{$chr}->{'organism'} = $config->val($build_config_string, 'organism');
+#      }
+#    }
 
     my $gff_submission_name = ModENCODE::Config::get_submission_pipeline_name;
     $gff_submission_name =~ s/[^0-9A-Za-z]/_/g;

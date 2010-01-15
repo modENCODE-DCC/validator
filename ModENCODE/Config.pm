@@ -132,6 +132,7 @@ my $cvhandler;
 my $root_dir;
 my $submission_pipeline_name;
 my $embargo_date;
+my %genome_builds;
 
 BEGIN {
   $root_dir = abs_path($0);
@@ -167,6 +168,10 @@ sub get_cfg {
   return $config_object;
 }
 
+sub get_genome_builds {
+  return \%genome_builds;
+}
+
 sub set_cfg {
   my ($inifile) = @_;
   $inifile = "validator.ini" unless length($inifile);
@@ -180,6 +185,23 @@ sub set_cfg {
       print STDERR "  " . join("\n  ", @Config::IniFiles::errors) . "\n";
       exit;
     }
+    my $genome_builds = $config_object->val("general", "genome_builds");
+    $genome_builds = $root_dir . $genome_builds unless ($genome_builds =~ /^\//);
+    unless (open(FH, "<", $genome_builds)) {
+      print STDERR "Couldn't open genome_builds file $genome_builds! $!\n";
+      exit;
+    }
+    my $current_build;
+    while (my $line = <FH>) {
+      if ($line =~ /^\[genome_build/) {
+        ($current_build) = ($line =~ /^\[(.*)\]$/);
+        $genome_builds{$current_build} = {};
+      } else {
+        my ($attr, $value) = split(/=/, $line, 2);
+        $genome_builds{$current_build}->{$attr} = $value;
+      }
+    }
+    close FH;
   }
 }
 
