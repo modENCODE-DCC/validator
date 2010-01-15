@@ -251,6 +251,24 @@ sub parse
                     next if $attr_name eq "gene";
                     next if $attr_name eq "parental_relationship";
                     next if $attr_name eq "normscore";
+                    if ($attr_name eq "external_evidence") {
+                      foreach my $attr_value (@{$attrs{$attr_name}}) {
+                        if ($attr_value =~ /^(modENCODE)_/) {
+                          my ($sub_id) = ($attr_value =~ /modENCODE_(\d+)/);
+                          my $feature_dbxref = new ModENCODE::Chado::DBXref({
+                              'accession' => $attr_value,
+                              'db' => new ModENCODE::Chado::DB({
+                                  'name' => 'modencode_submission',
+                                  'url' => $sub_id,
+                                  'description' => 'modencode_submission'
+                                })
+                            });
+                          $feature->get_object->add_dbxref($feature_dbxref);
+                        } else {
+                          log_error "Unknown external_evidence ID type \"$attr_name\" in GFF. Not creating DBXref.", "warning";
+                        }
+                      }
+                    }
 
                     my $rank = 0;
                     foreach my $attr_value (@{$attrs{$attr_name}}) {
