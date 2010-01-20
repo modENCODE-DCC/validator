@@ -193,6 +193,7 @@ sub set_cfg {
     }
     my $current_build;
     while (my $line = <FH>) {
+      chomp $line;
       if ($line =~ /^\[genome_build/) {
         ($current_build) = ($line =~ /^\[(.*)\]$/);
         $genome_builds{$current_build} = {};
