@@ -269,7 +269,7 @@ sub validate {
           my ($cv, $term, $name) = ModENCODE::Config::get_cvhandler()->parse_term($value);
           if (!defined($cv)) { $cv = $wiki_protocol_attr->get_types()->[0]; }
           if (!ModENCODE::Config::get_cvhandler()->is_valid_term($cv, $term)) {
-            log_error "Couldn't find cvterm '$cv.$term'.";
+            log_error "Couldn't find cvterm '$cv:$term'.";
             $success = 0;
           }
         }
