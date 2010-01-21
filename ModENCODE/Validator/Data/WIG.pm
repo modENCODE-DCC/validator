@@ -182,7 +182,22 @@ sub validate {
     }
     close FH;
 
-    $wiggle->get_object->set_data($wiggle_data);
+    if (length($wiggle_data) > (512*1024*1024)) {
+      # 512MB, just write to a new file, don't put in DB
+      open FH, ">", "$filename.cleaned.wig" or croak "Couldn't open $filename.cleaned.wig for writing.";
+      print FH $wiggle_data;
+      close FH;
+      $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
+            'datum' => $datum,
+            'heading' => 'Cleaned WIG File',
+            'value' => "$filename.cleaned.wig",
+            'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
+          })
+      );
+      $wiggle->get_object->set_data("Too large, see: $filename.cleaned.wig");
+    } else {
+      $wiggle->get_object->set_data($wiggle_data);
+    }
   }
 
   log_error "Done.", "notice", "<";
