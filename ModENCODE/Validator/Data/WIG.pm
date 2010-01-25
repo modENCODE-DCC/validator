@@ -39,11 +39,13 @@ sub validate {
 
   log_error "Validating attached WIG file(s).", "notice", ">";
 
-  my @all_chromosomes;
+  my %all_chromosomes;
   my $config = ModENCODE::Config::get_genome_builds();
   my @build_config_strings = keys(%$config);
   foreach my $build_config_string (@build_config_strings) {
-    push @all_chromosomes, split(/, */, $config->{$build_config_string}->{'chromosomes'});
+    foreach my $chr (split(/, */, $config->{$build_config_string}->{'chromosomes'})) {
+      $all_chromosomes{$chr} = 1;
+    }
   }
 #  my $config = ModENCODE::Config::get_cfg();
 #  my @build_config_strings = $config->GroupMembers('genome_build');
@@ -113,7 +115,7 @@ sub validate {
 #        unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
 #          || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
 #        ) {
-        unless ( grep { $chr eq $_ } @all_chromosomes) {
+        unless ( $all_chromosomes{$chr} ) {
           log_error "WIG file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum. The chromosome $chr is invalid:\n      $line";
           $success = 0;
           last;
@@ -166,7 +168,7 @@ sub validate {
 #        unless (   $chr =~ /^(I|II|III|IV|V|X|MtDNA)$/ #worm
 #          || $chr =~ /^([2-3][LR](Het)?|[X4MU]|[XY]Het|Uextra)$/ #fly
 #        ) {
-        unless ( grep { $chr eq $_ } @all_chromosomes) {
+        unless ( $all_chromosomes{$chr} ) {
           log_error "WIG file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum. The chromosome $chr is invalid:\n      $line";
           $success = 0;
           last;
@@ -184,6 +186,7 @@ sub validate {
 
     if (length($wiggle_data) > (512*1024*1024)) {
       # 512MB, just write to a new file, don't put in DB
+      log_error "WIG data too large for Chado; storing reference to file instead.", "notice";
       open FH, ">", "$filename.cleaned.wig" or croak "Couldn't open $filename.cleaned.wig for writing.";
       print FH $wiggle_data;
       close FH;
