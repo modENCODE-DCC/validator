@@ -136,6 +136,7 @@ sub validate {
 	my ($organism,$build,$chrom,$chrom_end,$source);
 	$organism = $build = $chrom = $chrom_end = $source = "";
 	chomp($header);
+        $header =~ s/[\r\n]*$//;
 	if ($header =~ m/^\@SQ/) {
 	    my @s = split("\t", $header);
 	    if (@s <=1) {
@@ -246,8 +247,13 @@ sub validate {
     $fa_file =  $fasta_path . "dsec.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila sechellia");
     $fa_file =  $fasta_path . "dper.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila persimilis");
     log_error "Testing SAM->BAM conversion", "notice";
+    unless ($fa_file) {
+      log_error "Couldn't figure out what FASTA file to use for \"$fa_organism\"!", "error";
+      return 0;
+    }
 
-    my $output = `$samtools_path/samtools import $fa_file $filename $filename.bam 2>&1`;
+    my $cmd = "$samtools_path/samtools import $fa_file $filename $filename.bam 2>&1";
+    my $output = `$cmd`;
     if ($?) {
 	log_error "You have an error in your SAM file \"$filename\"", "error";
 	for my $err_line (split(/\n/, $output)) { log_error $err_line, "error"; }
