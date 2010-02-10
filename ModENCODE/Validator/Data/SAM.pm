@@ -252,56 +252,62 @@ sub validate {
       return 0;
     }
 
-    my $cmd = "$samtools_path/samtools import $fa_file $filename $filename.bam 2>&1";
+    my $shell_safe_filename = $datum_obj->get_value();
+    if ($shell_safe_filename =~ /^\./ || $shell_safe_filename =~ /[ ;&><|()\[\]]/) {
+      log_error "$shell_safe_filename contains dangerous characters ( ;&<>|()[] ); please rename!", "error";
+      return 0;
+    }
+
+    my $cmd = "$samtools_path/samtools import $fa_file $shell_safe_filename $shell_safe_filename.bam 2>&1";
     my $output = `$cmd`;
-    if ($?) {
-	log_error "You have an error in your SAM file \"$filename\"", "error";
+    if ($? || $output =~ /fail to open file for reading/) {
+	log_error "You have an error in your SAM file \"$shell_safe_filename\"", "error";
 	for my $err_line (split(/\n/, $output)) { log_error $err_line, "error"; }
-	unlink("$filename.bam") || die ("Cannot delete temp file $filename.bam");
+	unlink("$shell_safe_filename.bam") || die ("Cannot delete temp file $shell_safe_filename.bam");
 	return 0;
     }
     log_error "Testing BAM sorting", "notice";
-    $output = `$samtools_path/samtools sort $filename.bam $filename.bam.sorted 2>&1`;
-    if ($?) {
-	log_error "You have an error in your SAM file \"$filename\"", "error";
+    $output = `$samtools_path/samtools sort $shell_safe_filename.bam $shell_safe_filename.bam.sorted 2>&1`;
+    if ($? || $output =~ /fail to open file for reading/) {
+	log_error "You have an error in your SAM file \"$shell_safe_filename\"", "error";
 	for my $err_line (split(/\n/, $output)) { log_error $err_line, "error"; }
-	unlink("$filename.bam") || die ("Cannot delete temp file $filename.bam");
-	unlink("$filename.bam.sorted.bam") || die ("Cannot delete temp file $filename.bam.sorted.bam");
+	unlink("$shell_safe_filename.bam") || die ("Cannot delete temp file $shell_safe_filename.bam");
+	unlink("$shell_safe_filename.bam.sorted.bam") || die ("Cannot delete temp file $shell_safe_filename.bam.sorted.bam");
 	return 0;
     }
 
     log_error "Testing BAM indexing", "notice";
-    $output = `$samtools_path/samtools index $filename.bam.sorted.bam 2>&1`;
-    if ($?) {
-	log_error "You have an error in your SAM file \"$filename\"", "error";
+    $output = `$samtools_path/samtools index $shell_safe_filename.bam.sorted.bam 2>&1`;
+    if ($? || $output =~ /fail to open file for reading/) {
+	log_error "You have an error in your SAM file \"$shell_safe_filename\"", "error";
 	for my $err_line (split(/\n/, $output)) { log_error $err_line, "error"; }
-	unlink("$filename.bam") || die ("Cannot delete temp file $filename.bam");
-	unlink("$filename.bam.sorted.bam") || die ("Cannot delete temp file $filename.bam.sorted.bam");
-	unlink("$filename.bam.sorted.bam.bai") || die ("Cannot delete temp file $filename.bam.sorted.bam.bai");
+	unlink("$shell_safe_filename.bam") || die ("Cannot delete temp file $shell_safe_filename.bam");
+	unlink("$shell_safe_filename.bam.sorted.bam") || die ("Cannot delete temp file $shell_safe_filename.bam.sorted.bam");
+	unlink("$shell_safe_filename.bam.sorted.bam.bai") || die ("Cannot delete temp file $shell_safe_filename.bam.sorted.bam.bai");
 	return 0;
     }
 
-#    unlink("$filename.bam") || die ("Cannot delete temp file $filename.bam");
-#    unlink("$filename.bam.sorted.bam") || die ("Cannot delete temp file $filename.bam.sorted.bam");
-#    unlink("$filename.bam.sorted.bam.bai") || die ("Cannot delete temp file $filename.bam.sorted.bam.bai");
+#    unlink("$shell_safe_filename.bam") || die ("Cannot delete temp file $shell_safe_filename.bam");
+#    unlink("$shell_safe_filename.bam.sorted.bam") || die ("Cannot delete temp file $shell_safe_filename.bam.sorted.bam");
+#    unlink("$shell_safe_filename.bam.sorted.bam.bai") || die ("Cannot delete temp file $shell_safe_filename.bam.sorted.bam.bai");
     $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
           'datum' => $datum,
           'heading' => 'BAM File',
-          'value' => "$filename.bam",
+          'value' => "$shell_safe_filename.bam",
           'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
         })
     );
     $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
           'datum' => $datum,
           'heading' => 'Sorted BAM File',
-          'value' => "$filename.bam.sorted.bam",
+          'value' => "$shell_safe_filename.bam.sorted.bam",
           'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
         })
     );
     $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
           'datum' => $datum,
           'heading' => 'Sorted BAM File Index',
-          'value' => "$filename.bam.sorted.bam.bai",
+          'value' => "$shell_safe_filename.bam.sorted.bam.bai",
           'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'string', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
         })
     );
