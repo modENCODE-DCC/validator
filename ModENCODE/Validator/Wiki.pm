@@ -356,7 +356,7 @@ sub validate {
     }
 
     # Make sure each CV and term defined in the IDF exist, and get the canonical CV name(s)
-    @idf_protocol_types = sort { $a->[0] . ":" . $a->[1] <=> $b->[0] . ":" . $b->[1] } map {
+    @idf_protocol_types = sort { $a->[0] . ":" . $a->[1] cmp $b->[0] . ":" . $b->[1] } map {
       my ($cv, $term, undef) = ModENCODE::Config::get_cvhandler->parse_term($_->get_object->get_value);
       $cv = $_->get_object->get_termsource(1)->get_db(1)->get_name unless $cv;
       if (!ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)) {
@@ -377,7 +377,7 @@ sub validate {
       [ $cv, $term ]
     } @idf_protocol_types;
 
-    @wiki_protocol_types = sort { $a->[0] . ":" . $a->[1] <=> $b->[0] . ":" . $b->[1] } map {
+    @wiki_protocol_types = sort { $a->[0] . ":" . $a->[1] cmp $b->[0] . ":" . $b->[1] } map {
       my ($cv, $term, $name) = ModENCODE::Config::get_cvhandler()->parse_term($_);
       $_->get_types()->[0] unless $cv;
       $cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
@@ -404,7 +404,7 @@ sub validate {
 
     # Collect all of the inputs from the wiki
     my ($input_type_defs) = grep { $_->get_name() =~ /^\s*input *types?\s*$/i } @{$wiki_protocol_def->get_values()};
-    my @wiki_input_definitions = sort { $a->{'cv'} . ":" . $a->{'term'} . ":" . $a->{'value'} <=> $b->{'cv'} . ":" . $b->{'term'} . ":" . $b->{'value'} } 
+    my @wiki_input_definitions = sort { $a->{'cv'} . ":" . $a->{'term'} . ":" . $a->{'value'} cmp $b->{'cv'} . ":" . $b->{'term'} . ":" . $b->{'value'} } 
     map {
       my ($name, $cv, $term) = (undef, split(/:/, $_));
       if (!defined($term)) {
@@ -429,7 +429,7 @@ sub validate {
       $success = 0;
       next;
     }
-    my @wiki_output_definitions = sort { $a->{'cv'} . ":" . $a->{'term'} . ":" . $a->{'value'} <=> $b->{'cv'} . ":" . $b->{'term'} . ":" . $b->{'value'} } 
+    my @wiki_output_definitions = sort { $a->{'cv'} . ":" . $a->{'term'} . ":" . $a->{'value'} cmp $b->{'cv'} . ":" . $b->{'term'} . ":" . $b->{'value'} } 
     map {
       my ($name, $cv, $term) = (undef, split(/:/, $_));
       if (!defined($term)) {
