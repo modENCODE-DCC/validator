@@ -131,7 +131,10 @@ sub validate {
       my $url = $datum_obj->get_value();
       # For FASTQ, just check if it exists, but don't fetch
       # Happily enough, LWP::UserAgent supports faking a HEAD request for FTP URLs.
-      if ($datum_obj->get_type(1)->get_name() eq "FASTQ") {
+      if (
+        $datum_obj->get_type(1)->get_name() eq "FASTQ"
+        || $datum_obj->get_type(1)->get_name() eq "SFF"
+      ) {
         my $req = HTTP::Request->new('HEAD', $url);
         my $res = $ua->request($req);
         log_error("Checking to see if " . $datum_obj->get_type(1)->get_name() . " file at $url exists.", "notice", ">");
