@@ -210,7 +210,9 @@ sub parse
 		$id ||= $attrs{Name}->[0] || sprintf("ID%.6d", ++($this->{counter}));
 
 		## can't have duplicate ids within the same file
-		die "Duplicate id $id found" if $this->{$id}++;
+                # Unless, of course, they're Wormbase CDSes, which by convention all
+                # have the same ID for a given gene (but multiple locations)
+                die "Duplicate id $id found" if ($this->{$id}++ && $type ne "CDS");
 
 
                 my $orig_seqid = $seqid;
@@ -293,9 +295,10 @@ sub parse
 
 		## have valid seq loc
 		if ($start =~ /^\d+$/ && $end =~ /^\d+$/) {
+                        my $locrank = $this->{$id} if $type eq "CDS";
 			my $feature_loc =
 				$this->create_feature_loc($start, $end, $strand,
-						$src_feature);
+						$src_feature, undef, $locrank);
 			$feature->get_object->add_location($feature_loc);
                         $feature->get_object->dirty();
 		}
@@ -455,7 +458,7 @@ sub create_organism
 sub create_feature_loc
 {
 	my $this = shift;
-	my ($start, $end, $strand, $src_feature, $residue_info) = @_;
+	my ($start, $end, $strand, $src_feature, $residue_info, $rank) = @_;
         if ($start && $end && ($end < $start)) {
           die "Start ($start) is less than end ($end)";
         }
@@ -476,6 +479,7 @@ sub create_feature_loc
 	$feature_loc->set_strand($strand);
 	$feature_loc->set_residue_info($residue_info);
 	$feature_loc->set_srcfeature($src_feature) if $src_feature;
+	$feature_loc->set_rank($rank) if defined($rank);
 	return $feature_loc;
 }
 
