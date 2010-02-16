@@ -14,7 +14,7 @@ sub new {
     # Update any cached attribute
     my $need_save = 0;
     if ($temp->get_value() && !($cached_attribute->get_object->get_value())) {
-      $cached_attribute->set_value($temp->get_value);
+      $cached_attribute->get_object->set_value($temp->get_value);
       $need_save = 1;
     }
     if ($temp->get_termsource() && !($cached_attribute->get_object->get_termsource())) {
