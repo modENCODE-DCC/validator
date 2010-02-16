@@ -186,6 +186,7 @@ L<http://www.modencode.org>.
 
 =cut
 use strict;
+no warnings 'recursion';
 use Class::Std;
 use Carp qw(croak carp);
 use HTML::Entities ();
