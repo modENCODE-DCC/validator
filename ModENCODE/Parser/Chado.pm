@@ -1263,12 +1263,14 @@ sub denormalize_applied_protocol : PRIVATE {
 }
 
 sub get_prepared_query : RESTRICTED {
-  my ($self, $query) = @_;
+  my ($self, $query, $schema) = @_;
+  $schema = $self->get_schema() unless $schema;
   if ($self->get_dbh()) {
-    if (!defined($prepared_queries{ident $self}->{$query})) {
-      $prepared_queries{ident $self}->{$query} = $self->get_dbh()->prepare($query);
+    $prepared_queries{ident $self}->{$schema} = {} if (!defined($prepared_queries{ident $self}->{$schema}));
+    if (!defined($prepared_queries{ident $self}->{$schema}->{$query})) {
+      $prepared_queries{ident $self}->{$schema}->{$query} = $self->get_dbh()->prepare($query);
     }
-    return $prepared_queries{ident $self}->{$query};
+    return $prepared_queries{ident $self}->{$schema}->{$query};
   } else {
     log_error "Can't get the prepared query '$query' with no database connection.", "error";
     exit;
