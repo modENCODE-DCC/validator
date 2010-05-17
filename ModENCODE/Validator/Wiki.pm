@@ -653,6 +653,11 @@ sub validate {
         next;
       }
 
+      my @anonymous_implied_by_wiki = me_array_subtract(
+        [grep { $_ } map { $_->get_name() } $applied_protocol->get_output_data(1)],
+        [grep { $_ } map { $_->{'name'} } @wiki_output_definitions]
+      );
+
       # Really special case where there's a single _extra_ anonymous datum implied by the wiki (type but no name)
       # AND no unnamed (anonymous_data) column in the SDRF AND named columns in the SDRF so an anonymous datum
       # was not automatically created
@@ -665,10 +670,51 @@ sub validate {
         &&
         # Only one unnamed type in wiki
         scalar(grep { $_->{'name'} eq '' } @wiki_output_definitions) == 1
+        &&
+        # One remaining named type in the SDRF
+        scalar(@anonymous_implied_by_wiki) == 1
       ) {
         my ($missing_type) = grep { $_->{'name'} eq '' } @wiki_output_definitions;
         log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra output column that is shown named in the SDRF.", "warning";
+        use Data::Dumper; print Dumper(map { $_->_DUMP(); } $applied_protocol->get_output_data(1)); exit;
         next;
+      }
+      # Update the output's type to match the type defined on the wiki
+      if (scalar($applied_protocol->get_output_data) == (scalar(@wiki_output_definitions)-1)) {
+        # Really special case where there's a single _extra_ anonymous datum implied by the wiki (type but no name)
+        # AND no unnamed (anonymous_data) column in the SDRF AND named columns in the SDRF so an anonymous datum
+        # was not automatically created
+        my $type = new ModENCODE::Chado::CVTerm({
+            'name' => 'anonymous_datum',
+            'cv' => new ModENCODE::Chado::CV({
+                'name' => 'modencode'
+              }),
+          });
+        my $anonymous_datum = new ModENCODE::Chado::Data({
+            'heading' => "Anonymous Extra Datum #" . $anonymous_data_num++,
+            'type' => $type,
+            'value' => '',
+            'anonymous' => 1,
+          });
+        $applied_protocol->add_output_datum($anonymous_datum);
+        log_error "Creating extra anonymous datum " . $anonymous_datum->get_object->get_heading() . " as output for " . $applied_protocol->get_protocol(1)->get_name . ".", "warning";
+
+        # If we added an anonymous output because there were none, then add it as an 
+        # input to the next protocol to the right (in SDRF)
+        my @potential_next_applied_protocol_slots = @{$experiment->get_applied_protocol_slots->[$applied_protocol_slot_for_this_protocol+1]} if ($applied_protocol_slot_for_this_protocol+1 < scalar(@{$experiment->get_applied_protocol_slots}));
+        foreach my $potential_next_applied_protocol (@potential_next_applied_protocol_slots) {
+          foreach my $current_output ($applied_protocol->get_output_data) {
+            if (
+              !scalar($potential_next_applied_protocol->get_input_data) ||
+              scalar(grep { $_ == $current_output } $potential_next_applied_protocol->get_input_data)
+            ) {
+              $potential_next_applied_protocol->add_input_datum($anonymous_datum);
+              log_error "Creating extra anonymous datum " . $anonymous_datum->get_object->get_heading() . " as input for " . $potential_next_applied_protocol->get_protocol(1)->get_name . ".", "warning";
+              last;
+            }
+          }
+        }
+        push @anonymous_data, $anonymous_datum;
       }
       # Fail if the number of outputs in the SDRF is not equal to the number in the wiki
       if (
@@ -676,7 +722,7 @@ sub validate {
         &&
         scalar(@wiki_output_definitions) != scalar($applied_protocol->get_output_data) # Everything accounted for
       ) {
-        log_error("There are " . scalar(@wiki_output_definitions) . " output parameters according to the wiki" .
+        log_error("There are " . (scalar(@wiki_output_definitions) - scalar(@anonymous_implied_by_wiki)) . " output parameters according to the wiki" .
         " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @wiki_output_definitions) . ")" .
         ", and " . scalar($applied_protocol->get_output_data) . " output parameters in the SDRF" .
         " (" . join(", ", map { $_->get_object->get_heading() . "[" . $_->get_object->get_name() . "]" } $applied_protocol->get_output_data) . ")" .
@@ -693,41 +739,6 @@ sub validate {
           log_error "Can't find the output [" . $wiki_term->{'name'} . "] in the SDRF for protocol '" . $protocol->get_object->get_name() . "'.";
           $success = 0;
           next;
-        }
-      }
-      # Update the output's type to match the type defined on the wiki
-      if (scalar($applied_protocol->get_output_data) == (scalar(@wiki_output_definitions)-1)) {
-        # Really special case where there's a single _extra_ anonymous datum implied by the wiki (type but no name)
-        # AND no unnamed (anonymous_data) column in the SDRF AND named columns in the SDRF so an anonymous datum
-        # was not automatically created
-        my $type = new ModENCODE::Chado::CVTerm({
-            'name' => 'anonymous_datum',
-            'cv' => new ModENCODE::Chado::CV({
-                'name' => 'modencode'
-              }),
-          });
-        my $anonymous_datum = new ModENCODE::Chado::Data({
-            'heading' => "Anonymous Extra Datum #" . $anonymous_data_num++,
-            'type' => $type,
-            'anonymous' => 1,
-          });
-        $applied_protocol->add_output_datum($anonymous_datum);
-        log_error "Creating extra anonymous datum " . $anonymous_datum->get_heading() . " as output for " . $applied_protocol->get_protocol->get_name . ".", "warning";
-
-        # If we added an anonymous output because there were none, then add it as an 
-        # input to the next protocol to the right (in SDRF)
-        my @potential_next_applied_protocol_slots = @{$experiment->get_applied_protocol_slots->[$applied_protocol_slot_for_this_protocol+1]} if ($applied_protocol_slot_for_this_protocol+1 < scalar(@{$experiment->get_applied_protocol_slots}));
-        foreach my $potential_next_applied_protocol (@potential_next_applied_protocol_slots) {
-          foreach my $current_output ($applied_protocol->get_output_data) {
-            if (
-              !scalar($potential_next_applied_protocol->get_input_data) ||
-              scalar(grep { $_ == $current_output } $potential_next_applied_protocol->get_input_data)
-            ) {
-              $potential_next_applied_protocol->add_input_datum($anonymous_datum);
-              log_error "Creating extra anonymous datum " . $anonymous_datum->get_heading() . " as input for " . $potential_next_applied_protocol->get_protocol->get_name . ".", "warning";
-              last;
-            }
-          }
         }
       }
 
@@ -792,6 +803,17 @@ sub validate {
 
   return $success;
 }
+
+sub me_array_subtract {
+  # minuend - subtrahend = difference
+  my ($minuend_array, $subtrahend_array) = @_;
+  my @difference = ();
+  foreach my $minuend (@$minuend_array) {
+    push(@difference, $minuend) unless scalar(grep { $minuend eq $_ } @$subtrahend_array);
+  }
+  return @difference;
+}
+
 
 1;
 
