@@ -1,4 +1,4 @@
-package ModENCODE::Validator::Data::ReadCount::MultiiplyMappedReadCount;
+package ModENCODE::Validator::Data::ReadCount::MultiplyMappedReadCount;
 
 # the ReadCount data type will create an experiment property (in addition to an attribute)
 # of the total read count for an experiment - this will allow quick access to
