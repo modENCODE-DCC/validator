@@ -157,8 +157,8 @@ sub START {
   $type_validators{$ident}->{'modencode:Signal_Graph_File'} = new ModENCODE::Validator::Data::WIG({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GFF3 (parse only)'} = new ModENCODE::Validator::Data::GFF3_parse_only({ 'experiment' => $self->get_experiment });
-  #$type_validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc({ 'experiment' => $self->get_experiment });
-  $type_validators{$ident}->{'modencode:genbank_record'} = new ModENCODE::Validator::Data::genbank_acc({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc({ 'experiment' => $self->get_experiment });
+  #$type_validators{$ident}->{'modencode:genbank_record'} = new ModENCODE::Validator::Data::genbank_acc({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:accession_number_list_data_file'} = new ModENCODE::Validator::Data::dbEST_acc_list({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'SO:protein'} = new ModENCODE::Validator::Data::SO_protein({ 'experiment' => $self->get_experiment });
