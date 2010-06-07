@@ -116,6 +116,7 @@ use ModENCODE::Validator::Data::WIG;
 use ModENCODE::Validator::Data::SAM;
 use ModENCODE::Validator::Data::dbEST_acc;
 use ModENCODE::Validator::Data::dbEST_acc_list;
+use ModENCODE::Validator::Data::genbank_acc;
 use ModENCODE::Validator::Data::Result_File;
 use ModENCODE::Validator::Data::GFF3;
 use ModENCODE::Validator::Data::GFF3_parse_only;
@@ -129,6 +130,11 @@ use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
 use ModENCODE::Validator::Data::ReferencedData;
 use ModENCODE::Validator::Data::ReferencedFile;
+use ModENCODE::Validator::Data::ReadCount;
+use ModENCODE::Validator::Data::ReadCount::UniquelyMappedReadCount;
+use ModENCODE::Validator::Data::ReadCount::MultiplyMappedReadCount;
+use ModENCODE::Validator::Data::ReadCount::ReadCount;
+
 
 use Class::Std;
 use Carp qw(croak carp);
@@ -138,6 +144,7 @@ use constant DEBUG => 1;
 
 my %termsource_validators       :ATTR( :default<{}> );
 my %type_validators             :ATTR( :default<{}> );
+my %sum_validators              :ATTR( :default<{}> );
 my %experiment                  :ATTR( :name<experiment> );
 
 sub START {
@@ -151,6 +158,7 @@ sub START {
   $type_validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GFF3 (parse only)'} = new ModENCODE::Validator::Data::GFF3_parse_only({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:dbEST_record'} = new ModENCODE::Validator::Data::dbEST_acc({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:genbank_record'} = new ModENCODE::Validator::Data::genbank_acc({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:accession_number_list_data_file'} = new ModENCODE::Validator::Data::dbEST_acc_list({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'SO:transcript'} = new ModENCODE::Validator::Data::SO_transcript({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'SO:protein'} = new ModENCODE::Validator::Data::SO_protein({ 'experiment' => $self->get_experiment });
@@ -160,6 +168,9 @@ sub START {
   $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID (SRA)'} = new ModENCODE::Validator::Data::SRA_lite({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID_list (SRA)'} = new ModENCODE::Validator::Data::SRA_list_lite({ 'experiment' => $self->get_experiment });
   $termsource_validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'experiment' => $self->get_experiment });
+  $sum_validators{$ident}->{'modencode:read_count'} = new ModENCODE::Validator::Data::ReadCount::ReadCount({ 'experiment' => $self->get_experiment });
+  $sum_validators{$ident}->{'modencode:uniquely_mapped_read_count'} = new ModENCODE::Validator::Data::ReadCount::UniquelyMappedReadCount({ 'experiment' => $self->get_experiment });
+  $sum_validators{$ident}->{'modencode:multiply_mapped_read_count'} = new ModENCODE::Validator::Data::ReadCount::MultiplyMappedReadCount({ 'experiment' => $self->get_experiment });
 }
 
 
@@ -168,11 +179,27 @@ sub get_validator_for_type : PRIVATE {
   my $cvname = $type->get_cv(1)->get_name();
   my $cvterm = $type->get_name();
 
+
   my @validator_keys = keys(%{$type_validators{ident $self}});
   foreach my $validator_key (@validator_keys) {
     my ($cv, $term) = split(/:/, $validator_key);
     if ($term eq $cvterm && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($cvname, $cv)) {
       return $type_validators{ident $self}->{$validator_key};
+    }
+  }
+}
+
+sub get_sum_validator_for_type : PRIVATE {
+  my ($self, $type) = @_;
+  my $cvname = $type->get_cv(1)->get_name();
+  my $cvterm = $type->get_name();
+
+
+  my @validator_keys = keys(%{$sum_validators{ident $self}});
+  foreach my $validator_key (@validator_keys) {
+    my ($cv, $term) = split(/:/, $validator_key);
+    if ($term eq $cvterm && ModENCODE::Config::get_cvhandler()->cvname_has_synonym($cvname, $cv)) {
+      return $sum_validators{ident $self}->{$validator_key};
     }
   }
 }
@@ -194,6 +221,8 @@ sub validate {
     }
   }
   my %seen;
+  my @all_data_with_dups = grep { !$seen{$_->[0]->get_id . '.' . $_->[1] . '.' . $_->[2]->get_id . '.' . join(",", map { $_->get_id } $_->[0]->get_output_data(1))    }++ } @all_data;
+  undef %seen;
   @all_data = grep { !$seen{$_->[0]->get_id . '.' . $_->[1] . '.' . $_->[2]->get_id}++ } @all_data;
 
   log_error "There are " . scalar(@all_data) . " unique data/applied protocol pairs found.", "debug", ">" if DEBUG;
@@ -221,6 +250,7 @@ sub validate {
   }
 
   # For any data field with a cvterm of type where there exists a validator module
+  my $need_to_sum = 0;
   foreach my $ap_datum (@all_data) {
 
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
@@ -228,6 +258,10 @@ sub validate {
 
     my $datum_type = $datum->get_object->get_type(1);
     my $validator;
+
+    if (!$need_to_sum) {
+      $need_to_sum = 1 if $self->get_sum_validator_for_type($datum_type);
+    }
 
     if ($datum_type) {
       $validator = $self->get_validator_for_type($datum_type);
@@ -264,10 +298,25 @@ sub validate {
       $validator->add_datum_pair($ap_datum);
     }
   }
+  if ($need_to_sum) {
+    foreach my $ap_datum (@all_data_with_dups) {
+      # Summation validators require access to all copies of a datum
+      my ($applied_protocol, $direction, $datum) = @$ap_datum;
+      log_error $applied_protocol->get_protocol(1)->get_name . " has non-unique $direction datum " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name .  "].", "debug" if DEBUG;
+
+      my $datum_type = $datum->get_object->get_type(1);
+      my $validator;
+
+      if ($datum_type) {
+        $validator = $self->get_sum_validator_for_type($datum_type);
+        $validator->add_datum_pair($ap_datum) if ($validator);
+      }
+    }
+  }
   log_error "Done adding applied_protocol/data pairs to validators.", "debug", "<" if DEBUG;
 
   log_error "Running validators.", "notice", ">";
-  foreach my $validator (values(%{$termsource_validators{ident $self}}), values(%{$type_validators{ident $self}})) {
+  foreach my $validator (values(%{$termsource_validators{ident $self}}), values(%{$type_validators{ident $self}}), values(%{$sum_validators{ident $self}})) {
     if ($validator->num_data() && !$validator->validate()) {
       return 0;
     }
