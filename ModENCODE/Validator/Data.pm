@@ -130,7 +130,7 @@ use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
 use ModENCODE::Validator::Data::ReferencedData;
 use ModENCODE::Validator::Data::ReferencedFile;
-#use ModENCODE::Validator::Data::ReadCount;
+use ModENCODE::Validator::Data::ReadCount;
 use ModENCODE::Validator::Data::ReadCount::UniquelyMappedReadCount;
 use ModENCODE::Validator::Data::ReadCount::MultiplyMappedReadCount;
 use ModENCODE::Validator::Data::ReadCount::ReadCount;
