@@ -115,7 +115,7 @@ use ModENCODE::Validator::Data::BED;
 use ModENCODE::Validator::Data::WIG;
 use ModENCODE::Validator::Data::SAM;
 use ModENCODE::Validator::Data::dbEST_acc;
-use ModENCODE::Validator::Data::dbEST_acc_list;
+#use ModENCODE::Validator::Data::dbEST_acc_list;
 use ModENCODE::Validator::Data::genbank_acc;
 use ModENCODE::Validator::Data::Result_File;
 use ModENCODE::Validator::Data::GFF3;
