@@ -46,7 +46,7 @@ sub validate {
     my $count = $exp_read_count->get_object->get_value() ;
     $count += $datum_obj->get_value;
     $exp_read_count->get_object->set_value($count);
-    log_error "Setting Experiment Property Total Read Count to $count", "notice"; 
+    log_error "Setting Experiment Property \"$title\" to $count", "notice"; 
 
   }
 
