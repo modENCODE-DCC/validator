@@ -94,7 +94,6 @@ L<http://www.modencode.org>.
 
 =cut
 use strict;
-use constant DEBUG => 0;
 use Exporter 'import';
 use IO::Handle;
 use Class::Std;
@@ -105,9 +104,17 @@ our @EXPORT_OK = qw(log_error);
 use constant LOGGING_PREFIX_OFF => 0;
 use constant LOGGING_PREFIX_ON => 1;
 
+use constant {
+  ERROR => 'error',
+  WARNING => 'warning',
+  NOTICE => 'notice',
+  DEBUG => 'debug'
+};
+
 my %indent           :ATTR( :name<indent>,              :default<0> );
 my %seen_errors      :ATTR( :name<seen_errors> );
 my %show_logtype     :ATTR( :name<show_logtype>,        :default<0> );
+my %show_loglevel    :ATTR( :name<show_loglevel>,       :default<NOTICE> );
 
 my $logger;
 
@@ -134,6 +141,11 @@ sub set_logtype {
   $logger->set_show_logtype(@_);
 }
 
+sub set_loglevel {
+  $logger = new ModENCODE::ErrorHandler() unless $logger;
+  $logger->set_show_loglevel(@_);
+}
+
 sub log_error {
   $logger = new ModENCODE::ErrorHandler() unless $logger;
   $logger->_log_error(@_);
@@ -149,23 +161,24 @@ sub _log_error {
   # = means do not change indent, do print spaces, and do not add newline
 
   # Standardize the level name
-  $level = 'error' if ($level =~ m/error/i);
-  $level = 'warning' if ($level =~ m/warning/i);
-  $level = 'debug' if ($level =~ m/debug/i);
-  $level = 'notice' if ($level =~ m/notice/i);
-  $level = 'error' unless $level;
+  $level = ERROR if ($level =~ m/error/i);
+  $level = WARNING if ($level =~ m/warning/i);
+  $level = DEBUG if ($level =~ m/debug/i);
+  $level = NOTICE if ($level =~ m/notice/i);
+  $level = ERROR unless $level;
   my @seen_error = grep { $_ eq $message } @{$self->get_seen_errors()->{$level}};
-  return if ($level eq 'debug' && !DEBUG);
+
+  return unless (logname_to_num($self->get_show_loglevel()) >= logname_to_num($level));
 
   $indent{ident $self}-- if ($change_indent eq "<");
   STDERR->autoflush(1) if ($change_indent eq "." || $change_indent eq "=");
 
   # Only print if we haven't seen this message before or if it's a notice
-  if ((!scalar(@seen_error) || $level eq 'notice' || $level eq 'debug') && length($message)) {
+  if ((!scalar(@seen_error) || $level eq NOTICE || $level eq DEBUG) && length($message)) {
     my $levelprefix;
-    $levelprefix = "Warning: " if ($level eq 'warning');
-    $levelprefix = "Error: " if ($level eq 'error');
-    $levelprefix = "" if ($level eq 'notice');
+    $levelprefix = "Warning: " if ($level eq WARNING);
+    $levelprefix = "Error: " if ($level eq ERROR);
+    $levelprefix = "" if ($level eq NOTICE);
 
     # Make indenting spaces
     my $spaces = "";
@@ -174,11 +187,10 @@ sub _log_error {
     }
     if ($self->get_show_logtype()) {
       my $logtype = uc($level);
-      #$logtype .= " (" . int($self->process_size()/1024) . "MB)" if DEBUG;
      
       $logtype .= ":";
       my $maxlength = length("WARNING:    ");
-      $maxlength += 7 if DEBUG;
+      $maxlength += 7 if ($self->get_show_loglevel() eq "debug");
       while (length($logtype) < $maxlength) {
         $logtype .= " ";
       }
@@ -200,6 +212,16 @@ sub _log_error {
 
   $indent{ident $self}++ if ($change_indent eq ">");
 }
+
+sub logname_to_num {
+  $_ = lc($_[0]);
+  return 4 if $_ eq DEBUG;
+  return 3 if $_ eq NOTICE;
+  return 2 if $_ eq WARNING;
+  return 1 if $_ eq ERROR;
+  return 0;
+}
+
 
 sub process_size {
   my $size;
