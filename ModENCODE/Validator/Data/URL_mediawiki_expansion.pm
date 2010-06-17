@@ -240,8 +240,239 @@ sub validate {
         log_error "Couldn't expand the empty value in the " . $datum->get_object->get_heading() . " [" . $datum->get_object->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "warning";
       }
     }
+
+    if ($datum->get_object->get_type(1)->get_name eq 'antibody') {
+      # XXX
+      use Data::Dumper;
+      ModENCODE::ErrorHandler::set_loglevel(ModENCODE::ErrorHandler::DEBUG);
+      if (!defined($pages{"QC".$datum->get_object->get_value()})) {
+        my $soap_data = SOAP::Data->name('query' => \SOAP::Data->value(
+            SOAP::Data->name('name' => HTML::Entities::encode("QC".$name))->type('xsd:string'),
+            SOAP::Data->name('revision' => $version)->type('xsd:int'),
+            SOAP::Data->name('auth' => \$login->get_soap_obj())->type('LoginResult'),
+          ))
+        ->type('FormDataQuery');
+        my $res = $soap_client->getFormData($soap_data);
+        if (!$res) {
+          $pages{$datum->get_object->get_value()} = 0;
+        } else {
+          bless($res, 'HASH');
+          my $result_data = new ModENCODE::Validator::Wiki::FormData($res);
+          if ($result_data) {
+            my @new_attributes;
+            my $qcinfo = {};
+            foreach my $formvalues (@{$result_data->get_values()}) {
+              my @keys = map { $_ =~ s/^\[|\]$//g; $_ } ($formvalues->get_name() =~ m/(^[^\[]+|\[[^\]]+\])/g);
+              my $h = $qcinfo;
+              my ($lasth, $lastkey);
+              foreach my $key (@keys) {
+                $lastkey = $key;
+                $lasth = $h;
+                $h->{$key} = {} unless defined($h->{$key});
+                $h = $h->{$key};
+              }
+              $lasth->{$lastkey} = join(", ", @{$formvalues->get_values()});
+            }
+
+            if ($qcinfo->{"antibody_type"} eq "histone_modification") {
+              $success &&= check_histone_antibody($datum->get_object->get_value, $qcinfo);
+            } else {
+              $success &&= check_generic_antibody($datum->get_object->get_value, $qcinfo);
+            }
+
+            $pages{"QC".$datum->get_object->get_value()} = $success;
+          }
+        }
+      }
+      if (!($pages{$datum->get_object->get_value()})) {
+        if ($datum->get_object->get_value()) {
+          $success = 0;
+          log_error "Couldn't expand " . $datum->get_object->get_value() . " in the " . $datum->get_object->get_heading() . " [" . $datum->get_object->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "error";
+        } else {
+          log_error "Couldn't expand the empty value in the " . $datum->get_object->get_heading() . " [" . $datum->get_object->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "warning";
+        }
+      }
+      ModENCODE::ErrorHandler::set_loglevel(ModENCODE::ErrorHandler::NOTICE);
+    }
   }
   log_error "Done.", "notice", "<";
+
+  return $success;
+}
+
+sub check_generic_antibody {
+  my ($datum, $qcinfo) = @_;
+
+  my $success = 1;
+
+  my $h = {};
+  if ($qcinfo->{"primary_assay"} eq "immunoblot") {
+    $h = $qcinfo->{"immunoblot"};
+
+    # Band size, gel image
+    if ($h->{"band_size_ok"} ne "yes") {
+      log_error "Antibody validation band size for Western/immunoblot not OK for antibody " . $datum . "!", "error";
+      $success = 0;
+    }
+    if ($h->{"band_image"} !~ /^http:\/\/wiki.modencode.org/) {
+      log_error "Didn't provide image for Western/immunoblot validation for antibody " . $datum . "!", "error";
+      $success = 0;
+    }
+    if ($h->{"secondary_assay"} eq "Knockdown") {
+      $h = $h->{"knockdown"};
+      # Band size OK
+      if ($h->{"band_size_ok"} ne "yes") {
+        log_error "Antibody validation band size for Western/immunoblot not OK for antibody " . $datum . "!", "error";
+        $success = 0;
+      }
+      if ($h->{"type"} eq "RNAi") {
+        $h = $h->{'rnai'};
+        # Two replicates, replicate image, RNAi reagent
+        if ($h->{"two_replicates"} ne "yes") {
+          log_error "Didn't generate two replicates for RNAi knockdown validation of antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"replicate_image"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide image for second replicate for RNAi knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"reagent_url"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide RNAi reagent URL for knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+      } elsif ($h->{"type"} eq "siRNA") {
+        $h = $h->{'sirna'};
+        # Two replicates, replicate image, siRNA reagent
+        if ($h->{"two_replicates"} ne "yes") {
+          log_error "Didn't generate two replicates for siRNA knockdown validation of antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"replicate_image"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide image for second replicate for siRNA knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"reagent_url"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide siRNA reagent URL for knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+      } elsif ($h->{"type"} eq "Mutation") {
+        $h = $h->{"mutant"};
+        if ($h->{"strain_url"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide strain page for mutant for knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+      } else {
+        # No knockdown type
+        log_error "Unknown or missing knockdown type for antibody " . $datum . "!", "error";
+      }
+    } elsif ($h->{"secondary_assay"} eq "IP w/ mass spec") {
+      $h = $h->{"ip_mass_spec"};
+      # Peptide sequences, result summary
+      if ($h->{"sequences"} !~ /^http:\/\/wiki.modencode.org/) {
+        log_error "Didn't provide wiki URL for sequences generated by mass spec validation for antibody " . $datum . "!", "error";
+        $success = 0;
+      }
+      if (!$h->{"result_summary"}) {
+        log_error "Didn't provide result summary for mass spec validation of antibody " . $datum . "!", "error";
+        $success = 0;
+      }
+    } elsif ($h->{"secondary_assay"} eq "IP w/ multiple antibodies") {
+      $h = $h->{"ip_multiple_antibodies"};
+      # Band size, qPCR validation
+      if ($h->{"band_size_ok"} ne "yes") {
+        log_error "Band size not okay for multiple-antibody validation of antibody " . $datum . "!", "error";
+        $success = 0;
+      }
+      if ($h->{"qpcr_ok"} ne "yes") {
+        log_error "qPCR verification for multiple-antibody validation of antibody " . $datum . " not okay!", "error";
+        $success = 0;
+      }
+    } elsif ($h->{"secondary_assay"} eq "IP w/ epitope-tagged protein") {
+      $h = $h->{"ip_epitope"};
+      # Band size, qPCR validation
+      if ($h->{"band_size_ok"} ne "yes") {
+        log_error "Band size not okay for epitope validation of antibody " . $datum . "!", "error";
+        $success = 0;
+      }
+      if ($h->{"qpcr_ok"} ne "yes") {
+        log_error "qPCR verification for epitope validation of antibody " . $datum . " not okay!", "error";
+        $success = 0;
+      }
+    } else {
+      # No secondary assay
+      log_error "Unknown or missing secondary assay for antibody " . $datum . "!", "error";
+    }
+  } elsif ($qcinfo->{"primary_assay"} eq "immunofluorescence") {
+    $h = $qcinfo->{"immunofluorescence"};
+    # Staining
+    if ($h->{"staining_ok"} ne "yes") {
+      log_error "Antibody validation immunofluorescence nuclear staining not OK for antibody " . $datum . "!", "error";
+      $success = 0;
+    }
+    if ($h->{"secondary_assay"} eq "Knockdown") {
+      $h = $h->{"knockdown"};
+      # Staining okay, staining image, background stainingp summary
+      if ($h->{"band_size_ok"} ne "yes") {
+        log_error "Nuclear staining still present after knockdown for antibody " . $datum . "!", "error";
+        $success = 0;
+      }
+      if ($h->{"staining_image"} !~ /^http:\/\/wiki.modencode.org/) {
+        log_error "Didn't provide staining image for immunofluorescence validation of antibdoy " . $datum->get_object->get_value . "!", "error";
+        $success = 0;
+      }
+      if (!$h->{"result_summary"}) {
+        log_error "Didn't provide summary of background staining results for knockdown validation of antibody " . $datum . "!", "error";
+        $success = 0;
+      }
+      if ($h->{"type"} eq "RNAi") {
+        $h = $h->{'rnai'};
+        # Two replicates, replicate image, RNAi reagent
+        if ($h->{"two_replicates"} ne "yes") {
+          log_error "Didn't generate two replicates for RNAi knockdown validation of antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"replicate_image"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide image for second replicate for RNAi knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"reagent_url"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide RNAi reagent URL for knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+      } elsif ($h->{"type"} eq "siRNA") {
+        $h = $h->{'sirna'};
+        # Two replicates, replicate image, siRNA reagent
+        if ($h->{"two_replicates"} ne "yes") {
+          log_error "Didn't generate two replicates for siRNA knockdown validation of antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"replicate_image"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide image for second replicate for siRNA knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+        if ($h->{"reagent_url"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide siRNA reagent URL for knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+      } elsif ($h->{"type"} eq "Mutation") {
+        $h = $h->{"mutant"};
+        if ($h->{"strain_url"} !~ /^http:\/\/wiki.modencode.org/) {
+          log_error "Didn't provide strain page for mutant for knockdown validation for antibody " . $datum . "!", "error";
+          $success = 0;
+        }
+      } else {
+        # No knockdown type
+        log_error "Unknown or missing knockdown type for antibody " . $datum . "!", "error";
+      }
+    } else {
+      # No secondary assay
+      log_error "Unknown or missing secondary assay for antibody " . $datum . "!", "error";
+    }
+  } else {
+    # Unknown type
+    log_error "Unknown antibody primary assay: " . $qcinfo->{'primary_assay'} . " for antibody " . $datum . "!", "error";
+    $success = 0;
+  }
 
   return $success;
 }
