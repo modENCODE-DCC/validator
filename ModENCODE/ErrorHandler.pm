@@ -190,7 +190,7 @@ sub _log_error {
      
       $logtype .= ":";
       my $maxlength = length("WARNING:    ");
-      $maxlength += 7 if ($self->get_show_loglevel() eq "debug");
+      $maxlength += 7 if ($self->get_show_loglevel() eq DEBUG);
       while (length($logtype) < $maxlength) {
         $logtype .= " ";
       }
@@ -214,11 +214,11 @@ sub _log_error {
 }
 
 sub logname_to_num {
-  $_ = lc($_[0]);
-  return 4 if $_ eq DEBUG;
-  return 3 if $_ eq NOTICE;
-  return 2 if $_ eq WARNING;
-  return 1 if $_ eq ERROR;
+  my $name = lc(shift);
+  return 4 if $name eq DEBUG;
+  return 3 if $name eq NOTICE;
+  return 2 if $name eq WARNING;
+  return 1 if $name eq ERROR;
   return 0;
 }
 
