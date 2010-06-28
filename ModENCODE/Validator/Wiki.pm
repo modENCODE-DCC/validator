@@ -225,6 +225,12 @@ sub validate {
     my $res = $soap_client->getFormData($data);
     if (!$res) { next; }
     bless($res, 'HASH');
+    my ($oldid) = ($protocol_description =~ /oldid=(\d+)/);
+    if ($oldid && $res->{'revision'} != $oldid) {
+      log_error "\n", "notice", ".";
+      log_error "Tried to get revision $oldid of " . $res->{'name'} . " but got back " . $res->{'revision'} . " instead. The latest version of the page is " . $res->{'latest_revision'} . ".", "error";
+      $success = 0;
+    }
     my $formdata = new ModENCODE::Validator::Wiki::FormData($res);
     $protocol_defs_by_url{$protocol_description} = $formdata;
   }
