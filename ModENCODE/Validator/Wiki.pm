@@ -226,9 +226,9 @@ sub validate {
     if (!$res) { next; }
     bless($res, 'HASH');
     my ($oldid) = ($protocol_description =~ /oldid=(\d+)/);
-    if ($oldid && $res->{'revision'} != $oldid) {
+    if ($res->{'requested_name'} && ($res->{'requested_name'} ne $res->{'name'})) {
       log_error "\n", "notice", ".";
-      log_error "Tried to get revision $oldid of " . $res->{'name'} . " but got back " . $res->{'revision'} . " instead. The latest version of the page is " . $res->{'latest_revision'} . ".", "error";
+      log_error "Tried to get " . $res->{'requested_name'} . ":$oldid, but got back " . $res->{'name'} . ":" . $res->{'revision'} . " instead.", "error";
       $success = 0;
     }
     my $formdata = new ModENCODE::Validator::Wiki::FormData($res);
