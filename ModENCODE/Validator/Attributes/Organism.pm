@@ -101,8 +101,21 @@ sub validate {
               }),
           }));
     } elsif (length($attribute->get_object->get_value())) {
-      log_error "Couldn't parse organism genus and species out of " . $attribute->get_object->get_heading . " [" . $attribute->get_object->get_name() . "]=" . $attribute->get_object->get_value() . ".";
-      $success = 0;
+      my $genus = $attribute->get_object->get_value();
+      my $organism = new ModENCODE::Chado::Organism({
+          'genus' => $genus,
+          'species' => '',
+        });
+      $attribute->get_object->add_organism($organism);
+      $attribute->get_object->set_type(new ModENCODE::Chado::CVTerm({
+            'name' => 'multi-cellular organism',
+            'cv' => new ModENCODE::Chado::CV({ 'name' => 'CARO' }),
+            'dbxref' => new ModENCODE::Chado::DBXref({
+                'db' => new ModENCODE::Chado::DB({'name' => 'CARO'}),
+                'accession' => 'multi-cellular organism',
+              }),
+          }));
+      log_error "Couldn't parse organism genus and species out of " . $attribute->get_object->get_heading . " [" . $attribute->get_object->get_name() . "]=" . $attribute->get_object->get_value() . ". Assuming it's a simple identifier like 'N/A' or 'Drosophila'.", "warning";
     }
   }
   log_error "Done.", "notice", "<";
