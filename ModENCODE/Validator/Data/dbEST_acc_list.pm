@@ -93,7 +93,6 @@ use Carp qw(croak carp);
 
 use constant ESTS_AT_ONCE => 200;
 use constant MAX_TRIES => 4;
-use constant DEBUG => 0;
 
 my %seen_data                   :ATTR( :default<{}> );
 my %cached_est_files            :ATTR( :default<{}> );
@@ -167,7 +166,7 @@ sub validate {
         my $feature = $parser->get_feature_by_genbank_id($accession);
         next unless $feature;
 
-        log_error "Found feature in $parser_name for $accession.", "debug" if DEBUG;
+        log_error "Found feature in $parser_name for $accession.", "debug";
         my $cvterm = $feature->get_object->get_type(1)->get_name;
         my $cv = $feature->get_object->get_type(1)->get_cv(1)->get_name;
         my $canonical_cvname = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];

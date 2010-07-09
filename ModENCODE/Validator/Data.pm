@@ -140,8 +140,6 @@ use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
-use constant DEBUG => 1;
-
 my %termsource_validators       :ATTR( :default<{}> );
 my %type_validators             :ATTR( :default<{}> );
 my %sum_validators              :ATTR( :default<{}> );
@@ -225,7 +223,7 @@ sub validate {
   undef %seen;
   @all_data = grep { !$seen{$_->[0]->get_id . '.' . $_->[1] . '.' . $_->[2]->get_id}++ } @all_data;
 
-  log_error "There are " . scalar(@all_data) . " unique data/applied protocol pairs found.", "debug", ">" if DEBUG;
+  log_error "There are " . scalar(@all_data) . " unique data/applied protocol pairs found.", "debug", ">";
 
   # Preprocess any Result File column which will fetch files at remote URLs, etc.
   my $file_validator = new ModENCODE::Validator::Data::Result_File({ 'experiment' => $self->get_experiment });
@@ -254,7 +252,7 @@ sub validate {
   foreach my $ap_datum (@all_data) {
 
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
-    log_error $applied_protocol->get_protocol(1)->get_name . " has $direction datum " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name .  "].", "debug" if DEBUG;
+    log_error $applied_protocol->get_protocol(1)->get_name . " has $direction datum " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name .  "].", "debug";
 
     my $datum_type = $datum->get_object->get_type(1);
     my $validator;
@@ -302,7 +300,7 @@ sub validate {
     foreach my $ap_datum (@all_data_with_dups) {
       # Summation validators require access to all copies of a datum
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
-      log_error $applied_protocol->get_protocol(1)->get_name . " has non-unique $direction datum " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name .  "].", "debug" if DEBUG;
+      log_error $applied_protocol->get_protocol(1)->get_name . " has non-unique $direction datum " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name .  "].", "debug";
 
       my $datum_type = $datum->get_object->get_type(1);
       my $validator;
@@ -313,7 +311,7 @@ sub validate {
       }
     }
   }
-  log_error "Done adding applied_protocol/data pairs to validators.", "debug", "<" if DEBUG;
+  log_error "Done adding applied_protocol/data pairs to validators.", "debug", "<";
 
   log_error "Running validators.", "notice", ">";
   foreach my $validator (values(%{$termsource_validators{ident $self}}), values(%{$type_validators{ident $self}}), values(%{$sum_validators{ident $self}})) {

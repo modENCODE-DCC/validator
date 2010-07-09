@@ -32,8 +32,6 @@ use ModENCODE::Chado::AnalysisFeature;
 use ModENCODE::Chado::FeatureLoc;
 use ModENCODE::Chado::FeatureProp;
 
-use constant DEBUG => 0;
-
 my $dbh;
 my $db_tempfile;
 my %queries;
@@ -326,7 +324,7 @@ sub load_db {
   $queries{'db_get'}->execute($db_id);
   my $row = $queries{'db_get'}->fetchrow_hashref();
   my $db = ModENCODE::Chado::DB->new_no_cache($row);
-  log_error "Loading DB " . $db->get_name . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading DB " . $db->get_name . " from cache database (unshrinking).", "debug";
   return $db;
 }
 
@@ -397,7 +395,7 @@ sub load_cv {
   $queries{'cv_get'}->execute($cv_id);
   my $row = $queries{'cv_get'}->fetchrow_hashref();
   my $cv = ModENCODE::Chado::CV->new_no_cache($row);
-  log_error "Loading CV " . $cv->get_name . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading CV " . $cv->get_name . " from cache database (unshrinking).", "debug";
   return $cv;
 }
 
@@ -515,7 +513,7 @@ sub save_dbxref {
     $queries{'dbxref_ins'}->execute($dbxref->get_accession, $dbxref->get_version, $dbxref->get_db_id);
     my $id = ModENCODE::Cache::dbh->func('last_insert_rowid');
     $dbxref->set_id($id);
-    log_error "Saving dbxref " . $dbxref->get_accession() . " with id $id.", "debug" if DEBUG;
+    log_error "Saving dbxref " . $dbxref->get_accession() . " with id $id.", "debug";
     return $id;
   } else {
     my $id = $dbxref->get_id();
@@ -538,7 +536,7 @@ sub load_dbxref {
   $row->{'db'} = $cachesets{'db'}->get_from_id_cache($row->{'db'});
   my $dbxref = ModENCODE::Chado::DBXref->new_no_cache($row);
   $dbxref->clean();
-  log_error "Loading DBXref " . $dbxref->get_accession . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading DBXref " . $dbxref->get_accession . " from cache database (unshrinking).", "debug";
   return $dbxref;
 }
 ############# /DBXREF ########### }
@@ -583,7 +581,7 @@ sub load_cvterm {
   $row->{'cv'} = $cachesets{'cv'}->get_from_id_cache($row->{'cv'});
   $row->{'dbxref'} = $cachesets{'dbxref'}->get_from_id_cache($row->{'dbxref'});
   my $cvterm = ModENCODE::Chado::CVTerm->new_no_cache($row);
-  log_error "Loading cvterm " . $cvterm->get_name . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading cvterm " . $cvterm->get_name . " from cache database (unshrinking).", "debug";
   return $cvterm;
 }
 ############# /CVTERM ########### }
@@ -629,7 +627,7 @@ sub load_experimentprop {
   $row->{'type'} = $cachesets{'cvterm'}->get_from_id_cache($row->{'type'});
   $row->{'experiment'} = $cachesets{'experiment'}->get_from_id_cache($row->{'experiment'});
   my $experimentprop = ModENCODE::Chado::ExperimentProp->new_no_cache($row);
-  log_error "Loading ExperimentProp " . $experimentprop->get_name . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading ExperimentProp " . $experimentprop->get_name . " from cache database (unshrinking).", "debug";
   return $experimentprop;
 }
 ############# /EXPERIMENTPROP ## }
@@ -676,7 +674,7 @@ sub load_experiment {
   $queries{'experiment_get'}->execute($experiment_id);
   my $row = $queries{'experiment_get'}->fetchrow_hashref();
   my $experiment = ModENCODE::Chado::Experiment->new_no_cache($row);
-  log_error "Loading Experiment " . $experiment->get_uniquename . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading Experiment " . $experiment->get_uniquename . " from cache database (unshrinking).", "debug";
   return $experiment;
 }
 ############# /EXPERIMENT ###### }
@@ -730,7 +728,7 @@ sub load_protocol {
   my $row = $queries{'protocol_get'}->fetchrow_hashref();
   $row->{'dbxref'} = $cachesets{'dbxref'}->get_from_id_cache($row->{'dbxref'});
   my $protocol = ModENCODE::Chado::Protocol->new_no_cache($row);
-  log_error "Loading protocol " . $protocol->get_name . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading protocol " . $protocol->get_name . " from cache database (unshrinking).", "debug";
   
   $queries{'protocol_attributes_get'}->execute($protocol_id);
   my @attribute_ids;
@@ -748,7 +746,7 @@ sub load_organism {
   $queries{'organism_get'}->execute($organism_id);
   my $row = $queries{'organism_get'}->fetchrow_hashref();
   my $organism = ModENCODE::Chado::Organism->new_no_cache($row);
-  log_error "Loading organism " . $organism->get_genus . " " . $organism->get_species . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading organism " . $organism->get_genus . " " . $organism->get_species . " from cache database (unshrinking).", "debug";
   return $organism;
 }
 
@@ -867,7 +865,7 @@ sub load_protocol_attribute {
   $row->{'protocol'} = $cachesets{'protocol'}->get_from_id_cache($protocol_id);
 
   my $protocol_attribute = ModENCODE::Chado::ProtocolAttribute->new_no_cache($row);
-  log_error "Loading protocol_attribute " . $protocol_attribute->get_heading . " [" . $protocol_attribute->get_name . "] from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading protocol_attribute " . $protocol_attribute->get_heading . " [" . $protocol_attribute->get_name . "] from cache database (unshrinking).", "debug";
   $queries{'protocol_attribute_organisms_get'}->execute($protocol_attribute_id);
   my @organism_ids;
   while (my ($organism_id) = $queries{'protocol_attribute_organisms_get'}->fetchrow_array()) {
@@ -927,7 +925,7 @@ sub load_datum_attribute {
   $row->{'datum'} = new ModENCODE::Cache::Data({'content' => $datum_id}) if $datum_id;
 
   my $datum_attribute = ModENCODE::Chado::DatumAttribute->new_no_cache($row);
-  log_error "Loading datum_attribute " . $datum_attribute->get_name . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading datum_attribute " . $datum_attribute->get_name . " from cache database (unshrinking).", "debug";
   $queries{'datum_attribute_organisms_get'}->execute($datum_attribute_id);
   my @organism_ids;
   while (my ($organism_id) = $queries{'datum_attribute_organisms_get'}->fetchrow_array()) {
@@ -1045,7 +1043,7 @@ sub load_datum {
   $row->{'type'} = $cachesets{'cvterm'}->get_from_id_cache($row->{'type'});
 
   my $datum = ModENCODE::Chado::Data->new_no_cache($row);
-  log_error "Loading datum " . $datum->get_heading . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading datum " . $datum->get_heading . " from cache database (unshrinking).", "debug";
   $queries{'datum_organisms_get'}->execute($datum_id);
   my @attribute_ids;
   while (my ($attribute_id) = $queries{'datum_attributes_get'}->fetchrow_array()) {
@@ -1136,7 +1134,7 @@ sub load_wiggle_data {
   $row->{'datum'} = new ModENCODE::Cache::Data({'content' => $datum_id}) if $datum_id;
 
   my $wiggle_data = ModENCODE::Chado::Wiggle_Data->new_no_cache($row);
-  log_error "Loading wiggle_data " . $wiggle_data->get_name . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading wiggle_data " . $wiggle_data->get_name . " from cache database (unshrinking).", "debug";
   $queries{'wiggle_data_organisms_get'}->execute($wiggle_data_id);
 
   return $wiggle_data;
@@ -1181,7 +1179,7 @@ sub save_feature {
     $queries{'feature_ins'}->execute($feature->get_name, $feature->get_uniquename, $feature->get_residues, $feature->get_seqlen, $feature->get_timeaccessioned, $feature->get_timelastmodified, $feature->get_is_analysis, $feature->get_primary_dbxref_id, $feature->get_organism_id, $feature->get_type_id);
     my $id = ModENCODE::Cache::dbh->func('last_insert_rowid');
     $feature->set_id($id);
-    log_error "Saving feature " . $feature->get_uniquename() . " with id $id and type id " . $feature->get_type(1)->get_name() . "", "debug" if DEBUG;
+    log_error "Saving feature " . $feature->get_uniquename() . " with id $id and type id " . $feature->get_type(1)->get_name() . "", "debug";
   } else {
     modification_notification();
     my $id = $feature->get_id();
@@ -1244,7 +1242,7 @@ sub load_feature {
 
   my $feature = ModENCODE::Chado::Feature->new_no_cache($row);
   $feature->clean();
-  log_error "Loading feature " . $feature->get_uniquename . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading feature " . $feature->get_uniquename . " from cache database (unshrinking).", "debug";
 
   $queries{'feature_dbxrefs_get'} = ModENCODE::Cache::dbh->prepare('SELECT dbxref_id AS dbxref FROM feature_dbxref WHERE feature_id = ?') unless $queries{'feature_dbxrefs_get'};
   $queries{'feature_dbxrefs_get'}->execute($feature_id);
@@ -1310,7 +1308,7 @@ sub load_analysis {
   $queries{'analysis_get'}->execute($analysis_id);
   my $row = $queries{'analysis_get'}->fetchrow_hashref();
   my $analysis = ModENCODE::Chado::Analysis->new_no_cache($row);
-  log_error "Loading analysis " . $analysis->program . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading analysis " . $analysis->program . " from cache database (unshrinking).", "debug";
   return $analysis;
 }
 
@@ -1370,7 +1368,7 @@ sub save_placeholder_feature_relationship {
   modification_notification();
   $queries{'feature_relationship_ins'}->execute($feature_relationship->get_type_id, $feature_relationship->get_rank);
   my $id = ModENCODE::Cache::dbh->func('last_insert_rowid');
-  log_error "Saving placeholder relationship with id $id", "debug" if DEBUG;
+  log_error "Saving placeholder relationship with id $id", "debug";
   $feature_relationship->set_id($id);
 }
 
@@ -1383,7 +1381,7 @@ sub save_feature_relationship {
   } else {
     my $id = $feature_relationship->get_id();
     $queries{'feature_relationship_upd'}->execute($feature_relationship->get_subject_id, $feature_relationship->get_object_id, $feature_relationship->get_type_id, $feature_relationship->get_rank, $id);
-    log_error "Updating relationship " . $feature_relationship->get_subject_id() . " " . $feature_relationship->get_type(1)->get_name . " " . $feature_relationship->get_object_id . " with id $id.", "debug" if DEBUG;
+    log_error "Updating relationship " . $feature_relationship->get_subject_id() . " " . $feature_relationship->get_type(1)->get_name . " " . $feature_relationship->get_object_id . " with id $id.", "debug";
   }
 
   return $feature_relationship->get_id;
@@ -1406,7 +1404,7 @@ sub load_feature_relationship {
 
   my $feature_relationship = ModENCODE::Chado::FeatureRelationship->new_no_cache($row);
   $feature_relationship->clean();
-  log_error "Loading relationship " . $feature_relationship->get_subject_id() . " " . $feature_relationship->get_type(1)->get_name . " " . $feature_relationship->get_object_id . " from cache database (unshrinking).", "debug" if DEBUG;
+  log_error "Loading relationship " . $feature_relationship->get_subject_id() . " " . $feature_relationship->get_type(1)->get_name . " " . $feature_relationship->get_object_id . " from cache database (unshrinking).", "debug";
 
   return $feature_relationship;
 }

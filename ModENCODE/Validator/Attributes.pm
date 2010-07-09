@@ -133,8 +133,6 @@ use Class::Std;
 use Carp qw(croak carp);
 use ModENCODE::ErrorHandler qw(log_error);
 
-use constant DEBUG => 1;
-
 my %termsource_validators       :ATTR( :default<{}> );
 my %type_validators             :ATTR( :default<{}> );
 my %experiment                  :ATTR( :name<experiment> );
