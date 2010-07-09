@@ -241,6 +241,7 @@ sub validate {
       }
     }
 
+if (0) {
     if ($datum->get_object->get_type(1)->get_name eq 'antibody') {
       # XXX
       use Data::Dumper;
@@ -294,6 +295,7 @@ sub validate {
       }
       ModENCODE::ErrorHandler::set_loglevel(ModENCODE::ErrorHandler::NOTICE);
     }
+}
   }
   log_error "Done.", "notice", "<";
 
