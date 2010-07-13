@@ -81,6 +81,7 @@ sub BUILD {
                                               'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
                                             });
                                           if (defined($experiment->{'Experimental Design'})) {
+                                            my $rank = 0;
                                             for (my $i = 0; $i < scalar(@{$experiment->{'Experimental Design'}}); $i++) {
                                               my $design_name = $experiment->{'Experimental Design'}->[$i];
                                               my $design_termsource = $experiment->{'Experimental Design Term Source REF'}->[$i];
@@ -100,7 +101,9 @@ sub BUILD {
                                                     'name' => 'Experimental Design',
                                                     'termsource' => $design_name_dbxref,
                                                     'type' => $design_name_type,
+                                                    'rank' => $rank,
                                                   });
+                                                $rank++;
                                               }
                                             }
                                           }
