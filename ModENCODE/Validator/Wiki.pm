@@ -801,6 +801,26 @@ sub validate {
       $experiment_description->get_object->set_termsource($dbxref);
       $experiment_description->get_object->set_value($description);
       log_error "Setting experiment description from wiki.", "notice";
+
+      my %extra_experiment_attrs = ("assay" => "Assay Type", "data_type" => "Data Type");
+      foreach my $attr_name (keys(%extra_experiment_attrs)) {
+        my $attr_title = $extra_experiment_attrs{$attr_name};
+        my ($attr_value) = grep { $_->get_name() eq $attr_name } @{$wiki_experiment_description_def->get_string_values()};
+        $attr_value = $attr_value->get_values()->[0];
+        if (!$attr_value) {
+          $success = 0;
+          log_error "No $attr_title specified on experiment description page at URL " . $experiment_description->get_object->get_value . ".", "error";
+        } else {
+          my $attr_prop = new ModENCODE::Chado::ExperimentProp({
+              'experiment' => $experiment,
+              'value' => $attr_value,
+              'name' => $attr_title,
+              'type' => new ModENCODE::Chado::CVTerm({'name' => 'string', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+              'dbxref' => $dbxref,
+            });
+          $experiment->add_property($attr_prop);
+        }
+      }
     }
   } else {
     log_error "No experiment description page found on wiki at URL " . $experiment_description->get_object->get_value . ".", "error";
