@@ -267,10 +267,12 @@ sub validate {
 
 
     my $datum_termsource_type;
-    if (!$validator && $datum->get_object->get_termsource) {
+    if ($datum->get_object->get_termsource) {
       # Fall back to validating by term source
       $datum_termsource_type = $datum->get_object->get_termsource(1)->get_db(1)->get_description();
-      $validator =  $termsource_validators{ident $self}->{$datum_termsource_type};
+      if (!$validator) {
+        $validator =  $termsource_validators{ident $self}->{$datum_termsource_type};
+      }
     }
 
     # Throw a warning if a field looks like a wiki URL but doesn't have an appropriate termsource
