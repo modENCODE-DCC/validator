@@ -96,9 +96,9 @@ sub validate {
           }
 
           if ($qcinfo->{"antibody_type"} eq "histone_modification") {
-            $success &&= $self->check_histone_antibody($datum->get_object->get_value, $qcinfo);
+            $success &&= $self->check_histone_antibody($datum, $qcinfo);
           } else {
-            $success &&= $self->check_generic_antibody($datum->get_object->get_value, $qcinfo);
+            $success &&= $self->check_generic_antibody($datum, $qcinfo);
           }
 
           $pages{$datum->get_object->get_value()} = $success;
@@ -139,7 +139,7 @@ sub check_generic_antibody {
   #print Dumper($qcinfo);
 
   my @check_urls;
-  log_error "Beginning generic antibody QC check for " . $datum . ".", "notice", ">";
+  log_error "Beginning generic antibody QC check for " . $datum->get_object->get_value . ".", "notice", ">";
   # Western
   if ($qcinfo->{'immunoblot'}) {
     my $okay_immunoblot = 0;
@@ -360,11 +360,54 @@ sub check_generic_antibody {
 
   # Override!
   if ($qcinfo->{'exceptions'}) {
-    unless ($qcinfo->{'exceptions'}->{'known_good'} eq "yes") { next; }
-    unless (length($qcinfo->{'exceptions'}->{'prior_literature'}) > 0) { log_error "Antibody marked known good, but no prior literature referenced.", "warning"; next; }
-    if (!$success) {
-      log_error "Marking an antibody as good (by prior literature) even though it failed/doesn't have other validation.", "warning";
-      $success = 1;
+    if ($qcinfo->{'exceptions'}->{'known_good'} eq "yes") {
+      unless (length($qcinfo->{'exceptions'}->{'prior_literature'}) > 0) {
+        log_error "Antibody marked known good, but no prior literature referenced.", "warning"
+      } else {
+        if (!$success) {
+          log_error "Marking an antibody as good (by prior literature) even though it failed/doesn't have other validation.", "warning";
+          $success = 1;
+        }
+      }
+    }
+  }
+
+  # Create attributes
+  if ($success) {
+    # Only necessary if this is going to have worked anyway
+    my $qc_antibody_type = new ModENCODE::Chado::CVTerm({
+        'name' => 'antibody_qc',
+        'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' }),
+      });
+    log_error "Creating attributes to attach to antibody", "notice";
+    foreach my $assay (keys(%$qcinfo)) {
+      my $rank = 0;
+      foreach my $assay_instance (values(%{$qcinfo->{$assay}})) {
+        if (ref($assay_instance) eq "HASH") {
+          foreach my $parameter (keys(%{$assay_instance})) {
+            my $value = $assay_instance->{$parameter};
+            my $attribute = new ModENCODE::Chado::DatumAttribute({
+                'heading' => $assay,
+                'name' => $parameter,
+                'value' => $value,
+                'rank' => $rank,
+                'type' => $qc_antibody_type,
+                'datum' => $datum,
+              });
+            $datum->get_object->add_attribute($attribute);
+          }
+        } else {
+          my $attribute = new ModENCODE::Chado::DatumAttribute({
+              'heading' => $assay,
+              'value' => $assay_instance,
+              'rank' => $rank,
+              'type' => $qc_antibody_type,
+              'datum' => $datum,
+            });
+          $datum->get_object->add_attribute($attribute);
+        }
+        $rank++;
+      }
     }
   }
 
