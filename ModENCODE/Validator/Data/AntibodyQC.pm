@@ -382,8 +382,9 @@ sub check_generic_antibody {
     log_error "Creating attributes to attach to antibody", "notice";
     foreach my $assay (keys(%$qcinfo)) {
       my $rank = 0;
-      foreach my $assay_instance (values(%{$qcinfo->{$assay}})) {
-        if (ref($assay_instance) eq "HASH") {
+      my @assay_instances = values(%{$qcinfo->{$assay}});
+      if (ref($assay_instances[0]) eq 'HASH') {
+        foreach my $assay_instance (values(%{$qcinfo->{$assay}})) {
           foreach my $parameter (keys(%{$assay_instance})) {
             my $value = $assay_instance->{$parameter};
             my $attribute = new ModENCODE::Chado::DatumAttribute({
@@ -396,9 +397,13 @@ sub check_generic_antibody {
               });
             $datum->get_object->add_attribute($attribute);
           }
-        } else {
+        }
+      } else {
+        foreach my $parameter (keys(%{$qcinfo->{$assay}})) {
+          my $assay_instance = $qcinfo->{$assay}->{$parameter};
           my $attribute = new ModENCODE::Chado::DatumAttribute({
               'heading' => $assay,
+              'name' => $parameter,
               'value' => $assay_instance,
               'rank' => $rank,
               'type' => $qc_antibody_type,
@@ -406,8 +411,8 @@ sub check_generic_antibody {
             });
           $datum->get_object->add_attribute($attribute);
         }
-        $rank++;
       }
+      $rank++;
     }
   }
 
