@@ -246,6 +246,8 @@ sub validate {
     $fa_file =  $fasta_path . "dsim.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila simulans");
     $fa_file =  $fasta_path . "dsec.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila sechellia");
     $fa_file =  $fasta_path . "dper.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila persimilis");
+    $fa_file =  $fasta_path . "dmoj.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila mojavensis");
+    
     log_error "Testing SAM->BAM conversion", "notice";
     unless ($fa_file) {
       log_error "Couldn't figure out what FASTA file to use for \"$fa_organism\"!", "error";
