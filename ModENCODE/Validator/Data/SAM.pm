@@ -154,7 +154,7 @@ sub validate {
 		$header =~ s/SN:chr/SN:/;
 		$chrom =~ s/chr//;
 	    }	  
-	    if (($organism !~ /Drosophila (melanogaster|pseudoobscura pseudoobscura|simulans|sechellia|persimilis)/) && ($organism ne "Caenorhabditis elegans")) {
+	    if (($organism !~ /Drosophila (melanogaster|pseudoobscura pseudoobscura|simulans|sechellia|persimilis|mojavensis)/) && ($organism ne "Caenorhabditis elegans")) {
 		log_error "You have specified an invalid species of \"$organism\" at line $linenum", "error";
 		$success = 0;
 	    }
