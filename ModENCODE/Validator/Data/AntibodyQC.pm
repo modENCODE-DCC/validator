@@ -105,6 +105,7 @@ sub validate {
         }
       }
     }
+    $success = 1;# XXX: TODO: Remove this line; this is just during the grace period!
     if (!($pages{$datum->get_object->get_value()})) {
       if ($datum->get_object->get_value()) {
 #        $success = 0; # XXX: TODO: Uncomment this line; this is just during the grace period!
