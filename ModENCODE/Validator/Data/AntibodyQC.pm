@@ -107,7 +107,7 @@ sub validate {
     }
     if (!($pages{$datum->get_object->get_value()})) {
       if ($datum->get_object->get_value()) {
-        $success = 0;
+#        $success = 0; # XXX: TODO: Uncomment this line; this is just during the grace period!
         log_error "No valid QC info for " . $datum->get_object->get_value() . " in the " . $datum->get_object->get_heading() . " [" . $datum->get_object->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "error";
       } else {
         log_error "Couldn't get QC info for the empty value in the " . $datum->get_object->get_heading() . " [" . $datum->get_object->get_name() . "] field with any attribute columns in the " . ref($self) . " validator.", "warning";
