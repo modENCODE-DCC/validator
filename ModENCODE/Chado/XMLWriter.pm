@@ -211,8 +211,9 @@ sub write_chadoxml {
   $seen_ids{ident $self} = {};
   my @tempfile_names = ('dbxrefs', 'cvterms', 'organisms', 'features', 'featurelocs', 'featureprops', 'feature_relationships', 'analyses', 'analysisfeatures', 'attributes', 'protocols', 'wiggle_data', 'data', 'default');
   foreach my $tempfile (@tempfile_names) {
-    $self->get_tempfiles()->{$tempfile} = File::Temp::tempfile( DIR => ModENCODE::Config::get_cfg()->val('cache', 'tmpdir'), SUFFIX => ".chadoxml" );
+    $self->get_tempfiles()->{$tempfile} = File::Temp->new( DIR => ModENCODE::Config::get_cfg()->val('cache', 'tmpdir'), SUFFIX => ".chadoxml" );
   }
+
   # Flush the cache
   ModENCODE::Cache::dbh->do("END TRANSACTION");
   ModENCODE::Cache::dbh->do("BEGIN TRANSACTION");
@@ -262,6 +263,7 @@ sub write_chadoxml {
       print {$output_handle{ident $self}} $_;
     }
     close $tmpfh;
+    $self->get_tempfiles()->{$tempfile} = undef;
   }
   print {$output_handle{ident $self}} "</chadoxml>\n";
   log_error "Done.", "notice", "<";
