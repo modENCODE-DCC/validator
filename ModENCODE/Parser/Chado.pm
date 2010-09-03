@@ -558,6 +558,18 @@ sub get_termsource {
   return $dbxref;
 }
 
+sub get_termsources_by_db_description {
+  my ($self, $db_description) = @_;
+  my @termsources;
+  return @termsources unless $db_description;
+  my $sth = $self->get_prepared_query("SELECT dbx.dbxref_id FROM dbxref dbx INNER JOIN db ON dbx.db_id = db.db_id WHERE db.description = ?");
+  $sth->execute($db_description);
+  while (my ($dbxref_id) = $sth->fetchrow_array()) {
+    push @termsources, $self->get_termsource($dbxref_id);
+  }
+  return @termsources;
+}
+
 sub get_feature {
   my ($self, $feature_id) = @_;
   return undef unless($feature_id);
@@ -1425,6 +1437,27 @@ sub get_experiment_props_by_name {
   return @exp_props;
 }
 
+sub get_experiment_props_by_type_name {
+  my ($self, $experiment_prop_type_name) = @_;
+  my @exp_props;
+  my $experiment_prop_sth = $self->get_prepared_query("SELECT ep.name, ep.type_id, ep.dbxref_id, ep.value, ep.rank FROM experiment_prop ep INNER JOIN cvterm cvt ON ep.type_id = cvt.cvterm_id WHERE cvt.name = ?");
+  $experiment_prop_sth->execute($experiment_prop_type_name);
+  while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
+    map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+    my $property = new ModENCODE::Chado::ExperimentProp({
+        'experiment' => $experiment{ident $self},
+        'name' => $row->{'name'},
+        'value' => $row->{'value'},
+        'rank' => $row->{'rank'},
+      });
+    my $termsource = $self->get_termsource($row->{'dbxref_id'});
+    $property->get_object->set_termsource($termsource) if $termsource;
+    my $type = $self->get_type($row->{'type_id'});
+    $property->get_object->set_type($type) if $type;
+    push @exp_props, $property;
+  }
+  return @exp_props;
+}
 
 
 1;

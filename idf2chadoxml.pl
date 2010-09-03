@@ -25,6 +25,7 @@ use ModENCODE::Validator::Data;
 use ModENCODE::Validator::ExperimentalFactorName;
 use ModENCODE::Validator::TermSources;
 use ModENCODE::Validator::FeatureExistence;
+use ModENCODE::Validator::ReadCounts;
 use ModENCODE::Chado::XMLWriter;
 use Getopt::Long;
 
@@ -142,6 +143,15 @@ if (!$data_validator->validate()) {
   exit;
 }
 $data_validator = undef;
+log_error "Done.", "notice", "<";
+
+
+log_error "Ensuring read counts are okay.", "notice", ">";
+my $read_counts_validator = new ModENCODE::Validator::ReadCounts({ 'experiment' => $experiment });
+if (!$read_counts_validator->validate()) {
+  log_error "Failed.", "error", "<";
+  exit;
+}
 log_error "Done.", "notice", "<";
 
 log_error "Validating Experimental Factor Name, if present.", "notice", ">";
