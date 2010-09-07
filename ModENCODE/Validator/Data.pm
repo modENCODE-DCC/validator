@@ -352,6 +352,9 @@ sub validate {
   if ($referenced_datum_validator->num_data) {
     $success = 0 unless $referenced_datum_validator->validate();
   }
+  if ($referenced_file_validator->num_data) {
+    $success = 0 unless $referenced_file_validator->validate();
+  }
 
 
 
