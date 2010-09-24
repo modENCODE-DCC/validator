@@ -17,7 +17,8 @@ use ModENCODE::Config;
 use ModENCODE::Validator::Wiki::URLValidator;
 use Data::Dumper;
 
-my %seen_urls   :ATTR( :default<{}> );
+my %seen_urls        :ATTR( :default<{}> );
+my %cached_samples   :ATTR( :default<{}> );
 
 sub BUILD {
   # HACKY FIX TO MISSING "can('as_$typename')"
@@ -41,6 +42,8 @@ sub BUILD {
 sub validate {
   my $self = shift;
   my $success = 1;
+
+  $self->cache_used_samples();
 
   log_error "Checking antibody QC status.", "notice", ">";
 
@@ -137,7 +140,6 @@ sub check_generic_antibody {
   # * IP+Mass Spec
   # * IP+Multiple Antibodies
   # * IP+Epitope-tagged protein
-  #print Dumper($qcinfo);
 
   my @check_urls;
   log_error "Beginning generic antibody QC check for " . $datum->get_object->get_value . ".", "notice", ">";
@@ -150,6 +152,8 @@ sub check_generic_antibody {
       unless ($ib_validation->{'band_size_ok'} eq "yes") { log_error "Band size not ok.", "warning"; next; }
       unless ($ib_validation->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
       unless ($ib_validation->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
+      my @bad_cell_lines = $self->check_validation_target($ib_validation->{'validation_targets'});
+      if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
       $okay_immunoblot = 1;
       push @check_urls, $ib_validation->{'band_image'}, $ib_validation->{'band_image_replicate'};
       last;
@@ -164,6 +168,8 @@ sub check_generic_antibody {
           unless ($ib_knockdown_rnai->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
           unless ($ib_knockdown_rnai->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
           unless ($ib_knockdown_rnai->{'rnai_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "RNAi reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ib_knockdown_rnai->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           push @check_urls, $ib_knockdown_rnai->{'band_image'}, $ib_knockdown_rnai->{'band_image_replicate'}, $ib_knockdown_rnai->{'rnai_reagent_page'};
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
@@ -174,7 +180,7 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid Knockdown+RNAi secondary assay found.", "warning", "<";
+        log_error "No valid Knockdown+RNAi secondary assay found.", "warning", "<" unless $success;
       }
       # Western knockdown by siRNA
       if ($qcinfo->{'western_knockdown_sirna'}) {
@@ -184,6 +190,8 @@ sub check_generic_antibody {
           unless ($ib_knockdown_sirna->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
           unless ($ib_knockdown_sirna->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
           unless ($ib_knockdown_sirna->{'sirna_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "siRNA reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ib_knockdown_sirna->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           push @check_urls, $ib_knockdown_sirna->{'band_image'}, $ib_knockdown_sirna->{'band_image_replicate'}, $ib_knockdown_sirna->{'sirna_reagent_page'};
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
@@ -194,7 +202,7 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid Knockdown+siRNA secondary assay found.", "warning", "<";
+        log_error "No valid Knockdown+siRNA secondary assay found.", "warning", "<" unless $success;
       }
       # Western knockdown by Mutant
       if ($qcinfo->{'western_knockdown_mutant'}) {
@@ -204,6 +212,8 @@ sub check_generic_antibody {
           unless ($ib_knockdown_mutant->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
           unless ($ib_knockdown_mutant->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
           unless ($ib_knockdown_mutant->{'mutant_strain_page'} =~ m|^http://wiki.modencode.org/|) { log_error "Mutant strain URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ib_knockdown_mutant->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           push @check_urls, $ib_knockdown_mutant->{'band_image'}, $ib_knockdown_mutant->{'band_image_replicate'}, $ib_knockdown_mutant->{'mutant_strain_page'};
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
@@ -214,7 +224,7 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid Knockdown+mutant secondary assay found.", "warning", "<";
+        log_error "No valid Knockdown+mutant secondary assay found.", "warning", "<" unless $success;
       }
       # IP+Mass Spec
       if ($qcinfo->{'ip_mass_spec'}) {
@@ -222,6 +232,8 @@ sub check_generic_antibody {
         foreach my $ip_mass_spec (values(%{$qcinfo->{'ip_mass_spec'}})) {
           unless ($ip_mass_spec->{'sequences'} =~ m|^http://wiki.modencode.org/|) { log_error "Sequences URL not a wiki URL.", "warning"; next; }
           unless (length($ip_mass_spec->{'results'}) > 0) { log_error "No result summary provided.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ip_mass_spec->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           push @check_urls, $ip_mass_spec->{'sequences'};
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
@@ -232,7 +244,7 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid IP+Mass Spec secondary assay found.", "warning", "<";
+        log_error "No valid IP+Mass Spec secondary assay found.", "warning", "<" unless $success;
       }
       # Multiple antibodies
       if ($qcinfo->{'ip_multiple_antibodies'}) {
@@ -240,6 +252,8 @@ sub check_generic_antibody {
         foreach my $ip_multiple_antibodies (values(%{$qcinfo->{'ip_multiple_antibodies'}})) {
           unless ($ip_multiple_antibodies->{'overlap_ok'} eq "yes") { log_error "Band overlap not ok.", "warning"; next; }
           unless ($ip_multiple_antibodies->{'qpcr_verified'} eq "yes") { log_error "IP+Mass Spec not qPCR-verified.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ip_multiple_antibodies->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
             log_error "Antibody is valid (Western + IP+Multiple Antibodies)!", "notice", "<"; log_error "Done.", "notice", "<";
@@ -249,7 +263,7 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid IP+Multiple Antibodies secondary assay found.", "warning", "<";
+        log_error "No valid IP+Multiple Antibodies secondary assay found.", "warning", "<" unless $success;
       }
       # Epitope-tagged protein
       if ($qcinfo->{'ip_epitope-tagged_protein'}) {
@@ -257,6 +271,8 @@ sub check_generic_antibody {
         foreach my $ip_epitope_tagged (values(%{$qcinfo->{'ip_epitope-tagged_protein'}})) {
           unless ($ip_epitope_tagged->{'overlap_ok'} eq "yes") { log_error "Band overlap not ok.", "warning"; next; }
           unless ($ip_epitope_tagged->{'qpcr_verified'} eq "yes") { log_error "IP+Mass Spec not qPCR-verified.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ip_epitope_tagged->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
             log_error "Antibody is valid (Western + IP+Eptitope-Tagged Protein)!", "notice", "<"; log_error "Done.", "notice", "<";
@@ -266,12 +282,12 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid IP+Epitope-Tagged Protein secondary assay found.", "warning", "<";
+        log_error "No valid IP+Epitope-Tagged Protein secondary assay found.", "warning", "<" unless $success;
       }
 
-      log_error "No successful secondary validation found for primary immunoblot assay(s).", "warning", "<";
+      log_error "No successful secondary validation found for primary immunoblot assay(s).", "warning", "<" unless $success;
     } else {
-      log_error "No successful immunoblot validation found.", "warning", "<";
+      log_error "No successful immunoblot validation found.", "warning", "<" unless $success;
     }
   }
   # Immunofluorescence
@@ -283,6 +299,8 @@ sub check_generic_antibody {
       unless ($if_validation->{'staining_ok'} eq "yes") { log_error "Staining not ok.", "warning"; next; }
       unless ($if_validation->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
       unless ($if_validation->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
+      my @bad_cell_lines = $self->check_validation_target($if_validation->{'validation_targets'});
+      if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
       $okay_immunofluorescence = 1;
       push @check_urls, $if_validation->{'staining_image'}, $if_validation->{'staining_image_replicate'};
       last;
@@ -298,6 +316,8 @@ sub check_generic_antibody {
           unless ($if_knockdown_rnai->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
           unless ($if_knockdown_rnai->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
           unless ($if_knockdown_rnai->{'rnai_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "RNAi reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($if_knockdown_rnai->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           push @check_urls, $if_knockdown_rnai->{'staining_image'}, $if_knockdown_rnai->{'staining_image_replicate'}, $if_knockdown_rnai->{'rnai_reagent_page'};
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
@@ -308,7 +328,7 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid Knockdown+RNAi secondary assay found.", "warning", "<";
+        log_error "No valid Knockdown+RNAi secondary assay found.", "warning", "<" unless $success;
       }
       # Immunofluorescence knockdown by siRNA
       if ($qcinfo->{'immunofluorescence_knockdown_sirna'}) {
@@ -319,6 +339,8 @@ sub check_generic_antibody {
           unless ($if_knockdown_sirna->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
           unless ($if_knockdown_sirna->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
           unless ($if_knockdown_sirna->{'sirna_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "siRNA reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($if_knockdown_sirna->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           push @check_urls, $if_knockdown_sirna->{'staining_image'}, $if_knockdown_sirna->{'staining_image_replicate'}, $if_knockdown_sirna->{'sirna_reagent_page'};
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
@@ -329,7 +351,7 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid Knockdown+siRNA secondary assay found.", "warning", "<";
+        log_error "No valid Knockdown+siRNA secondary assay found.", "warning", "<" unless $success;
       }
       # Immunofluorescence knockdown by Mutant
       if ($qcinfo->{'immunofluorescence_knockdown_mutant'}) {
@@ -340,6 +362,8 @@ sub check_generic_antibody {
           unless ($if_knockdown_mutant->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
           unless ($if_knockdown_mutant->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
           unless ($if_knockdown_mutant->{'mutant_strain_page'} =~ m|^http://wiki.modencode.org/|) { log_error "Mutant reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($if_knockdown_mutant->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
           push @check_urls, $if_knockdown_mutant->{'staining_image'}, $if_knockdown_mutant->{'staining_image_replicate'}, $if_knockdown_mutant->{'mutant_strain_page'};
           my @missing_urls = $self->check_urls(@check_urls);
           unless (@missing_urls) {
@@ -350,12 +374,12 @@ sub check_generic_antibody {
             $success = 0;
           }
         }
-        log_error "No valid Knockdown+Mutant secondary assay found.", "warning", "<";
+        log_error "No valid Knockdown+Mutant secondary assay found.", "warning", "<" unless $success;
       }
 
-      log_error "No successful secondary validation found for primary immunofluorescence assay(s).", "warning", "<";
+      log_error "No successful secondary validation found for primary immunofluorescence assay(s).", "warning", "<" unless $success;
     } else {
-      log_error "No successful immunofluorescence validation found.", "warning", "<";
+      log_error "No successful immunofluorescence validation found.", "warning", "<" unless $success;
     }
   }
 
@@ -437,7 +461,6 @@ sub check_urls {
       $seen_urls{ident $self}->{$url} = $res->is_success;
       if ($res->is_success) {
         if ($res->content =~ m/div class="noarticletext"/ || $res->content =~ m/<title>Error<\/title>/) {
-          print "NOOOOOOOOOOOOO: $url\n";
           $seen_urls{ident $self}->{$url} = 0;
         }
       }
@@ -445,6 +468,67 @@ sub check_urls {
     push(@missing_urls, $url) unless $seen_urls{ident $self}->{$url};
   }
   return @missing_urls;
+}
+
+sub check_validation_target {
+  my ($self, $validation_targets) = @_;
+  my (%cell_lines, %stages, %strains);
+
+  foreach my $cell_line (split(/,\s*/, $validation_targets->{'cell_line'})) { $cell_lines{$cell_line} = 1; }
+  foreach my $stage (split(/,\s*/, $validation_targets->{'developmental_stage'})) { $stages{$stage} = 1; }
+  foreach my $strain (split(/,\s*/, $validation_targets->{'strain'})) { $strains{$strain} = 1; }
+
+  # Get appropriate sample info from this submission
+
+  my @bad_samples;
+
+  push @bad_samples, grep { !$cell_lines{$_} } @{$cached_samples{ident $self}->{'cell_lines'}};
+  push @bad_samples, grep { !$stages{$_} } @{$cached_samples{ident $self}->{'stages'}};
+  push @bad_samples, grep { !$strains{$_} } @{$cached_samples{ident $self}->{'strains'}};
+
+  return @bad_samples;
+}
+
+sub cache_used_samples {
+  my ($self) = @_;
+
+  my @all_data;
+  foreach my $applied_protocol_slot (@{$self->get_experiment->get_applied_protocol_slots}) {
+    foreach my $applied_protocol (@$applied_protocol_slot) {
+      push @all_data, map { [ $applied_protocol, 'input', $_ ] } $applied_protocol->get_input_data;
+      push @all_data, map { [ $applied_protocol, 'output', $_ ] } $applied_protocol->get_output_data;
+    }
+  }
+  my %seen;
+  my @all_data_with_dups = grep { !$seen{$_->[0]->get_id . '.' . $_->[1] . '.' . $_->[2]->get_id . '.' . join(",", map { $_->get_id } $_->[0]->get_output_data(1))    }++ } @all_data;
+  undef %seen;
+  @all_data = grep { !$seen{$_->[0]->get_id . '.' . $_->[1] . '.' . $_->[2]->get_id}++ } @all_data;
+
+  # Keep only wiki pages
+  @all_data = grep { $_->[2]->get_object->get_termsource() && $_->[2]->get_object->get_termsource(1)->get_db(1)->get_url eq "http://wiki.modencode.org/project/index.php?title=" } @all_data;
+
+  my (@used_cell_lines, @used_stages, @used_strains);
+  foreach my $ap_datum (@all_data) {
+    my (undef, undef, $datum) = @$ap_datum;
+    # Cell lines
+    if ($datum->get_object->get_type(1)->get_name =~ /cell_?line/i) {
+      my ($official_name) = map { $_->get_value } grep { $_->get_heading eq "official name" } $datum->get_object->get_attributes(1);
+      push (@used_cell_lines, $official_name) if $official_name;
+    }
+    # Stage
+    if ($datum->get_object->get_type(1)->get_name =~ /stage/i) {
+      my ($official_name) = map { $_->get_value } grep { $_->get_heading eq "developmental stage" } $datum->get_object->get_attributes(1);
+      push (@used_stages, $official_name) if $official_name;
+    }
+    # Strain
+    if ($datum->get_object->get_type(1)->get_name =~ /strain/i) {
+      my ($official_name) = map { $_->get_value } grep { $_->get_heading eq "official name" } $datum->get_object->get_attributes(1);
+      push (@used_strains, $official_name) if $official_name;
+    }
+  }
+  $cached_samples{ident $self}->{'cell_lines'} = \@used_cell_lines;
+  $cached_samples{ident $self}->{'stages'} = \@used_stages;
+  $cached_samples{ident $self}->{'strains'} = \@used_strains;
 }
 
 1;

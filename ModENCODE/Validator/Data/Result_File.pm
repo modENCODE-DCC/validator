@@ -123,7 +123,7 @@ sub validate {
 
     my $datum_obj = $datum->get_object;
 
-    if ($datum_obj->get_value() =~ m'(http|ftp)s?://') {
+    if ($datum_obj->get_value() =~ m'(http|ftp|rsync)s?://') {
       # If this datum's value is a URL, pull it down and replace the current
       # datum with a pointer to the local file
       my $ua = LWP::UserAgent->new();
@@ -139,7 +139,7 @@ sub validate {
         my $res = $ua->request($req);
         log_error("Checking to see if " . $datum_obj->get_type(1)->get_name() . " file at $url exists.", "notice", ">");
         if ($res->is_success) {
-          log_error("Yes, saving.", "notice");
+          log_error("Yes, delaying fetch.", "notice");
         } else {
           log_error("No, can't find file at URL $url using HTTP HEAD request!", "error");
           $success = 0;
