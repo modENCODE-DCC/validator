@@ -15,7 +15,7 @@ my %seen_data           :ATTR( :default<{}> );
 my %transfer_host       :ATTR( :name<transfer_host>,     :default<"74.114.99.77"> );
 my %remote_url_prefix   :ATTR( :name<remote_url_prefix>, :default<"rsync://uberkeley\@74.114.99.63::berkeley/pipeline/"> );
 my %transfer_cmd        :ATTR( :name<transfer_cmd>,      :default<"devel/fetcher.pl"> );
-my %local_web_prefix    :ATTR( :name<local_web_prefix>,  :default<"http://smaug.lbl.gov/submit/public/get_file/"> );
+my %local_web_prefix    :ATTR( :name<local_web_prefix>,  :default<"http://submit.modencode.org/submit/public/get_file/"> );
 my %seen_url_filenames  :ATTR( :default<{}> );
 
 sub validate {
