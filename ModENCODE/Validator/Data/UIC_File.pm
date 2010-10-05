@@ -128,7 +128,7 @@ sub parse_response {
   my $text = shift;
 
   my ($done) = ($text =~ /^done\t(.*)$/m);
-  if (!defined($done)) { $done = -1; }
+  if (!defined($done)) { $done = -1; chomp $text; log_error "Couldn't parse $text.", "error"; }
   my ($failed) = ($text =~ /^failed\t(.*)$/m);
   my ($destination) = ($text =~ /^destination\t(.*)$/m);
   my ($destination_size) = ($text =~ /^destination_size\t(.*)$/m);
