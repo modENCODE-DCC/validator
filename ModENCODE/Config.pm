@@ -186,7 +186,15 @@ sub set_cfg {
       exit;
     }
     my $genome_builds = $config_object->val("general", "genome_builds");
-    $genome_builds = $root_dir . $genome_builds unless ($genome_builds =~ /^\//);
+    if ($genome_builds !~ /^\//) {
+      if (!-e ($root_dir . $genome_builds)) {
+        # Try finding it next to validator.ini
+        my ($ini_root) = ($inifile =~ m/^(.*\/)/);
+        $genome_builds = $ini_root . $genome_builds;
+      } else {
+        $genome_builds = $root_dir . $genome_builds;
+      }
+    }
     unless (open(FH, "<", $genome_builds)) {
       print STDERR "Couldn't open genome_builds file $genome_builds! $!\n";
       exit;
