@@ -1,6 +1,13 @@
 package ModENCODE::Validator::Data::UIC_File;
 
 use strict;
+my $root_dir;
+BEGIN {
+  $root_dir = $0;
+  $root_dir =~ s/[^\/]*$//;
+  $root_dir = "./" unless $root_dir =~ /\//;
+  push @INC, $root_dir;
+}
 use Class::Std;
 use Carp qw(croak carp);
 use base qw(ModENCODE::Validator::Data::Data);
@@ -16,7 +23,13 @@ my %transfer_host       :ATTR( :name<transfer_host>,     :default<"74.114.99.77"
 my %remote_url_prefix   :ATTR( :name<remote_url_prefix>, :default<"rsync://uberkeley\@74.114.99.63::berkeley/pipeline/"> );
 my %transfer_cmd        :ATTR( :name<transfer_cmd>,      :default<"devel/fetcher.pl"> );
 my %local_web_prefix    :ATTR( :name<local_web_prefix>,  :default<"http://submit.modencode.org/submit/public/get_file/"> );
+my %ssh_args            :ATTR( :name<ssh_args>,          :default<["-o", "User=uberkeley", "-o", "PasswordAuthentication=no"]> );
 my %seen_url_filenames  :ATTR( :default<{}> );
+
+sub START {
+  my ($self, $ident, $args) = @_;
+  push(@{$ssh_args{ident $self}}, "-o", "IdentityFile=$root_dir/id_rsa.uic");
+}
 
 sub validate {
   my ($self) = @_;
@@ -162,7 +175,8 @@ sub transfer_file {
   my $failed;
   my $response = "";
   {
-    my $pid = open3(my $sin, my $sout, my $serr, $ssh, $self->get_transfer_host, $cmd);
+    my @args = @{$ssh_args{ident $self}};
+    my $pid = open3(my $sin, my $sout, my $serr, $ssh, @args, $self->get_transfer_host, $cmd);
     print $sin $url . "\n";
     print $sin $command_id . "\n";
     print $sin $self->get_project_id() . "\n";
@@ -195,7 +209,8 @@ sub transfer_file {
     # Wait for transfer to complete
     $cmd = $self->get_transfer_cmd . " check";
     while (1) {
-      open3(my $sin, my $sout, my $serr, $ssh, $self->get_transfer_host, $cmd);
+      my @args = @{$ssh_args{ident $self}};
+      open3(my $sin, my $sout, my $serr, $ssh, @args, $self->get_transfer_host, $cmd);
       print $sin $url . "\n";
       print $sin $command_id . "\n";
       print $sin $self->get_project_id() . "\n";
