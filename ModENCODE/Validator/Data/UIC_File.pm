@@ -42,7 +42,7 @@ sub validate {
     my $datum_obj = $datum->get_object;
 
     if (!length($datum_obj->get_value())) {
-      log_error "No file for " . $datum->get_heading(), ", though one was expected.", 'warning';
+      log_error "No file for " . $datum_obj->get_heading(), ", though one was expected.", 'warning';
       next;
     } elsif (-r $datum_obj->get_value()) {
       log_error "Found local file " . $datum_obj->get_value() . " for column " . $datum_obj->get_heading() . " [" . $datum_obj->get_name . "]; skipping transfer to " . $self->get_transfer_host . ".", "notice";
