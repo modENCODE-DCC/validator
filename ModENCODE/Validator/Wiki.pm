@@ -511,11 +511,11 @@ sub validate {
       foreach my $definition (@definitions) {
         my @inputs = @{$definition->[0]};
         my @outputs = @{$definition->[1]};
-        my $url = $definition->[3];
+        my $url = $definition->[2];
         foreach my $other_definition (@definitions) {
           my @other_inputs = @{$other_definition->[0]};
           my @other_outputs = @{$other_definition->[1]};
-          my $other_url = $other_definition->[3];
+          my $other_url = $other_definition->[2];
           if (scalar(@other_inputs) != scalar(@inputs)) {
             log_error "Protocol at $url has " . scalar(@inputs) . " inputs, while protocol at $other_url has " . scalar(@other_inputs) . " inputs. These cannot differ for alternative treatments!", "error";
             $success = 0;
