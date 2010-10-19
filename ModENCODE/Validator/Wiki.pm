@@ -570,6 +570,7 @@ sub validate {
       # Really special case where there's a single _extra_ anonymous datum implied by the wiki (type but no name)
       # AND no unnamed (anonymous_data) column in the SDRF AND named columns in the SDRF so an anonymous datum
       # was not automatically created
+      my $skip_inputs = 0;
       if (
         # No unnamed columns in SDRF
         scalar(@anonymous_data) == 0
@@ -587,67 +588,69 @@ sub validate {
           next;
         } else {
           log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra input column that is not shown in the SDRF.", "warning";
-          next;
+          $skip_inputs = 1;
         }
       }
 
-      # Fail if the number of inputs in the SDRF is not equal to the number in the wiki
-      if (
-        scalar(@wiki_input_definitions) != scalar($applied_protocol->get_input_data) - scalar(@anonymous_data) # Everything but an un-needed anonymous one
-        &&
-        scalar(@wiki_input_definitions) != scalar($applied_protocol->get_input_data) # Everything accounted for
-      ) {
-        log_error("There are " . scalar(@wiki_input_definitions) . " input parameters according to the wiki" .
-        " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @wiki_input_definitions) . ")" .
-        ", and " . scalar($applied_protocol->get_input_data) . " input parameters in the SDRF" .
-        " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } $applied_protocol->get_input_data(1)) . ")" .
-        " for protocol " . $protocol->get_object->get_name() . ".\n" .
-        "Please correct one or the other.");
-        $success = 0;
-        next;
-      }
-      # Verify that any named inputs are also named in the $experiment
-      # If there's only one unnamed one in the set, see if there's an unnamed type in the wiki for it?
-      foreach my $wiki_term (@wiki_input_definitions) {
-        next unless (defined($wiki_term->{'name'}) && length($wiki_term->{'name'})); # Allowed to have one unnamed one
-        if (!scalar(grep { $_->get_name() eq $wiki_term->{'name'} } $applied_protocol->get_input_data(1))) {
-          log_error "Can't find the input [" . $wiki_term->{'name'} . "] in the SDRF for protocol '" . $protocol->get_object->get_name() . "'.";
+      unless ($skip_inputs) {
+        # Fail if the number of inputs in the SDRF is not equal to the number in the wiki
+        if (
+          scalar(@wiki_input_definitions) != scalar($applied_protocol->get_input_data) - scalar(@anonymous_data) # Everything but an un-needed anonymous one
+          &&
+          scalar(@wiki_input_definitions) != scalar($applied_protocol->get_input_data) # Everything accounted for
+        ) {
+          log_error("There are " . scalar(@wiki_input_definitions) . " input parameters according to the wiki" .
+          " (" . join(", ", map { $_->{'term'} . "[" . $_->{'name'} . "]" } @wiki_input_definitions) . ")" .
+          ", and " . scalar($applied_protocol->get_input_data) . " input parameters in the SDRF" .
+          " (" . join(", ", map { $_->get_heading() . "[" . $_->get_name() . "]" } $applied_protocol->get_input_data(1)) . ")" .
+          " for protocol " . $protocol->get_object->get_name() . ".\n" .
+          "Please correct one or the other.");
           $success = 0;
           next;
         }
-      }
-
-      # Update the input's type to match the type defined on the wiki
-      foreach my $input ($applied_protocol->get_input_data) {
-        my ($wiki_term) = grep { $_->{'name'} eq $input->get_object->get_name } @wiki_input_definitions;
-        if (!$wiki_term) {
-          # Try to find an anonymous term
-          ($wiki_term) = grep { $_->{'name'} =~ /^\s*$/ || !defined($_->{'name'}) } @wiki_input_definitions;
-          if (!$wiki_term && $input->get_object->is_anonymous) {
-            # An automatically added anonymous datum w/ no type; leave it alone since
-            # it will be used to tie together applied protocols
+        # Verify that any named inputs are also named in the $experiment
+        # If there's only one unnamed one in the set, see if there's an unnamed type in the wiki for it?
+        foreach my $wiki_term (@wiki_input_definitions) {
+          next unless (defined($wiki_term->{'name'}) && length($wiki_term->{'name'})); # Allowed to have one unnamed one
+          if (!scalar(grep { $_->get_name() eq $wiki_term->{'name'} } $applied_protocol->get_input_data(1))) {
+            log_error "Can't find the input [" . $wiki_term->{'name'} . "] in the SDRF for protocol '" . $protocol->get_object->get_name() . "'.";
+            $success = 0;
             next;
-          } else {
-            log_error "Input term of " . $applied_protocol->get_protocol(1)->get_name() . ": " . $input->get_object->get_heading . " [" . $input->get_object->get_name . "] is named in the IDF/SDRF, but not in the wiki.", "warning" if ($input->get_object->get_name());
           }
         }
-        if (!$wiki_term) {
-          # No anonymous type found on the wiki
-          $success = 0;
-          log_error "Couldn't find the wiki definition for input '" . $input->get_object->get_name() . "' in protocol " . $protocol->get_object->get_name() . " even though everything validated", "error";
-          next;
+
+        # Update the input's type to match the type defined on the wiki
+        foreach my $input ($applied_protocol->get_input_data) {
+          my ($wiki_term) = grep { $_->{'name'} eq $input->get_object->get_name } @wiki_input_definitions;
+          if (!$wiki_term) {
+            # Try to find an anonymous term
+            ($wiki_term) = grep { $_->{'name'} =~ /^\s*$/ || !defined($_->{'name'}) } @wiki_input_definitions;
+            if (!$wiki_term && $input->get_object->is_anonymous) {
+              # An automatically added anonymous datum w/ no type; leave it alone since
+              # it will be used to tie together applied protocols
+              next;
+            } else {
+              log_error "Input term of " . $applied_protocol->get_protocol(1)->get_name() . ": " . $input->get_object->get_heading . " [" . $input->get_object->get_name . "] is named in the IDF/SDRF, but not in the wiki.", "warning" if ($input->get_object->get_name());
+            }
+          }
+          if (!$wiki_term) {
+            # No anonymous type found on the wiki
+            $success = 0;
+            log_error "Couldn't find the wiki definition for input '" . $input->get_object->get_name() . "' in protocol " . $protocol->get_object->get_name() . " even though everything validated", "error";
+            next;
+          }
+          my $cv = $wiki_term->{'cv'};
+          my $term = $wiki_term->{'term'};
+          $cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
+          log_error "Updating type of input " . $input->get_object->get_heading . " [" . $input->get_object->get_name . "] to $cv:$term.", "debug";
+          $input->get_object->set_type(new ModENCODE::Chado::CVTerm({
+                'name' => $term,
+                'cv' => new ModENCODE::Chado::CV({
+                    'name' => $cv,
+                  }),
+              })
+          );
         }
-        my $cv = $wiki_term->{'cv'};
-        my $term = $wiki_term->{'term'};
-        $cv = ModENCODE::Config::get_cvhandler()->get_cv_by_name($cv)->{'names'}->[0];
-        log_error "Updating type of input " . $input->get_object->get_heading . " [" . $input->get_object->get_name . "] to $cv:$term.", "debug";
-        $input->get_object->set_type(new ModENCODE::Chado::CVTerm({
-              'name' => $term,
-              'cv' => new ModENCODE::Chado::CV({
-                  'name' => $cv,
-                }),
-            })
-        );
       }
 
       # OUTPUTS
