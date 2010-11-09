@@ -7,7 +7,6 @@ int main(int argc, char *argv[]) {
   samfile_t *infp;
   samfile_t *outfp;
 
-  char *aux = 0;
   char in_mode[5];
   strcpy(in_mode, "r");
   if (argc < 3) {
@@ -19,25 +18,32 @@ int main(int argc, char *argv[]) {
       show_usage();
       return 1;
     }
+
+    char *aux = 0;
+    if (argc >= 4 && strcmp(argv[3], "-v") != 0) {
+      char *fn_ref = strdup(argv[3]);
+      aux = samfaipath(fn_ref);
+    }
+
+    if (strcmp(argv[argc-1], "-v") == 0) {
+      debug_level = 1;
+    }
     char *extension = strcasestr(argv[1], ".bam");
-    if (extension && strcasecmp(extension, ".bam") == 0) { strcat(in_mode, "b"); } // BAM file?
+    if (extension && strcasecmp(extension, ".bam") == 0) { strcat(in_mode, "b"); aux = 0; } // BAM file?
+
     if ((infp = samopen(argv[1], in_mode, aux)) == 0) {
       fprintf(stderr, "Failed to open input file %s\n", argv[1]);
       return 1;
     }
   }
-  if (argc == 4 && strcmp(argv[3], "-v") == 0) {
-    debug_level = 1;
-  }
 
-  bam_header_t *header = (infp->header);
+  bam_header_t *header = bam_header_dup(infp->header);
 
   bam1_t *alignment = bam_init1(); // Create alignment object, I think
   bam1_core_t *core;
   core = &alignment->core;
   long long mapped_read_count = 0;
 
-  // XXX: This may be unnecessary...
   int i;
   for (i = 0; i < header->n_targets; i++) {
     char *target = header->target_name[i];
@@ -52,9 +58,23 @@ int main(int argc, char *argv[]) {
       }
     }
   }
-  // XXX: END This may be unnecessary...
 
   char *replace_here;
+
+  if ((!header->text || strlen(header->text) == 0) && header->n_targets > 0) {
+    // Regenerate it
+    header->text = "";
+    char *buf1;
+    char *buf2;
+    fprintf(stderr, "No header found, regenerating.\n");
+    for (i = 0; i < header->n_targets; i++) {
+      if (asprintf(&buf1, "@SQ\tSN:%s\tLN:%d\n", header->target_name[i], header->target_len[i]) < 0) { exit(1); }
+      if (asprintf(&buf2, "%s%s", header->text, buf1) < 0) { exit(1); }
+      header->text = strdup(buf2);
+      free(buf1);
+      free(buf2);
+    }
+  }
   char *new_text = strdup(header->text);
   while ((replace_here = strstr(new_text, "SN:chr"))) {
     strcpy(replace_here+3, replace_here + 6);
