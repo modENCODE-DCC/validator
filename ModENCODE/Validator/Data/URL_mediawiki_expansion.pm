@@ -142,6 +142,7 @@ sub validate {
     my ($name, $version) = ($datum->get_object->get_value() =~ /^(.*?)(?:&oldid=(\d*))?$/);
     $name =~ s/_/ /g;
     if (!defined($pages{$datum->get_object->get_value()})) {
+      log_error "Expanding page from " . $datum->get_object->get_value() . ".", "notice";
       my $soap_data = SOAP::Data->name('query' => \SOAP::Data->value(
           SOAP::Data->name('name' => HTML::Entities::encode($name))->type('xsd:string'),
           SOAP::Data->name('revision' => $version)->type('xsd:int'),
