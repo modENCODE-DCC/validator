@@ -7,7 +7,7 @@ int main(int argc, char *argv[]) {
   samfile_t *infp;
   samfile_t *outfp;
 
-  char in_mode[5];
+  char in_mode[3];
   strcpy(in_mode, "r");
   if (argc < 3) {
     show_usage();
@@ -25,8 +25,14 @@ int main(int argc, char *argv[]) {
       aux = samfaipath(fn_ref);
     }
 
-    if (strcmp(argv[argc-1], "-v") == 0) {
-      debug_level = 1;
+    int i;
+    for (i = argc-1; i > 0; i--) {
+      if (strcmp(argv[i], "-v") == 0) {
+        debug_level <<= 1;
+        debug_level += 1;
+      } else {
+        break;
+      }
     }
     char *extension = strcasestr(argv[1], ".bam");
     if (extension && strcasecmp(extension, ".bam") == 0) { strcat(in_mode, "b"); aux = 0; } // BAM file?
@@ -42,7 +48,6 @@ int main(int argc, char *argv[]) {
   bam1_t *alignment = bam_init1(); // Create alignment object, I think
   bam1_core_t *core;
   core = &alignment->core;
-  long long mapped_read_count = 0;
 
   int i;
   for (i = 0; i < header->n_targets; i++) {
@@ -59,7 +64,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  char *replace_here;
 
   if ((!header->text || strlen(header->text) == 0) && header->n_targets > 0) {
     // Regenerate it
@@ -68,14 +72,21 @@ int main(int argc, char *argv[]) {
     char *buf2;
     fprintf(stderr, "No header found, regenerating.\n");
     for (i = 0; i < header->n_targets; i++) {
-      if (asprintf(&buf1, "@SQ\tSN:%s\tLN:%d\n", header->target_name[i], header->target_len[i]) < 0) { exit(1); }
-      if (asprintf(&buf2, "%s%s", header->text, buf1) < 0) { exit(1); }
+      if (asprintf(&buf1, "@SQ\tSN:%s\tLN:%d\n", header->target_name[i], header->target_len[i]) < 0) {
+        fprintf(stderr, "Out of memory while reformatting header!\n"); fflush(stderr);
+        exit(1);
+      }
+      if (asprintf(&buf2, "%s%s", header->text, buf1) < 0) {
+        fprintf(stderr, "Out of memory while reformatting header!\n"); fflush(stderr);
+        exit(1);
+      }
       header->text = strdup(buf2);
       free(buf1);
       free(buf2);
     }
   }
   char *new_text = strdup(header->text);
+  char *replace_here;
   while ((replace_here = strstr(new_text, "SN:chr"))) {
     strcpy(replace_here+3, replace_here + 6);
   }
@@ -95,18 +106,91 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  long long total_reads = 0;
+
+  // Write out updated file as BAM
+  long long mapped_read_count = 0;
   while (samread(infp, alignment) >= 0) {
     // Generate BAM with chromosome prefixes stripped off
+    ++total_reads;
     if (!((core)->flag & BAM_FUNMAP)) ++mapped_read_count;
     bam_write1(outfp->x.bam, alignment);
   }
+
   bam_destroy1(alignment);
+  samclose(outfp);
+  samclose(infp);
+
+  // TODO: Sort by ID for faster/lower memory read counts?
+  char * outfile_prefix;
+  char * outfile;
+  if (asprintf(&outfile_prefix, "%s.sorted_by_id", argv[2]) < 0) {
+    fprintf(stderr, "Couldn't allocate memory for sorted output filename.\n");
+    exit(1);
+  }
+  size_t mem_max = 1879048192;
+  bam_sort_core(1, argv[2], outfile_prefix, mem_max); // Sort by ID, allow 1.75GB of RAM to be used
+  if (asprintf(&outfile, "%s.bam", outfile_prefix) < 0) {
+    fprintf(stderr, "Couldn't allocate memory for sorted output filename.\n");
+    exit(1);
+  }
+  free(outfile_prefix);
+  if ((infp = samopen(outfile, "rb", 0)) == 0) {
+    fprintf(stderr, "Failed to open newly created sorted BAM file for reading: %s\n", outfile);
+    return 1;
+  }
+  // Scan the new sorted file for unique reads
+  alignment = bam_init1(); // Create new alignment object
+  core = &alignment->core;
+
+  char * last_read_id = 0;
+  char * current_read_id;
+  int current_read_num;
+
+  long long unique_mapped_reads = 0;
+  long long unique_reads = 0;
+  int last_read_nums[2];
+
+  while (samread(infp, alignment) >= 0) {
+    current_read_id = bam1_qname(alignment);
+    current_read_num = !((core)->flag & BAM_FREAD1);
+    if (last_read_id && strcmp(current_read_id, last_read_id) == 0) {
+      // IDs are unique
+      if (last_read_nums[current_read_num]) {
+        // And we've seen this read number before:
+        // Dup!
+        if (debug_level & 2) {
+          printf("Duplicate id:\n");
+          printf("  %s %d\n", current_read_id, current_read_num);
+          printf("  %s [%i, %i]\n", last_read_id, last_read_nums[0], last_read_nums[1]);
+        }
+      } else {
+        // Unique by read number, increment
+        if (!((core)->flag & BAM_FUNMAP)) { unique_mapped_reads++; }
+        unique_reads++;
+      }
+    } else {
+      // New read ID
+      last_read_nums[0] = last_read_nums[1] = 0;
+      last_read_id = strdup(current_read_id);
+
+      // Unique by ID, increment
+      if (!((core)->flag & BAM_FUNMAP)) { unique_mapped_reads++; }
+      unique_reads++;
+    }
+    last_read_nums[current_read_num] = 1;
+  }
+  bam_destroy1(alignment);
+  samclose(infp);
+  unlink(outfile);
 
   // Output the read count
   printf("Mapped reads: %lld\n", mapped_read_count);
+  printf("Total reads: %lld\n", total_reads);
+  printf("Unique mapped reads: %lld\n", unique_mapped_reads);
+  printf("Unique total reads: %lld\n", unique_reads);
 
-  samclose(outfp);
-  samclose(infp);
+
   return 0;
 }
 
@@ -115,4 +199,3 @@ void show_usage() {
   fprintf(stderr, "  ./sam_bam_verify <input.sam|input.bam> <output.bam> [-v]\n");
   fprintf(stderr, "    -v   Verbose output (to stderr).\n");
 }
-
