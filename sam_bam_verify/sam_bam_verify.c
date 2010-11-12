@@ -128,7 +128,12 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Couldn't allocate memory for sorted output filename.\n");
     exit(1);
   }
+#ifdef __x86_64__
+  size_t mem_max = 2684354560;
+#else
   size_t mem_max = 1879048192;
+#endif
+  printf("Size: %u\n", mem_max);
   bam_sort_core(1, argv[2], outfile_prefix, mem_max); // Sort by ID, allow 1.75GB of RAM to be used
   if (asprintf(&outfile, "%s.bam", outfile_prefix) < 0) {
     fprintf(stderr, "Couldn't allocate memory for sorted output filename.\n");
