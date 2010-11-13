@@ -844,6 +844,11 @@ sub create_datum_attribute {
       'datum' => $datum,
       'type' => $type,
     });
+    if ($value ne $attribute->get_object->get_value()) {
+      log_error "The \"$heading [$name]\" attribute cannot have different values for the same exact datum: '" . $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "] = \"" . $datum->get_object->get_value . "\"'.", "error";
+      log_error "  $value != " . $attribute->get_object->get_value(), "error";
+      exit;
+    }
 
 
   # Term source
