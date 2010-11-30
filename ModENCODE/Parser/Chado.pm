@@ -494,7 +494,7 @@ sub get_protocol {
 }
 
 sub get_datum {
-  my ($self, $datum_id) = @_;
+  my ($self, $datum_id, $datum_only) = @_;
   my $sth = $self->get_prepared_query("SELECT name, heading, value, dbxref_id, type_id FROM data WHERE data_id = ?");
   $sth->execute($datum_id);
   my $row = $sth->fetchrow_hashref();
@@ -511,6 +511,20 @@ sub get_datum {
       'type' => $type,
     });
 
+  $sth = $self->get_prepared_query("SELECT organism_id FROM data_organism WHERE data_id = ?");
+  $sth->execute($datum_id);
+  while (my ($organism_id) = $sth->fetchrow_array()) {
+    $datum->get_object->add_organism($self->get_organism($organism_id));
+  }
+
+  $sth = $self->get_prepared_query("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
+  $sth->execute($datum_id);
+  while (my ($attr_id) = $sth->fetchrow_array()) {
+    $datum->get_object->add_attribute($self->get_attribute($attr_id, $datum));
+  }
+
+  return $datum if $datum_only;
+
   $sth = $self->get_prepared_query("SELECT wiggle_data_id FROM data_wiggle_data WHERE data_id = ?");
   $sth->execute($datum_id);
   while (my ($wiggle_data_id) = $sth->fetchrow_array()) {
@@ -523,17 +537,6 @@ sub get_datum {
     $datum->get_object->add_feature($self->get_feature($feature_id));
   }
 
-  $sth = $self->get_prepared_query("SELECT organism_id FROM data_organism WHERE data_id = ?");
-  $sth->execute($datum_id);
-  while (my ($organism_id) = $sth->fetchrow_array()) {
-    $datum->get_object->add_organism($self->get_organism($organism_id));
-  }
-
-  $sth = $self->get_prepared_query("SELECT attribute_id FROM data_attribute WHERE data_id = ?");
-  $sth->execute($datum_id);
-  while (my ($attr_id) = $sth->fetchrow_array()) {
-    $datum->get_object->add_attribute($self->get_attribute($attr_id, $datum));
-  }
   return $datum;
 }
 
@@ -1038,13 +1041,13 @@ sub get_feature_by_genbank_id {
 }
 
 sub get_datum_id_by_value {
-  my ($self, $value) = @_;
+  my ($self, $value, $datum_only) = @_;
   return undef unless $value;
   my $sth = $self->get_prepared_query("SELECT data_id FROM data WHERE value = ?");
   $sth->execute($value);
   my $row = $sth->fetchrow_hashref();
   return undef if (!$row || !$row->{'data_id'});
-  my $datum = $self->get_datum($row->{'data_id'});
+  my $datum = $self->get_datum($row->{'data_id'}, $datum_only);
   return $datum;
 }
 

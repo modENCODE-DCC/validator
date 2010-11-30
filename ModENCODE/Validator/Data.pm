@@ -241,7 +241,7 @@ sub validate {
       $datum->get_object->get_heading() =~ m/Array *Matrix *Data *Files?/i ||
       $datum->get_object->get_heading() =~ m/(Derived)? Array *Data *Files?/i
     ) {
-      if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+      if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() =~ /modencode_submission(_quick)?/) {
         log_error "Not checking for local presence of referenced file " . $datum->get_object->get_value()  . ".", "notice";
       } else {
         $file_validator->add_datum_pair($ap_datum);
@@ -299,7 +299,7 @@ sub validate {
     } elsif (!$validator) {
       next;
     }
-    unless ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+    unless ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() =~ /modencode_submission(_quick)?/) {
       $validator->add_datum_pair($ap_datum);
     }
   }
@@ -338,7 +338,7 @@ sub validate {
     }
     my $type_name = $datum->get_object->get_type(1)->get_cv(1)->get_name . ":" . $datum->get_object->get_type(1)->get_name;
     next if $type_name eq "SO:transcript"; # Custom handler for transcripts
-    if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+    if ($datum->get_object->get_termsource() && $datum->get_object->get_termsource(1)->get_db(1)->get_description() =~ /modencode_submission(_quick)?/) {
       if (
         $datum->get_object->get_heading() =~ m/Result *Files?/i ||
         $datum->get_object->get_heading() =~ m/Parameter *Files?/i ||

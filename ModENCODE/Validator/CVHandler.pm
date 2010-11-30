@@ -383,7 +383,7 @@ sub add_cv {
   }
 
   # referring to old submission
-  if ($cvurltype =~ /modencode_submission/) {
+  if ($cvurltype =~ /modencode_submission(_quick)?/) {
       $cvs{ident $self}->{$cvurl} = $newcv;
       return 1;
   }

@@ -27,6 +27,8 @@ sub validate {
     my ($applied_protocol, $direction, $datum) = @$ap_datum;
     my $datum_obj = $datum->get_object;
 
+    my $datum_only = ($datum_obj->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission_quick");
+
     my $version = $datum_obj->get_termsource(1)->get_db(1)->get_url();
     if ($version !~ /^\d+$/) {
       log_error "Found a modencode_submission Term Source REF for " . $datum_obj->get_heading() . " [" . $datum_obj->get_name() . "], but it's $version when it should be a numeric project ID.", "error";
@@ -41,7 +43,7 @@ sub validate {
     }
 
     log_error "Finding referenced datum: " . $datum_obj->get_value . " of type " . $datum_obj->get_type(1)->to_string . ".", "debug";
-    my $new_datum = $parser->get_datum_id_by_value($datum_obj->get_value);
+    my $new_datum = $parser->get_datum_id_by_value($datum_obj->get_value, $datum_only);
     if ($new_datum) {
       log_error "Found an old datum object for \"" . $datum_obj->get_value . "\".", "notice";
       log_error "Got datum: " . $new_datum->get_object->to_string() . ".", "debug";
