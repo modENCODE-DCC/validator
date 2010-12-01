@@ -245,25 +245,27 @@ sub validate {
 	);
     log_error "BAM file verified.", "notice", "<";
 
+    #add a mapped read count attribute for just this file
     $datum->get_object->add_attribute(new ModENCODE::Chado::DatumAttribute({
 	'datum' => $datum,
-	'heading' => 'Total mapped read count',
+	'heading' => 'Mapped read count',
 	'value' => $read_count,
 	'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'int', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'xsd' }) })
 									   })
 	);
     $read_count_for_expmt += $read_count;
-    my $title = 'Total Mapped Read Count';
-    my $experiment = $self->get_experiment();
-    my ($exp_read_count) = new ModENCODE::Chado::ExperimentProp({
-	'name' => $title,
-	'value' => $read_count_for_expmt,
-	'experiment' => $experiment,
-	'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'mapped_read_count', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'ME' }) }),							   });
-    $experiment->add_property($exp_read_count);
   }
 
-  #TODO: sum up all the read counts, and add a total mapped read count as an experiment prop
+  #sum up all the read counts, and add a total mapped read count as an experiment prop
+  my $title = 'Total Mapped Read Count';
+  my $experiment = $self->get_experiment();
+  my ($exp_read_count) = new ModENCODE::Chado::ExperimentProp({
+      'name' => $title,
+      'value' => $read_count_for_expmt,
+      'experiment' => $experiment,
+      'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'mapped_read_count', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'ME' }) }),							   });
+  $experiment->add_property($exp_read_count);
+
   log_error "Found $read_count_for_expmt total mapped reads for this experiment", "notice";
   log_error "Done.", "notice", "<";
   return $success;
