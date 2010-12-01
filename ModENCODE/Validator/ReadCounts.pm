@@ -13,8 +13,9 @@ sub validate {
   my ($uniq_reads) = grep { $_->get_type(1)->get_name eq "uniquely_mapped_read_count" } @properties;
   my ($multiply_mapped_reads) = grep { $_->get_type(1)->get_name eq "multiply_mapped_read_count" } @properties;
   my ($total_reads) = grep { $_->get_type(1)->get_name eq "read_count" } @properties;
+  my ($total_mapped_reads) = grep { $_->get_type(1)->get_name eq "mapped_read_count" } @properties;
 
-  if ($uniq_reads || $multiply_mapped_reads || $total_reads) {
+  if ($uniq_reads || $multiply_mapped_reads || $total_reads || $total_mapped_reads) {
     if ($uniq_reads) {
       $uniq_reads = $uniq_reads->get_value();
       log_error "Found $uniq_reads uniquely mapped reads.", "notice";
@@ -22,6 +23,10 @@ sub validate {
     if ($multiply_mapped_reads) {
       $multiply_mapped_reads = $multiply_mapped_reads->get_value();
       log_error "Found $multiply_mapped_reads multiply mapped reads.", "notice";
+    }
+    if ($total_mapped_reads) {
+      $total_mapped_reads = $total_mapped_reads->get_value();
+      log_error "Found $total_mapped_reads total mapped reads.", "notice";
     }
     if ($total_reads) {
       $total_reads = $total_reads->get_value();
@@ -73,11 +78,14 @@ sub validate {
       }
     }
 
-    my $mapped_reads = $uniq_reads + $multiply_mapped_reads;
+    my $mapped_reads = $uniq_reads + $multiply_mapped_reads + $total_mapped_reads;
     my $read_ratio = ($mapped_reads / $total_reads) * 100;
     if ($read_ratio <= 30) {
       log_error "Only " . int($read_ratio) . "% of reads were mapped; your data set must map at least 30%!", "error";
       return 0;
+    } elsif ($read_ratio > 100) {
+	log_error "More than 100% of your reads were mapped (" . int($read_ratio) . "%).  Please verify your total read counts provided in the SDRF.", "error";
+	return 0;
     } else {
       log_error int($read_ratio) . "% of reads were mapped (more than 30%).", "notice";
       return 1;

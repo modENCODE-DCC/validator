@@ -126,6 +126,7 @@ use ModENCODE::Validator::Data::GEO_lite;
 use ModENCODE::Validator::Data::AE_lite;
 use ModENCODE::Validator::Data::SRA_lite;
 use ModENCODE::Validator::Data::SRA_list_lite;
+use ModENCODE::Validator::Data::SRA_acc_new;
 use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
 use ModENCODE::Validator::Data::AntibodyQC;
@@ -136,7 +137,7 @@ use ModENCODE::Validator::Data::ReadCount::UniquelyMappedReadCount;
 use ModENCODE::Validator::Data::ReadCount::MultiplyMappedReadCount;
 use ModENCODE::Validator::Data::ReadCount::ReadCount;
 use ModENCODE::Validator::Data::UIC_File;
-
+use ModENCODE::Validator::Data::SAMBAM;
 
 use Class::Std;
 use Carp qw(croak carp);
@@ -153,7 +154,8 @@ sub START {
   $type_validators{$ident}->{'modencode:transcriptional_fragment_map'} = new ModENCODE::Validator::Data::BED({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:Browser_Extensible_Data_Format (BED)'} = new ModENCODE::Validator::Data::BED({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:WIG'} = new ModENCODE::Validator::Data::WIG({ 'experiment' => $self->get_experiment });
-  $type_validators{$ident}->{'modencode:Sequence_Alignment/Map (SAM)'} = new ModENCODE::Validator::Data::SAM({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:Sequence_Alignment/Map (SAM)'} = new ModENCODE::Validator::Data::SAMBAM({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:Binary Sequence_Alignment/Map (BAM)'} = new ModENCODE::Validator::Data::SAMBAM({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:Signal_Graph_File'} = new ModENCODE::Validator::Data::WIG({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GFF3'} = new ModENCODE::Validator::Data::GFF3({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:GFF3 (parse only)'} = new ModENCODE::Validator::Data::GFF3_parse_only({ 'experiment' => $self->get_experiment });
@@ -166,6 +168,7 @@ sub START {
   $type_validators{$ident}->{'modencode:GEO_record'} = new ModENCODE::Validator::Data::GEO_lite({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:ArrayExpress_record'} = new ModENCODE::Validator::Data::GEO_lite({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID (SRA)'} = new ModENCODE::Validator::Data::SRA_lite({ 'experiment' => $self->get_experiment });
+#  $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID (SRA)'} = new ModENCODE::Validator::Data::SRA_acc_new({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID_list (SRA)'} = new ModENCODE::Validator::Data::SRA_list_lite({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'mged:antibody'} = new ModENCODE::Validator::Data::AntibodyQC({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:FASTQ'} = new ModENCODE::Validator::Data::UIC_File({ 'experiment' => $self->get_experiment });
