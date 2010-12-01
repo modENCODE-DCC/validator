@@ -126,7 +126,7 @@ use ModENCODE::Validator::Data::GEO_lite;
 use ModENCODE::Validator::Data::AE_lite;
 use ModENCODE::Validator::Data::SRA_lite;
 use ModENCODE::Validator::Data::SRA_list_lite;
-use ModENCODE::Validator::Data::SRA_acc_new;
+#use ModENCODE::Validator::Data::SRA_acc_new;
 use ModENCODE::Validator::Data::TA_acc;
 use ModENCODE::Validator::Data::URL_mediawiki_expansion;
 use ModENCODE::Validator::Data::AntibodyQC;
