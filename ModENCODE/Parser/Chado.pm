@@ -1418,6 +1418,19 @@ sub str_repeat : PRIVATE {
   return $newstr;
 }
 
+sub get_experiment_prop_values_by_name { 
+  my ($self, $experiment_prop_name) = @_;
+  my @exp_prop_values;
+  my $experiment_prop_sth = $self->get_prepared_query("SELECT value FROM experiment_prop WHERE name = ?");
+  $experiment_prop_sth->execute($experiment_prop_name);
+  while (my $row = $experiment_prop_sth->fetchrow_hashref()) {
+    map { $row->{$_} = xml_unescape($row->{$_}) } keys(%$row);
+        'value' => $row->{'value'},
+    push @exp_prop_values, $row->{'value'};
+  }
+  return @exp_prop_values;
+}
+
 sub get_experiment_props_by_name {
   my ($self, $experiment_prop_name) = @_;
   my @exp_props;

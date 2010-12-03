@@ -40,10 +40,11 @@ sub validate {
     my $exp_factor_name = $exp_factor_name_prop->get_value;
     next unless length($exp_factor_name);
 
+    log_error "Looking for Experimental Factor \"$exp_factor_name\".", "notice", ">";
     foreach my $ap_datum (@all_data) {
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
       if ($datum->get_object->get_name eq $exp_factor_name) {
-        log_error "Found Experimental Factor Name column, datum: " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "].", "notice";
+        log_error "Found \"$exp_factor_name\" column, datum: " . $datum->get_object->get_heading . " [" . $datum->get_object->get_name . "].", "notice", "<";
         next EXP_NAME;
       }
     }
@@ -52,41 +53,65 @@ sub validate {
     # Check attribute columns
     foreach my $attribute (@all_attributes) {
       if ($attribute->get_object->get_name eq $exp_factor_name) {
-        log_error "Found Experimental Factor Name column, attribute: " . $attribute->get_object->get_heading . " [" . $attribute->get_object->get_name . "].", "notice";
+        log_error "Found \"$exp_factor_name\" column, attribute: " . $attribute->get_object->get_heading . " [" . $attribute->get_object->get_name . "].", "notice", "<";
         next EXP_NAME;
       }
     }
 
-    # Take off on a little tangent to look in the old submission
+    # Take off on a little tangent to look in the old submission(s)
+    my $seen_old_instance_of_factor = 0;
     foreach my $ap_datum (@all_data) {
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
       foreach my $attribute ($datum->get_object->get_attributes(1)) {
         if ($attribute->get_termsource() && $attribute->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
           my $version = $attribute->get_termsource(1)->get_db(1)->get_url;
           my $schema = "modencode_experiment_${version}_data";
+          log_error "Looking in #$version.", "notice";
           if ($parser->get_schema() ne $schema) {
-            log_error "Setting modENCODE Chado parser schema to '$schema' for " . $attribute->get_heading() . " [" . $attribute->get_name() . "].", "notice";
+            log_error "Setting modENCODE Chado parser schema to '$schema' for " . $attribute->get_heading() . " [" . $attribute->get_name() . "].", "debug";
             my $experiment_name = $parser->set_schema($schema);
-            log_error "Experiment name is \"$experiment_name\".", "notice";
+            #log_error "Experiment name is \"$experiment_name\".", "notice";
           }
-          my @exp_props = $parser->get_experiment_props_by_name("Experimental Factor Name");
-          foreach my $property (@exp_props) {
-            if ($property->get_object->get_value eq $exp_factor_name) {
-              log_error "Found Experimental Factor Name column in old experiment: " . $version . ".", "notice";
-              $exp_factor_name_prop->set_termsource(
-                new ModENCODE::Chado::DBXref({
-                    'accession' => $exp_factor_name,
-                    'db' => $attribute->get_termsource(1)->get_db(),
-                  })
-              );
-              next EXP_NAME;
+          my @exp_prop_values = $parser->get_experiment_prop_values_by_name("Experimental Factor Name", new ModENCODE::Chado::Experiment({ 'experiment_id' => $schema }));
+          foreach my $propval (@exp_prop_values) {
+            if ($propval eq $exp_factor_name) {
+              if ($exp_factor_name_prop->get_termsource() && $exp_factor_name_prop->get_termsource(1)->get_db(1)->get_name =~ /modencode_submission/) {
+                # Already made this prop
+                my @ranks = sort(map { $_->get_rank } grep { $_->get_name eq "Experimental Factor Name" } ($experiment->get_properties(1)));
+                my $new_prop = new ModENCODE::Chado::ExperimentProp({
+                    'experiment' => $experiment,
+                    'value' => $exp_factor_name,
+                    'type' => $exp_factor_name_prop->get_type,
+                    'name' => $exp_factor_name_prop->get_name,
+                    'rank' => $ranks[$#ranks]+1,
+                    'termsource' => new ModENCODE::Chado::DBXref({
+                      'accession' => $exp_factor_name,
+                      'db' => $attribute->get_termsource(1)->get_db(),
+                    })
+                  });
+                $experiment->add_property($new_prop);
+                my @ranks = sort(map { $_->get_rank } grep { $_->get_name eq "Experimental Factor Name" } ($experiment->get_properties(1)));
+              } else {
+                $exp_factor_name_prop->set_termsource(
+                  new ModENCODE::Chado::DBXref({
+                      'accession' => $exp_factor_name,
+                      'db' => $attribute->get_termsource(1)->get_db(),
+                    })
+                );
+              }
+              log_error "  Found $exp_factor_name in experiment: #" . $version . ".", "notice";
+              $seen_old_instance_of_factor = 1;
             }
           }
         }
       }
     }
+    if ($seen_old_instance_of_factor) {
+      log_error "Found $exp_factor_name.", "notice", "<";
+      next EXP_NAME;
+    }
 
-    log_error "Didn't find Experimental Factor Name column \"$exp_factor_name\" in data or attributes of data!", "error";
+    log_error "Didn't find Experimental Factor Name column \"$exp_factor_name\" in data or attributes of data!", "error", "<";
     $success = 0;
   }
 
