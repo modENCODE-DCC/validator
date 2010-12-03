@@ -63,7 +63,7 @@ sub validate {
     foreach my $ap_datum (@all_data) {
       my ($applied_protocol, $direction, $datum) = @$ap_datum;
       foreach my $attribute ($datum->get_object->get_attributes(1)) {
-        if ($attribute->get_termsource() && $attribute->get_termsource(1)->get_db(1)->get_description() eq "modencode_submission") {
+        if ($attribute->get_termsource() && $attribute->get_termsource(1)->get_db(1)->get_description() =~ /modencode_submission(_quick)?/) {
           my $version = $attribute->get_termsource(1)->get_db(1)->get_url;
           my $schema = "modencode_experiment_${version}_data";
           log_error "Looking in #$version.", "notice";
