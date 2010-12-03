@@ -113,8 +113,6 @@ sub validate {
     return 0 if ($success == 0);
        
     my $bam_file = "";
-    my $bam_sorted_file = "";
-    my $bam_index_file = "";
 
 #    if ($filename =~ /BAM/i) {
 #	#check the BAM file for chrs
@@ -197,10 +195,11 @@ sub validate {
     #test the bam sorting and indexing.
     log_error "Testing BAM file integrity", "notice", ">";
 
-    $bam_sorted_file = "$bam_file.sorted";
+    my $bam_sorted_file_prefix = "$bam_file.sorted";
+    my $bam_sorted_file = "$bam_sorted_file_prefix.bam";
     log_error "Sorting BAM file into $bam_sorted_file", "notice", ">";
-    $output = `$samtools_path/samtools sort $bam_file $bam_sorted_file 2>&1`;
-    if ($? || $output =~ /fail to open file for reading/) {
+    $output = `$samtools_path/samtools sort $bam_file $bam_sorted_file_prefix 2>&1`;
+    if ($? || $output =~ /fail to open file for reading/ || !(-e $bam_sorted_file)) {
 	log_error "You have an error in your file \"$bam_file\"", "error";
 	for my $err_line (split(/\n/, $output)) { log_error $err_line, "error"; }
 	unlink("$bam_file") || die ("Cannot delete temp file $bam_file");
@@ -209,10 +208,10 @@ sub validate {
     }
     log_error "Done.", "notice", "<";
     
-    $bam_index_file = "$bam_sorted_file.bai";
+    my $bam_index_file = "$bam_sorted_file.bai";
     log_error "Indexing BAM file into $bam_index_file", "notice", ">";
     $output = `$samtools_path/samtools index $bam_sorted_file $bam_index_file 2>&1`;
-    if ($? || $output =~ /fail to open file for reading/) {
+    if ($? || $output =~ /fail to open file for reading/ || !(-e $bam_index_file)) {
 	log_error "You have an error in your SAM file \"$bam_sorted_file\"", "error";
 	for my $err_line (split(/\n/, $output)) { log_error $err_line, "error"; }
 	unlink("$bam_file") || die ("Cannot delete temp file $bam_file");
