@@ -78,7 +78,7 @@ sub validate {
               if ($exp_factor_name_prop->get_termsource() && $exp_factor_name_prop->get_termsource(1)->get_db(1)->get_name =~ /modencode_submission/) {
                 # Already made this prop
                 my @ranks = sort(map { $_->get_rank } grep { $_->get_name eq "Experimental Factor Name" } ($experiment->get_properties(1)));
-                my $new_prop = new ModENCODE::Chado::ExperimentProp({
+                my $new_name_prop = new ModENCODE::Chado::ExperimentProp({
                     'experiment' => $experiment,
                     'value' => $exp_factor_name,
                     'type' => $exp_factor_name_prop->get_type,
@@ -89,7 +89,18 @@ sub validate {
                       'db' => $attribute->get_termsource(1)->get_db(),
                     })
                   });
-                $experiment->add_property($new_prop);
+                my ($old_type_prop) = grep { $_->get_name eq "Experimental Factor Type" && $_->get_rank == $exp_factor_name_prop->get_rank } ($experiment->get_properties(1));
+                my $new_type_prop = new ModENCODE::Chado::ExperimentProp({
+                    'experiment' => $experiment,
+                    'value' => $old_type_prop->get_value,
+                    'type' => $old_type_prop->get_type,
+                    'name' => $old_type_prop->get_name,
+                    'rank' => $new_name_prop->get_object->get_rank,
+                    'termsource' => $old_type_prop->get_termsource
+                  });
+
+                $experiment->add_property($new_name_prop);
+                $experiment->add_property($new_type_prop);
                 my @ranks = sort(map { $_->get_rank } grep { $_->get_name eq "Experimental Factor Name" } ($experiment->get_properties(1)));
               } else {
                 $exp_factor_name_prop->set_termsource(
