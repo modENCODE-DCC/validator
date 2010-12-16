@@ -18,19 +18,19 @@ sub validate {
   if ($uniq_reads || $multiply_mapped_reads || $total_reads || $total_mapped_reads) {
     if ($uniq_reads) {
       $uniq_reads = $uniq_reads->get_value();
-      log_error "Found $uniq_reads uniquely mapped reads.", "notice";
+      log_error "Found $uniq_reads uniquely mapped reads (reported by submitter).", "notice";
     }
     if ($multiply_mapped_reads) {
       $multiply_mapped_reads = $multiply_mapped_reads->get_value();
-      log_error "Found $multiply_mapped_reads multiply mapped reads.", "notice";
+      log_error "Found $multiply_mapped_reads multiply mapped reads (reported by submitter).", "notice";
     }
     if ($total_mapped_reads) {
       $total_mapped_reads = $total_mapped_reads->get_value();
-      log_error "Found $total_mapped_reads total mapped reads.", "notice";
+      log_error "Found $total_mapped_reads total mapped reads (calculated by validator).", "notice";
     }
     if ($total_reads) {
       $total_reads = $total_reads->get_value();
-      log_error "Found $total_reads total reads.", "notice";
+      log_error "Found $total_reads total reads (reported by submitter).", "notice";
     }
     if (!$total_reads) {
       # First make sure we have as many of these as we can from somewhere (e.g. reffed experiments)
@@ -78,7 +78,19 @@ sub validate {
       }
     }
 
-    my $mapped_reads = $uniq_reads + $multiply_mapped_reads + $total_mapped_reads;
+    my $mapped_reads = 0;
+    if ($uniq_reads || $multiply_mapped_reads) {
+      $mapped_reads = $uniq_reads + $multiply_mapped_reads;
+      if ($mapped_reads != $total_mapped_reads) {
+        log_error "We have calculated $total_mapped_reads, but you reported a total of $mapped_reads in this submission.  Please verify that
+        your alignment files are complete.", "error";
+        return 0;
+      }
+    } else {
+      $mapped_reads = $total_mapped_reads;
+      log_error "Using calculated value $mapped_reads for mapped read count", "notice";
+    }
+
     my $read_ratio = ($mapped_reads / $total_reads) * 100;
     if ($read_ratio <= 30) {
       log_error "Only " . int($read_ratio) . "% of reads were mapped; your data set must map at least 30%!", "error";
