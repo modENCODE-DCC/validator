@@ -43,6 +43,14 @@ sub validate {
   my $self = shift;
   my $success = 1;
 
+  # Expand Antibodies
+  my $expansion_validator = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'experiment' => $self->get_experiment });
+  while (my $ap_datum = $self->next_datum) {
+    $expansion_validator->add_datum_pair($ap_datum);
+  }
+  $self->rewind();
+  $expansion_validator->validate();
+
   $self->cache_used_samples();
 
   log_error "Checking antibody QC status.", "notice", ">";
@@ -150,7 +158,7 @@ sub check_generic_antibody {
     foreach my $ib_validation (values(%{$qcinfo->{'immunoblot'}})) {
       unless ($ib_validation->{'band_size_ok'} eq "yes") { log_error "Band size not ok.", "warning"; next; }
       unless ($ib_validation->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
-      unless ($ib_validation->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
+#      unless ($ib_validation->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
       my @bad_cell_lines = $self->check_validation_target($ib_validation->{'validation_targets'});
       if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
       $okay_immunoblot = 1;
@@ -297,7 +305,7 @@ sub check_generic_antibody {
     foreach my $if_validation (values(%{$qcinfo->{'immunofluorescence'}})) {
       unless ($if_validation->{'staining_ok'} eq "yes") { log_error "Staining not ok.", "warning"; next; }
       unless ($if_validation->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
-      unless ($if_validation->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
+#      unless ($if_validation->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
       my @bad_cell_lines = $self->check_validation_target($if_validation->{'validation_targets'});
       if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
       $okay_immunofluorescence = 1;
