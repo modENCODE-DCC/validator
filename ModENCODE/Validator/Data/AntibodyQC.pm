@@ -444,6 +444,360 @@ sub check_generic_antibody {
   return $success;
 }
 
+sub check_histone_antibody {
+  my ($self, $datum, $qcinfo) = @_;
+
+  my $success = 0;
+
+  # Requirements:
+  # Requires primary: Western
+  # * Band size OK? Two images provided?
+  # * Knockdown
+  # ** RNAi
+  # ** siRNA
+  # ** Mutation
+  # *** Band size OK, two images, strain/reagent page
+  # * IP+Mass Spec
+  # * IP+Multiple Antibodies
+  # * IP+Epitope-tagged protein
+
+  my @check_urls;
+  log_error "Beginning histone antibody QC check for " . $datum->get_object->get_value . ".", "notice", ">";
+  # Western
+  if ($qcinfo->{'immunoblot'}) {
+    my $okay_immunoblot = 0;
+    # Find a valid Western
+    log_error "Looking for valid immunoblot/Western QC info.", "notice", ">";
+    foreach my $ib_validation (values(%{$qcinfo->{'immunoblot'}})) {
+      unless ($ib_validation->{'protein_sample_ok'} eq "yes") { log_error "Protein sample not ok.", "warning"; next; }
+      unless ($ib_validation->{'band_signal_ok'} eq "yes") { log_error "Band signal not ok.", "warning"; next; }
+      unless ($ib_validation->{'band_enrichment_ok'} eq "yes") { log_error "Band enrichment not ok.", "warning"; next; }
+      unless ($ib_validation->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
+      my @bad_cell_lines = $self->check_validation_target($ib_validation->{'validation_targets'});
+      if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+      $okay_immunoblot = 1;
+      push @check_urls, $ib_validation->{'band_image'};
+      last;
+    }
+    if ($okay_immunoblot) {
+      log_error "Found a successful immunoblot validation.", "notice";
+      # Peptide binding tests (Dot blots)
+      if ($qcinfo->{'peptide_dot_blots'}) {
+        log_error "Looking for valid Peptide Binding Sites (dot blots) secondary assay.", "notice", ">";
+        foreach my $peptide_dot_blots (values(%{$qcinfo->{'peptide_dot_blots'}})) {
+          unless ($peptide_dot_blots->{'modification_enrichment_ok'} eq "yes") { log_error "Modification enrichment not ok.", "warning"; next; }
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + Peptide Binding Sites)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + Peptide Binding Sites), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Peptide Binding Sites secondary assay found.", "warning", "<" unless $success;
+      }
+      # IP+Mass Spec
+      if ($qcinfo->{'ip_mass_spec'}) {
+        log_error "Looking for valid IP+Mass Spec secondary assay.", "notice", ">";
+        foreach my $ip_mass_spec (values(%{$qcinfo->{'ip_mass_spec'}})) {
+          unless ($ip_mass_spec->{'sequences'} =~ m|^http://wiki.modencode.org/|) { log_error "Sequences URL not a wiki URL.", "warning"; next; }
+          unless ($ip_mass_spec->{'modification_enrichment_ok'} eq "yes") { log_error "Modification enrichment not ok.", "warning"; next; }
+          push @check_urls, $ip_mass_spec->{'sequences'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + IP+Mass Spec)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + IP+Mass Spec), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid IP+Mass Spec secondary assay found.", "warning", "<" unless $success;
+      }
+      # Western knockdown by RNAi
+      if ($qcinfo->{'western_knockdown_rnai'}) {
+        log_error "Looking for valid Knockdown+RNAi secondary assay.", "notice", ">";
+        foreach my $ib_knockdown_rnai (values(%{$qcinfo->{'western_knockdown_rnai'}})) {
+          unless ($ib_knockdown_rnai->{'band_intensity_ok'} eq "yes") { log_error "Band intensity not ok.", "warning"; next; }
+          unless ($ib_knockdown_rnai->{'positive_control_ok'} eq "yes") { log_error "Positive control not ok.", "warning"; next; }
+          unless ($ib_knockdown_rnai->{'alt_antibody_control_ok'} eq "yes") { log_error "Alternative antibody control not ok.", "warning"; next; }
+          unless ($ib_knockdown_rnai->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
+          unless ($ib_knockdown_rnai->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
+          unless ($ib_knockdown_rnai->{'rnai_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "RNAi reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ib_knockdown_rnai->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $ib_knockdown_rnai->{'band_image'}, $ib_knockdown_rnai->{'band_image_replicate'}, $ib_knockdown_rnai->{'rnai_reagent_page'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + RNAi Knockdown)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + RNAi Knockdown), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Knockdown+RNAi secondary assay found.", "warning", "<" unless $success;
+      }
+      # Western knockdown by siRNA
+      if ($qcinfo->{'western_knockdown_sirna'}) {
+        log_error "Looking for valid Knockdown+siRNA secondary assay.", "notice", ">";
+        foreach my $ib_knockdown_sirna (values(%{$qcinfo->{'western_knockdown_sirna'}})) {
+          unless ($ib_knockdown_sirna->{'band_intensity_ok'} eq "yes") { log_error "Band intensity not ok.", "warning"; next; }
+          unless ($ib_knockdown_sirna->{'positive_control_ok'} eq "yes") { log_error "Positive control not ok.", "warning"; next; }
+          unless ($ib_knockdown_sirna->{'alt_antibody_control_ok'} eq "yes") { log_error "Alternative antibody control not ok.", "warning"; next; }
+          unless ($ib_knockdown_sirna->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
+          unless ($ib_knockdown_sirna->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
+          unless ($ib_knockdown_sirna->{'sirna_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "siRNA reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ib_knockdown_sirna->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $ib_knockdown_sirna->{'band_image'}, $ib_knockdown_sirna->{'band_image_replicate'}, $ib_knockdown_sirna->{'sirna_reagent_page'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + siRNA Knockdown)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + siRNA Knockdown), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Knockdown+siRNA secondary assay found.", "warning", "<" unless $success;
+      }
+      # Western knockdown by Mutant
+      if ($qcinfo->{'western_knockdown_mutant'}) {
+        log_error "Looking for valid Knockdown+mutant secondary assay.", "notice", ">";
+        foreach my $ib_knockdown_mutant (values(%{$qcinfo->{'western_knockdown_mutant'}})) {
+          unless ($ib_knockdown_mutant->{'band_intensity_ok'} eq "yes") { log_error "Band intensity not ok.", "warning"; next; }
+          unless ($ib_knockdown_mutant->{'positive_control_ok'} eq "yes") { log_error "Positive control not ok.", "warning"; next; }
+          unless ($ib_knockdown_mutant->{'alt_antibody_control_ok'} eq "yes") { log_error "Alternative antibody control not ok.", "warning"; next; }
+          unless ($ib_knockdown_mutant->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
+          unless ($ib_knockdown_mutant->{'band_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image replicate URL not a wiki URL.", "warning"; next; }
+          unless ($ib_knockdown_mutant->{'mutant_strain_page'} =~ m|^http://wiki.modencode.org/|) { log_error "Mutant strain URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ib_knockdown_mutant->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $ib_knockdown_mutant->{'band_image'}, $ib_knockdown_mutant->{'band_image_replicate'}, $ib_knockdown_mutant->{'mutant_strain_page'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + Mutant Knockdown)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + Mutant Knockdown), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Knockdown+mutant secondary assay found.", "warning", "<" unless $success;
+      }
+      ###
+      # Immunofluorescence knockdown by RNAi
+      if ($qcinfo->{'immunofluorescence_knockdown_rnai'}) {
+        log_error "Looking for valid Knockdown+RNAi secondary assay.", "notice", ">";
+        foreach my $if_knockdown_rnai (values(%{$qcinfo->{'immunofluorescence_knockdown_rnai'}})) {
+          unless ($if_knockdown_rnai->{'signal_intensity_ok'} eq "yes") { log_error "Signal intensity not ok.", "warning"; next; }
+          unless ($if_knockdown_rnai->{'positive_control_ok'} eq "yes") { log_error "Positive control not ok.", "warning"; next; }
+          unless ($if_knockdown_rnai->{'alt_antibody_control_ok'} eq "yes") { log_error "Alternative antibody control not ok.", "warning"; next; }
+          unless ($if_knockdown_rnai->{'staining_ok'} eq "yes") { log_error "Staining not ok.", "warning"; next; }
+          unless (length($if_knockdown_rnai->{'results'}) > 0) { log_error "No result summary provided.", "warning"; next; }
+          unless ($if_knockdown_rnai->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
+          unless ($if_knockdown_rnai->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
+          unless ($if_knockdown_rnai->{'rnai_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "RNAi reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($if_knockdown_rnai->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $if_knockdown_rnai->{'staining_image'}, $if_knockdown_rnai->{'staining_image_replicate'}, $if_knockdown_rnai->{'rnai_reagent_page'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Immunofluorescence + RNAi Knockdown)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Immunofluorescence + RNAi Knockdown), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Knockdown+RNAi secondary assay found.", "warning", "<" unless $success;
+      }
+      # Immunofluorescence knockdown by siRNA
+      if ($qcinfo->{'immunofluorescence_knockdown_sirna'}) {
+        log_error "Looking for valid Knockdown+siRNA secondary assay.", "notice", ">";
+        foreach my $if_knockdown_sirna (values(%{$qcinfo->{'immunofluorescence_knockdown_sirna'}})) {
+          unless ($if_knockdown_sirna->{'signal_intensity_ok'} eq "yes") { log_error "Signal intensity not ok.", "warning"; next; }
+          unless ($if_knockdown_sirna->{'positive_control_ok'} eq "yes") { log_error "Positive control not ok.", "warning"; next; }
+          unless ($if_knockdown_sirna->{'alt_antibody_control_ok'} eq "yes") { log_error "Alternative antibody control not ok.", "warning"; next; }
+          unless ($if_knockdown_sirna->{'staining_ok'} eq "yes") { log_error "Staining not ok.", "warning"; next; }
+          unless (length($if_knockdown_sirna->{'results'}) > 0) { log_error "No result summary provided.", "warning"; next; }
+          unless ($if_knockdown_sirna->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
+          unless ($if_knockdown_sirna->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
+          unless ($if_knockdown_sirna->{'sirna_reagent_page'} =~ m|^http://wiki.modencode.org/|) { log_error "siRNA reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($if_knockdown_sirna->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $if_knockdown_sirna->{'staining_image'}, $if_knockdown_sirna->{'staining_image_replicate'}, $if_knockdown_sirna->{'sirna_reagent_page'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Immunofluorescence + siRNA Knockdown)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Immunofluorescence + siRNA Knockdown), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Knockdown+siRNA secondary assay found.", "warning", "<" unless $success;
+      }
+      # Immunofluorescence knockdown by Mutant
+      if ($qcinfo->{'immunofluorescence_knockdown_mutant'}) {
+        log_error "Looking for valid Knockdown+Mutant secondary assay.", "notice", ">";
+        foreach my $if_knockdown_mutant (values(%{$qcinfo->{'immunofluorescence_knockdown_mutant'}})) {
+          unless ($if_knockdown_mutant->{'signal_intensity_ok'} eq "yes") { log_error "Signal intensity not ok.", "warning"; next; }
+          unless ($if_knockdown_mutant->{'positive_control_ok'} eq "yes") { log_error "Positive control not ok.", "warning"; next; }
+          unless ($if_knockdown_mutant->{'alt_antibody_control_ok'} eq "yes") { log_error "Alternative antibody control not ok.", "warning"; next; }
+          unless ($if_knockdown_mutant->{'staining_ok'} eq "yes") { log_error "Staining not ok.", "warning"; next; }
+          unless (length($if_knockdown_mutant->{'results'}) > 0) { log_error "No result summary provided.", "warning"; next; }
+          unless ($if_knockdown_mutant->{'staining_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image URL not a wiki URL.", "warning"; next; }
+          unless ($if_knockdown_mutant->{'staining_image_replicate'} =~ m|^http://wiki.modencode.org/|) { log_error "Staining image replicate URL not a wiki URL.", "warning"; next; }
+          unless ($if_knockdown_mutant->{'mutant_strain_page'} =~ m|^http://wiki.modencode.org/|) { log_error "Mutant reagent URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($if_knockdown_mutant->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $if_knockdown_mutant->{'staining_image'}, $if_knockdown_mutant->{'staining_image_replicate'}, $if_knockdown_mutant->{'mutant_strain_page'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Immunofluorescence + Mutant Knockdown)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Immunofluorescence + Mutant Knockdown), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Knockdown+Mutant secondary assay found.", "warning", "<" unless $success;
+      }
+      ###
+      # Mutant Histone Western Blot
+      if ($qcinfo->{'mutant_histone_western'}) {
+        log_error "Looking for valid Mutant Histone+Western secondary assay.", "notice", ">";
+        foreach my $ib_mutant_histone (values(%{$qcinfo->{'mutant_histone_western'}})) {
+          unless (length($ib_mutant_histone->{'histone_AA_mutation'}) > 0) { log_error "No histone mutation provided.", "warning"; next; }
+          unless ($ib_mutant_histone->{'band_intensity_ok'} eq "yes") { log_error "Band intensity not ok.", "warning"; next; }
+          unless ($ib_mutant_histone->{'band_image'} =~ m|^http://wiki.modencode.org/|) { log_error "Band image URL not a wiki URL.", "warning"; next; }
+          unless ($ib_mutant_histone->{'mutant_strain_page'} =~ m|^http://wiki.modencode.org/|) { log_error "Mutant strain URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ib_mutant_histone->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $ib_mutant_histone->{'band_image'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + Western/Mutant Histone)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + Western/Mutant Histone), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Mutant Histone+Western secondary assay found.", "warning", "<" unless $success;
+      }
+      # Mutant Histone ChIP
+      if ($qcinfo->{'mutant_histone_chip'}) {
+        log_error "Looking for valid Mutant Histone+ChIP secondary assay.", "notice", ">";
+        foreach my $chip_mutant_histone (values(%{$qcinfo->{'mutant_histone_chip'}})) {
+          unless (length($chip_mutant_histone->{'histone_AA_mutation'}) > 0) { log_error "No histone mutation provided.", "warning"; next; }
+          unless ($chip_mutant_histone->{'overlap_ok'} eq "yes") { log_error "Band overlap not ok.", "warning"; next; }
+          unless ($chip_mutant_histone->{'mutant_strain_page'} =~ m|^http://wiki.modencode.org/|) { log_error "Mutant strain URL not a wiki URL.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($chip_mutant_histone->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          push @check_urls, $chip_mutant_histone->{'band_image'};
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + ChIP/Mutant Histone)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + ChIP/Mutant Histone), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid Mutant Histone+ChIP secondary assay found.", "warning", "<" unless $success;
+      }
+      # IP + Multiple Antibodies
+      if ($qcinfo->{'ip_multiple_antibodies'}) {
+        log_error "Looking for valid IP+Multiple Antibodies secondary assay.", "notice", ">";
+        foreach my $ip_multiple_antibodies (values(%{$qcinfo->{'ip_multiple_antibodies'}})) {
+          unless ($ip_multiple_antibodies->{'overlap_ok'} eq "yes") { log_error "Band overlap not ok.", "warning"; next; }
+          unless ($ip_multiple_antibodies->{'qpcr_verified'} eq "yes") { log_error "IP+Mass Spec not qPCR-verified.", "warning"; next; }
+          my @bad_cell_lines = $self->check_validation_target($ip_multiple_antibodies->{'validation_targets'});
+          if (scalar(@bad_cell_lines)) { log_error "Couldn't find evidence that QC was done on " . join(", ", @bad_cell_lines), "warning"; next; }
+          my @missing_urls = $self->check_urls(@check_urls);
+          unless (@missing_urls) {
+            log_error "Antibody is valid (Western + IP+Multiple Antibodies)!", "notice", "<"; log_error "Done.", "notice", "<";
+            $success = 1;
+          } else {
+            log_error "Antibody QC is filled in (Western + IP+Multiple Antibodies), but provided URLs were not found: " . join(", ", @missing_urls) . ".", "error", "<"; log_error "Done.", "notice", "<";
+            $success = 0;
+          }
+        }
+        log_error "No valid IP+Multiple Antibodies secondary assay found.", "warning", "<" unless $success;
+      }
+      ###
+      log_error "No successful secondary validation found for primary immunoblot assay(s).", "warning", "<" unless $success;
+    } else {
+      log_error "No successful immunoblot validation found.", "warning", "<" unless $success;
+    }
+  }
+
+  # Override!
+  if ($qcinfo->{'exceptions'}) {
+    if ($qcinfo->{'exceptions'}->{'known_good'} eq "yes") {
+      unless (length($qcinfo->{'exceptions'}->{'prior_literature'}) > 0) {
+        log_error "Antibody marked known good, but no prior literature referenced.", "warning"
+      } else {
+        if (!$success) {
+          log_error "Marking an antibody as good (by prior literature) even though it failed/doesn't have other validation.", "warning";
+          $success = 1;
+        }
+      }
+    }
+  }
+
+  # Create attributes
+  if ($success) {
+    # Only necessary if this is going to have worked anyway
+    my $qc_antibody_type = new ModENCODE::Chado::CVTerm({
+        'name' => 'antibody_qc',
+        'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' }),
+      });
+    log_error "Creating attributes to attach to antibody", "notice";
+    foreach my $assay (keys(%$qcinfo)) {
+      my $rank = 0;
+      my @assay_instances = values(%{$qcinfo->{$assay}});
+      if (ref($assay_instances[0]) eq 'HASH') {
+        foreach my $assay_instance (values(%{$qcinfo->{$assay}})) {
+          foreach my $parameter (keys(%{$assay_instance})) {
+            my $value = $assay_instance->{$parameter};
+            my $attribute = new ModENCODE::Chado::DatumAttribute({
+                'heading' => $assay,
+                'name' => $parameter,
+                'value' => $value,
+                'rank' => $rank,
+                'type' => $qc_antibody_type,
+                'datum' => $datum,
+              });
+            $datum->get_object->add_attribute($attribute);
+          }
+        }
+      } else {
+        foreach my $parameter (keys(%{$qcinfo->{$assay}})) {
+          my $assay_instance = $qcinfo->{$assay}->{$parameter};
+          my $attribute = new ModENCODE::Chado::DatumAttribute({
+              'heading' => $assay,
+              'name' => $parameter,
+              'value' => $assay_instance,
+              'rank' => $rank,
+              'type' => $qc_antibody_type,
+              'datum' => $datum,
+            });
+          $datum->get_object->add_attribute($attribute);
+        }
+      }
+      $rank++;
+    }
+  }
+
+  log_error "Done with histone antibody QC check.", "notice", "<";
+  return $success;
+}
+
 sub check_urls {
   my ($self, @urls) = @_;
   my $url_validator = new ModENCODE::Validator::Wiki::URLValidator({
