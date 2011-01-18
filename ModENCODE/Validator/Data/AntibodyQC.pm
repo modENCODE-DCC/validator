@@ -835,9 +835,9 @@ sub check_validation_target {
   my ($self, $validation_targets) = @_;
   my (%cell_lines, %stages, %strains);
 
-  foreach my $cell_line (split(/,\s*/, $validation_targets->{'cell_line'})) { $cell_lines{$cell_line} = 1; }
-  foreach my $stage (split(/,\s*/, $validation_targets->{'developmental_stage'})) { $stages{$stage} = 1; }
-  foreach my $strain (split(/,\s*/, $validation_targets->{'strain'})) { $strains{$strain} = 1; }
+  foreach my $cell_line (split(/,\s*/, $validation_targets->{'cell_line'})) { $cell_line =~ s/^.*://; $cell_lines{$cell_line} = 1; }
+  foreach my $stage (split(/,\s*/, $validation_targets->{'developmental_stage'})) { $stage =~ s/^.*://; $stages{$stage} = 1; }
+  foreach my $strain (split(/,\s*/, $validation_targets->{'strain'})) { $strain =~ s/^.*://; $strains{$strain} = 1; }
 
   # Get appropriate sample info from this submission
 
