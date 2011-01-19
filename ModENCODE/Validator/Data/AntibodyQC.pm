@@ -817,6 +817,7 @@ sub check_urls {
 
   my @missing_urls;
   foreach my $url (@urls) {
+    next unless $url;
     if (!defined($seen_urls{ident $self}->{$url})) {
       my $res = $url_validator->get_url($url);
       $seen_urls{ident $self}->{$url} = $res->is_success;
