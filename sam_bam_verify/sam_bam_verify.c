@@ -37,6 +37,9 @@ int main(int argc, char *argv[]) {
     char *extension = strcasestr(argv[1], ".bam");
     if (extension && strcasecmp(extension, ".bam") == 0) { strcat(in_mode, "b"); aux = 0; } // BAM file?
 
+    if (aux != 0 && debug_level & 1) {
+      fprintf(stderr, "Using FASTA file %s\n", aux);
+    }
     if ((infp = samopen(argv[1], in_mode, aux)) == 0) {
       fprintf(stderr, "Failed to open input file %s\n", argv[1]);
       return 1;
@@ -94,7 +97,7 @@ int main(int argc, char *argv[]) {
   header->text = strdup(new_text);
   free(new_text);
 
-  header->l_text = strlen(header->text);
+  header->l_text = strlen(header->text) + 1;
 
   // Output the header so it can be checked against modENCODE stuff
   if (debug_level & 1)
@@ -105,6 +108,10 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Failed to open output file %s\n", argv[2]);
     return 1;
   }
+
+  bam_init_header_hash(header);
+  infp->header = bam_header_dup(header);
+  bam_init_header_hash(infp->header);
 
   long long total_reads = 0;
 
@@ -121,7 +128,7 @@ int main(int argc, char *argv[]) {
   samclose(outfp);
   samclose(infp);
 
-  // TODO: Sort by ID for faster/lower memory read counts?
+  // Sort by ID for faster/lower memory read counts?
   char * outfile_prefix;
   char * outfile;
   if (asprintf(&outfile_prefix, "%s.sorted_by_id", argv[2]) < 0) {
@@ -129,7 +136,8 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 #ifdef __x86_64__
-  size_t mem_max = 2684354560;
+  //size_t mem_max = 2684354560;
+  size_t mem_max = 1879048192;
 #else
   size_t mem_max = 1879048192;
 #endif
