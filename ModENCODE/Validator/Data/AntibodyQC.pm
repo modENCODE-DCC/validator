@@ -413,6 +413,7 @@ sub check_generic_antibody {
       });
     log_error "Creating attributes to attach to antibody", "notice";
     foreach my $assay (keys(%$qcinfo)) {
+      next if $assay eq "antibody_type";
       my $rank = 0;
       my @assay_instances = values(%{$qcinfo->{$assay}});
       if (ref($assay_instances[0]) eq 'HASH') {
@@ -767,6 +768,7 @@ sub check_histone_antibody {
       });
     log_error "Creating attributes to attach to antibody", "notice";
     foreach my $assay (keys(%$qcinfo)) {
+      next if $assay eq "antibody_type";
       my $rank = 0;
       my @assay_instances = values(%{$qcinfo->{$assay}});
       if (ref($assay_instances[0]) eq 'HASH') {
