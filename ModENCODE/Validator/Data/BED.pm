@@ -137,17 +137,19 @@ sub validate {
       $linenum++;
       next if $line =~ m/^\s*#/; # Skip comments
       next if $line =~ m/^\s*$/; # Skip blank lines
-      my ($chr, $start, $end) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)\s*$/);
+      my ($chr, $start, $end, $score) = ($line =~ m/^\s*(\S+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?\s*$/);
       if (!(length($chr) && length($start) && length($end))) {
         log_error "BED file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum:\n      $line";
         $success = 0;
-        next;
+        last;
       } elsif ($start == 0) {
         log_error "BED file " . $datum_obj->get_value() . " does not seem valid beginning at line $linenum:\n\>      $line.  You have a start coordinate of zero, which may indicate your data are zero-based.  BED files must be 1-based.\nOnly the first instance is reported.";
         $success = 0;
-        next;
+        last;
       } else {
-        $wiggle_data .= "$chr $start $end\n";
+        $score = 1 if length($score) == 0;
+        $wiggle_data .= "$chr $start $end $score";
+        $wiggle_data .= "\n";
       }
     }
 
