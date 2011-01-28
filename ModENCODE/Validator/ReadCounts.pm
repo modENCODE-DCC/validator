@@ -81,10 +81,11 @@ sub validate {
     my $mapped_reads = 0;
     if ($uniq_reads || $multiply_mapped_reads) {
       $mapped_reads = $uniq_reads + $multiply_mapped_reads;
-      if ($mapped_reads != $total_mapped_reads) {
-        log_error "We have calculated $total_mapped_reads, but you reported a total of $mapped_reads in this submission.  Please verify that
-        your alignment files are complete.", "error";
+      if (defined($total_mapped_reads) && $mapped_reads != $total_mapped_reads) {
+        log_error "We have calculated $total_mapped_reads total reads, but you reported a total of $mapped_reads in this submission.  Please verify that your alignment files are complete.", "error";
         return 0;
+      } else {
+        log_error "Assuming provided read counts are accurate.", "notice";
       }
     } else {
       $mapped_reads = $total_mapped_reads;
@@ -94,6 +95,8 @@ sub validate {
     my $read_ratio = ($mapped_reads / $total_reads) * 100;
     if ($read_ratio <= 30) {
       log_error "Only " . int($read_ratio) . "% of reads were mapped; your data set must map at least 30%!", "error";
+      # TODO: Remove at some point
+      return 1;
       return 0;
     } elsif ($read_ratio > 100) {
 	log_error "More than 100% of your reads were mapped (" . int($read_ratio) . "%).  Please verify your total read counts provided in the SDRF.", "error";
