@@ -262,7 +262,7 @@ sub validate {
       'name' => $title,
       'value' => $read_count_for_expmt,
       'experiment' => $experiment,
-      'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'mapped_read_count', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'ME' }) }),							   });
+      'type' => new ModENCODE::Chado::CVTerm({ 'name' => 'mapped_read_count', 'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' }) }),							   });
   $experiment->add_property($exp_read_count);
 
   log_error "Found $read_count_for_expmt total mapped reads for this experiment", "notice";
