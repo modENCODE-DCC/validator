@@ -134,6 +134,7 @@ sub validate {
       if (
         $datum_obj->get_type(1)->get_name() eq "FASTQ"
         || $datum_obj->get_type(1)->get_name() eq "SFF"
+        || $datum_obj->get_type(1)->get_name() eq "SRA"
       ) {
         my $req = HTTP::Request->new('HEAD', $url);
         my $res = $ua->request($req);

@@ -173,6 +173,7 @@ sub START {
   $type_validators{$ident}->{'mged:antibody'} = new ModENCODE::Validator::Data::AntibodyQC({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:FASTQ'} = new ModENCODE::Validator::Data::UIC_File({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:SFF'} = new ModENCODE::Validator::Data::UIC_File({ 'experiment' => $self->get_experiment });
+  $type_validators{$ident}->{'modencode:SRA'} = new ModENCODE::Validator::Data::UIC_File({ 'experiment' => $self->get_experiment });
   $termsource_validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'experiment' => $self->get_experiment });
   $sum_validators{$ident}->{'modencode:read_count'} = new ModENCODE::Validator::Data::ReadCount::ReadCount({ 'experiment' => $self->get_experiment });
   $sum_validators{$ident}->{'modencode:uniquely_mapped_read_count'} = new ModENCODE::Validator::Data::ReadCount::UniquelyMappedReadCount({ 'experiment' => $self->get_experiment });
