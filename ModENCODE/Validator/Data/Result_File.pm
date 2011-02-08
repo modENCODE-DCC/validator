@@ -132,9 +132,11 @@ sub validate {
       # For FASTQ, just check if it exists, but don't fetch
       # Happily enough, LWP::UserAgent supports faking a HEAD request for FTP URLs.
       if (
-        $datum_obj->get_type(1)->get_name() eq "FASTQ"
-        || $datum_obj->get_type(1)->get_name() eq "SFF"
-        || $datum_obj->get_type(1)->get_name() eq "SRA"
+        (
+          $datum_obj->get_type(1)->get_name() eq "FASTQ"
+          || $datum_obj->get_type(1)->get_name() eq "SFF"
+          || $datum_obj->get_type(1)->get_name() eq "SRA"
+        ) && ModENCODE::Config::get_cfg()->SectionExists('remote_file_storage')
       ) {
         my $req = HTTP::Request->new('HEAD', $url);
         my $res = $ua->request($req);

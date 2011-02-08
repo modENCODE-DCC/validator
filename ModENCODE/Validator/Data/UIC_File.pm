@@ -21,14 +21,18 @@ my %cached_fastq_files  :ATTR( :default<{}> );
 my %seen_data           :ATTR( :default<{}> );
 my %transfer_host       :ATTR( :name<transfer_host>,     :default<"74.114.99.77"> );
 my %remote_url_prefix   :ATTR( :name<remote_url_prefix>, :default<"rsync://uberkeley\@74.114.99.63::berkeley/pipeline/"> );
-my %transfer_cmd        :ATTR( :name<transfer_cmd>,      :default<"devel/fetcher.pl"> );
 my %local_web_prefix    :ATTR( :name<local_web_prefix>,  :default<"http://submit.modencode.org/submit/public/get_file/"> );
-my %ssh_args            :ATTR( :name<ssh_args>,          :default<["-o", "User=uberkeley", "-o", "PasswordAuthentication=no"]> );
+my %transfer_cmd        :ATTR( :name<transfer_cmd>,      :default<"devel/fetcher.pl"> );
+my %remote_user         :ATTR( :name<remote_user>,       :default<"uberkeley"> );
+my %identity_file       :ATTR( :name<identity_file>,     :default<"id_rsa.uic"> );
 my %seen_url_filenames  :ATTR( :default<{}> );
 
 sub START {
   my ($self, $ident, $args) = @_;
-  push(@{$ssh_args{ident $self}}, "-o", "IdentityFile=$root_dir/id_rsa.uic");
+  if ($identity_file{$ident} !~ /^\//) {
+    # Relative to root_dir
+    $identity_file{$ident} = $root_dir . "/" . $identity_file{$ident};
+  }
 }
 
 sub validate {
@@ -54,62 +58,72 @@ sub validate {
     }
 
     my ($this_success, $done, $failed, $destination, $destination_size, $log);
-    ($this_success, $success, $done, $failed, $destination, $destination_size, $log) = $self->transfer_file($datum_obj);
-    last unless $success; # Some serious failure means we should stop processing
-    if (!$this_success) {
-      # Local fetch
-      my $url = $datum_obj->get_value();
-      $destination = File::Basename::basename($url);
-      my $uniqid = ($seen_url_filenames{ident $self}->{$destination} ||= 0);
-      if ($uniqid) { $destination = $uniqid . "_" . $destination; }
-      log_error "Fetching remote file from $url to $destination...", "notice", ">";
-      if (-r $destination) {
-        log_error "$destination found locally...overwriting...", "notice";
-      }
-      my $ua = LWP::UserAgent->new();
-      my $res = $ua->mirror($url, $destination);
-      if ($res->is_success) {
-        log_error "Done.", "notice", "<";
-      } elsif ($res->is_error) {
-        my $error_msg = $res->status_line;
-        log_error ("Error retrieving Result File [" . $datum_obj->get_name() . "] from " . $datum_obj->get_value(), "error");
-        log_error ("HTTP Response for $destination was:  " . $error_msg , "error", "<");
-        $success = 0;
-        last;
-      }
-      # Now pass it along to the transfer host from here...
-      my $local_url = $self->get_local_url($destination);
-      my @attributes = $datum_obj->get_attributes;
-      push @attributes, new ModENCODE::Chado::DatumAttribute({
-        'value' => $url,
-        'type' => new ModENCODE::Chado::CVTerm({'name' => 'anyURI', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
-        'name' => 'URL',
-        'heading' => 'File Download URL',
-        'datum' => $datum,
-      });
-      my $new_datum = new ModENCODE::Chado::Data({
-          'heading' => $datum_obj->get_heading,
-          'name' => $datum_obj->get_name,
-          'value' => $local_url,
-          'termsource' => $datum_obj->get_termsource,
-          'type' => $datum_obj->get_type,
-          'attributes' => \@attributes,
-          'features' => $datum_obj->get_features || undef,
-          'wiggle_datas' => $datum_obj->get_wiggle_datas || undef,
-          'organisms' => $datum_obj->get_organisms || undef,
-        });
-      ModENCODE::Cache::update_datum($datum->get_object, $new_datum->get_object);
-      $datum_obj = $new_datum->get_object;
-
-      log_error "Transferring file from local machine ($local_url) to transfer host.", "notice", ">";
+    if ($datum_obj->get_value() =~ m|://|) {
       ($this_success, $success, $done, $failed, $destination, $destination_size, $log) = $self->transfer_file($datum_obj);
-      last unless $success;
+      last unless $success; # Some serious failure means we should stop processing
       if (!$this_success) {
-        log_error "Couldn't transfer from local copy to transfer host: $failed.", "error", "<";
+        # Local fetch
+        my $url = $datum_obj->get_value();
+        $destination = File::Basename::basename($url);
+        my $uniqid = ($seen_url_filenames{ident $self}->{$destination} ||= 0);
+        if ($uniqid) { $destination = $uniqid . "_" . $destination; }
+        log_error "Fetching remote file from $url to $destination...", "notice", ">";
+        if (-r $destination) {
+          log_error "$destination found locally...overwriting...", "notice";
+        }
+        my $ua = LWP::UserAgent->new();
+        my $res = $ua->mirror($url, $destination);
+        if ($res->is_success) {
+          log_error "Done.", "notice", "<";
+        } elsif ($res->is_error) {
+          my $error_msg = $res->status_line;
+          log_error ("Error retrieving Result File [" . $datum_obj->get_name() . "] from " . $datum_obj->get_value(), "error");
+          log_error ("HTTP Response for $destination was:  " . $error_msg , "error", "<");
+          $success = 0;
+          last;
+        }
+        # Now pass it along to the transfer host from here...
+        my $local_url = $self->get_local_url($destination);
+        my @attributes = $datum_obj->get_attributes;
+        push @attributes, new ModENCODE::Chado::DatumAttribute({
+            'value' => $url,
+            'type' => new ModENCODE::Chado::CVTerm({'name' => 'anyURI', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
+            'name' => 'URL',
+            'heading' => 'File Download URL',
+            'datum' => $datum,
+          });
+        my $new_datum = new ModENCODE::Chado::Data({
+            'heading' => $datum_obj->get_heading,
+            'name' => $datum_obj->get_name,
+            'value' => $local_url,
+            'termsource' => $datum_obj->get_termsource,
+            'type' => $datum_obj->get_type,
+            'attributes' => \@attributes,
+            'features' => $datum_obj->get_features || undef,
+            'wiggle_datas' => $datum_obj->get_wiggle_datas || undef,
+            'organisms' => $datum_obj->get_organisms || undef,
+          });
+        ModENCODE::Cache::update_datum($datum->get_object, $new_datum->get_object);
+        $datum_obj = $new_datum->get_object;
+
+        log_error "Transferring file from local machine ($local_url) to transfer host.", "notice", ">";
+        ($this_success, $success, $done, $failed, $destination, $destination_size, $log) = $self->transfer_file($datum_obj);
+        last unless $success;
+        if (!$this_success) {
+          log_error "Couldn't transfer from local copy to transfer host: $failed.", "error", "<";
+          $success = 0;
+          last;
+        }
+        log_error "Done.", "notice", "<";
+      }
+    } else {
+      # It's already a local file
+      if (!-r $datum_obj->get_value) {
+        log_error "Couldn't find file " . $datum_obj->get_value . "!", "error", "<";
         $success = 0;
         last;
       }
-      log_error "Done.", "notice", "<";
+      next;
     }
     $seen_url_filenames{ident $self}->{$destination}++;
 
@@ -175,7 +189,7 @@ sub transfer_file {
   my $failed;
   my $response = "";
   {
-    my @args = @{$ssh_args{ident $self}};
+    my @args =("-o", "User=" . $remote_user{ident $self}, "-o", "PasswordAuthentication=no", "-o", "IdentityFile=" . $identity_file{ident $self});
     my $pid = open3(my $sin, my $sout, my $serr, $ssh, @args, $self->get_transfer_host, $cmd);
     print $sin $url . "\n";
     print $sin $command_id . "\n";
@@ -209,7 +223,7 @@ sub transfer_file {
     # Wait for transfer to complete
     $cmd = $self->get_transfer_cmd . " check";
     while (1) {
-      my @args = @{$ssh_args{ident $self}};
+      my @args =("-o", "User=" . $remote_user{ident $self}, "-o", "PasswordAuthentication=no", "-o", "IdentityFile=" . $identity_file{ident $self});
       open3(my $sin, my $sout, my $serr, $ssh, @args, $self->get_transfer_host, $cmd);
       print $sin $url . "\n";
       print $sin $command_id . "\n";

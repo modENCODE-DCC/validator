@@ -171,9 +171,25 @@ sub START {
 #  $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID (SRA)'} = new ModENCODE::Validator::Data::SRA_acc_new({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'modencode:ShortReadArchive_project_ID_list (SRA)'} = new ModENCODE::Validator::Data::SRA_list_lite({ 'experiment' => $self->get_experiment });
   $type_validators{$ident}->{'mged:antibody'} = new ModENCODE::Validator::Data::AntibodyQC({ 'experiment' => $self->get_experiment });
-  $type_validators{$ident}->{'modencode:FASTQ'} = new ModENCODE::Validator::Data::UIC_File({ 'experiment' => $self->get_experiment });
-  $type_validators{$ident}->{'modencode:SFF'} = new ModENCODE::Validator::Data::UIC_File({ 'experiment' => $self->get_experiment });
-  $type_validators{$ident}->{'modencode:SRA'} = new ModENCODE::Validator::Data::UIC_File({ 'experiment' => $self->get_experiment });
+
+  my $uic_config = ModENCODE::Config::get_cfg()->SectionExists('remote_file_storage');
+  if ($uic_config) {
+    $uic_config = ModENCODE::Config::get_cfg();
+    my $args = {
+      "transfer_host" => $uic_config->val("remote_file_storage", "host"),
+      "remote_url_prefix" => $uic_config->val("remote_file_storage", "remote_url_prefix"),
+      "local_web_prefix" => $uic_config->val("remote_file_storage", "local_web_prefix"),
+      "transfer_cmd" => $uic_config->val("remote_file_storage", "remote_transfer_daemon"),
+      "remote_user" => $uic_config->val("remote_file_storage", "remote_user"),
+      "identity_file" => $uic_config->val("remote_file_storage", "identity_file"),
+      "experiment" => $self->get_experiment
+    };
+
+    $type_validators{$ident}->{'modencode:FASTQ'} = new ModENCODE::Validator::Data::UIC_File($args);
+    $type_validators{$ident}->{'modencode:SFF'} = new ModENCODE::Validator::Data::UIC_File($args);
+    $type_validators{$ident}->{'modencode:SRA'} = new ModENCODE::Validator::Data::UIC_File($args);
+  }
+
   $termsource_validators{$ident}->{'URL_mediawiki_expansion'} = new ModENCODE::Validator::Data::URL_mediawiki_expansion({ 'experiment' => $self->get_experiment });
   $sum_validators{$ident}->{'modencode:read_count'} = new ModENCODE::Validator::Data::ReadCount::ReadCount({ 'experiment' => $self->get_experiment });
   $sum_validators{$ident}->{'modencode:uniquely_mapped_read_count'} = new ModENCODE::Validator::Data::ReadCount::UniquelyMappedReadCount({ 'experiment' => $self->get_experiment });

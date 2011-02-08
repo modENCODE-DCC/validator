@@ -685,7 +685,7 @@ sub validate {
       ) {
         my ($missing_type) = grep { $_->{'name'} eq '' } @wiki_output_definitions;
         log_error "Assuming that " . $missing_type->{'cv'} . ":" . $missing_type->{'term'} . " applies to an implied extra output column that is shown named in the SDRF.", "warning";
-        use Data::Dumper; print Dumper(map { $_->_DUMP(); } $applied_protocol->get_output_data(1)); exit;
+#        use Data::Dumper; print Dumper(map { $_->_DUMP(); } $applied_protocol->get_output_data(1)); exit;
         next;
       }
       # Update the output's type to match the type defined on the wiki
