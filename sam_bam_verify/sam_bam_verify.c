@@ -34,6 +34,9 @@ int main(int argc, char *argv[]) {
         break;
       }
     }
+    /*
+     * Figure out if we're opening a BAM or a SAM, and attach a reference FASTA if provided
+     */
     char *extension = strcasestr(argv[1], ".bam");
     if (extension && strcasecmp(extension, ".bam") == 0) { strcat(in_mode, "b"); aux = 0; } // BAM file?
 
@@ -52,6 +55,9 @@ int main(int argc, char *argv[]) {
   bam1_core_t *core;
   core = &alignment->core;
 
+  /*
+   * Update header and remove "chr" prefixes
+   */
   int i;
   for (i = 0; i < header->n_targets; i++) {
     char *target = header->target_name[i];
@@ -98,8 +104,9 @@ int main(int argc, char *argv[]) {
   free(new_text);
 
   header->l_text = strlen(header->text) + 1;
+  bam_init_header_hash(header);
 
-  // Output the header so it can be checked against modENCODE stuff
+  // Output the header if verbose mode
   if (debug_level & 1)
     fprintf(stderr, "New header:\n%s", header->text);
 
@@ -109,9 +116,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  bam_init_header_hash(header);
-  infp->header = bam_header_dup(header);
-  bam_init_header_hash(infp->header);
 
   long long total_reads = 0;
 
@@ -121,6 +125,17 @@ int main(int argc, char *argv[]) {
     // Generate BAM with chromosome prefixes stripped off
     ++total_reads;
     if (!((core)->flag & BAM_FUNMAP)) ++mapped_read_count;
+
+    // If we updated the header, we also have to update the content to remove "chr" prefixes
+    //&alignment->core->tid < 0 && ;
+    bam1_core_t *c = &alignment->core;
+    if (c->tid < 0) {
+      // This is an unmapped sequence, which should probably be error-worthy.
+      fprintf(stderr, "Unknown reference sequence found for a read. Check that your headers and reads match!\n");
+      fprintf(stderr, "  Provided reference sequences were:\n");
+      fprintf(stderr, "%s\n", infp->header->text);
+      exit(1);
+    }
     bam_write1(outfp->x.bam, alignment);
   }
 
@@ -208,6 +223,6 @@ int main(int argc, char *argv[]) {
 
 void show_usage() {
   fprintf(stderr, "Usage:\n");
-  fprintf(stderr, "  ./sam_bam_verify <input.sam|input.bam> <output.bam> [-v]\n");
+  fprintf(stderr, "  ./sam_bam_verify <input.sam|input.bam> <output.bam> [reference.fa] [-v]\n");
   fprintf(stderr, "    -v   Verbose output (to stderr).\n");
 }
