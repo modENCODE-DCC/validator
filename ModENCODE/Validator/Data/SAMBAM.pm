@@ -52,7 +52,7 @@ sub validate {
     my $datum_obj = $datum->get_object;
 
     if (!length($datum_obj->get_value())) {
-      log_error "No SAM/BAM file for " . $datum->get_heading(), 'warning';
+      log_error "No SAM/BAM file for " . $datum_obj->get_heading(), 'warning';
       next;
     } elsif (!-r $datum_obj->get_value()) {
       log_error "Cannot find SAM/BAM file " . $datum_obj->get_value() . " for column " . $datum_obj->get_heading() . " [" . $datum_obj->get_name . "].", "error";
