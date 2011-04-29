@@ -94,6 +94,9 @@ sub validate {
       log_error "Using calculated value $mapped_reads for mapped read count", "notice";
     }
 
+    if ($total_reads <= 0) {
+      log_error "Couldn't find total reads, assuming 100% and continuing.", "error";
+    }
     my $read_ratio = $total_reads > 0 ? ($mapped_reads / $total_reads) * 100 : 100;
     if ($read_ratio <= 30) {
       log_error "Only " . int($read_ratio) . "% of reads were mapped; your data set must map at least 30%!", "error";
