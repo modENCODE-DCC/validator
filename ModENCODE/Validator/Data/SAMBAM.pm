@@ -100,12 +100,14 @@ sub validate {
 	$success = 0;
 	last;
     } else {
-	$success = &verify_header(\@file_header);
+        my @filtered_header;
+	($success, @filtered_header) = verify_header(@file_header);
 	if (!$success) { #the header doesn't match our genome-build definitions.  fail.	    
 	    last;
 	} else {
-	    ($fa_organism) = (@file_header[0] =~ m/((Drosophila|Caenorhabditis) \w*)/);  
-	    log_error "Header verified.  Organism set to $fa_organism.", "notice";
+          my ($fh) = grep { $_ =~ /Drosophila|Caenorhabditis/ } @filtered_header;
+          ($fa_organism) = ($fh =~ m/((Drosophila|Caenorhabditis) \w*)/);  
+          log_error "Header verified.  Organism set to $fa_organism.", "notice";
 	}
 
     }
@@ -270,15 +272,15 @@ sub validate {
   return $success;
 }
 
-sub verify_header () {
-    my @header = split(/\n/, $_);
+sub verify_header {
+    my @header = @_;
 
     # Get genome builds
 
     my $config = ModENCODE::Config::get_genome_builds();
     my @build_config_strings = keys(%$config);
     my $build_config = {};
-    my %organisms = {};
+    my %organisms;
     foreach my $build_config_string (@build_config_strings) {
       my (undef, $source, $build) = split(/ +/, $build_config_string);
       $build_config->{$source} = {} unless $build_config->{$source};
@@ -292,15 +294,14 @@ sub verify_header () {
         $build_config->{$source}->{$build}->{$chr}->{'end'} = $config->{$build_config_string}->{$chr . '_end'};
         $build_config->{$source}->{$build}->{$chr}->{'organism'} = $config->{$build_config_string}->{'organism'};
       }
-      $organisms{$config->{$build_config_string}->{'organism'}};
+      $organisms{$config->{$build_config_string}->{'organism'}} = 1;
       #push (@organisms, $config->{$build_config_string}->{'organism'});
     }
     my $success = 1;
     my $header_linenum = 0;
-    my @modencode_header = ();
+    my @modencode_header;
     # Need to verify the SAM header against known genome info
-    while (@header) {
-	my $line = $_;
+    foreach my $line (@header) {
 	if ($line =~ m/^\s*@/) { #header
 	    $header_linenum++;
 	    $line =~ s/^\s*//;
@@ -324,12 +325,9 @@ sub verify_header () {
 		    log_error "Stripping off \"chr\" from chromosome name $chrom in header.", "notice";
 		    $header =~ s/SN:chr/SN:/;
 		    $chrom =~ s/chr//;
-		}	  
-		if (!exists($organisms{$organism})) {
-		    log_error "You have specified an invalid species of \"$organism\" at line $header_linenum in the header", "error";
-		    $success = 0;
 		}
 		($source,$build) = ($build =~ m/(\S+) (\S+)/);
+                next if $source =~ /SPIKE/;
 		
 		if (!exists $build_config->{$source}) {
 		    log_error "You have specified an invalid source of \"$source\" at line $header_linenum in the header","error" ;
@@ -346,7 +344,25 @@ sub verify_header () {
 		    $success = 0;
 		}
 		if ($build_config->{$source}->{$build}->{$chrom}->{'end'} != $chrom_end) {
-		    log_error "You have specified a bad length for \"$source $build $chrom\" at line $header_linenum in the header.  Please verify the build or the length. ", "error";
+		    log_error "You have specified a bad length for \"$source $build $chrom\" at line $header_linenum in the header (Expected " . $build_config->{$source}->{$build}->{$chrom}->{'end'} . ", got $chrom_end.  Please verify the build or the length. ", "error";
+		    $success = 0;
+		}
+
+                if ($organism eq "" && $build ne "") {
+                  log_error "No SP:organism specified in your SAM header. Attempting to detect it from the build.", "warning";
+                  ($organism) = map { $_->{'organism'} } values(%{$build_config->{$source}->{$build}});
+                  if ($organism) {
+                    log_error "Set organism to $organism based on build.", "warning";
+                    $header .= "\tSP:$organism";
+                  }
+                }
+                if ($organism eq "") {
+                  log_error "No SP:organism specified in your SAM header. And couldn't detect it from the build.", "error";
+                  $success = 0;
+                  last;
+                }
+		if (!exists($organisms{$organism})) {
+		    log_error "You have specified an invalid species of \"$organism\" at line $header_linenum in the header", "error";
 		    $success = 0;
 		}
 		
@@ -362,7 +378,7 @@ sub verify_header () {
 	    }
 	}
     }
-    return $success;
+    return $success, @modencode_header;
 }
 
 1;

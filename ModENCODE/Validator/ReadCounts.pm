@@ -73,6 +73,8 @@ sub validate {
           if ($total_reads) {
             $total_reads = $total_reads->get_object->get_value();
             log_error "Found (missing from this submission) $total_reads total reads in submission $referenced_submission_id.", "notice";
+          } else {
+            log_error "No total read count whatsoever found for this submission. Continuing anyway.", "error";
           }
         }
       }
@@ -92,7 +94,7 @@ sub validate {
       log_error "Using calculated value $mapped_reads for mapped read count", "notice";
     }
 
-    my $read_ratio = ($mapped_reads / $total_reads) * 100;
+    my $read_ratio = $total_reads > 0 ? ($mapped_reads / $total_reads) * 100 : 100;
     if ($read_ratio <= 30) {
       log_error "Only " . int($read_ratio) . "% of reads were mapped; your data set must map at least 30%!", "error";
       # TODO: Remove at some point
