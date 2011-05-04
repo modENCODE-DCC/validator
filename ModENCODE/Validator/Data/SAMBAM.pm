@@ -328,6 +328,7 @@ sub verify_header {
 		}
 		($source,$build) = ($build =~ m/(\S+) (\S+)/);
                 next if $source =~ /SPIKE/;
+                next if $source =~ /PLASMID/;
 		
 		if (!exists $build_config->{$source}) {
 		    log_error "You have specified an invalid source of \"$source\" at line $header_linenum in the header","error" ;
