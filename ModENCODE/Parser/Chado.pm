@@ -1018,6 +1018,9 @@ sub get_feature_by_genbank_id {
       OR o.species = 'simulans'
       OR o.species = 'sechellia'
       OR o.species = 'persimilis'
+      OR o.species = 'ananassae'
+      OR o.species = 'virilis'
+      OR o.species = 'yakuba'
       )
     AND cv.name IN('SO', 'sequence') AND cvt.name != 'gene'
     AND dbx.accession = ?

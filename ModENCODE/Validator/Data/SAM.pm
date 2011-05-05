@@ -242,11 +242,17 @@ sub validate {
     #will need to change these if we allow different versions of builds
     $fa_file = $fasta_path . "elegans.WS190.dna.fa.fai" if ($fa_organism eq "Caenorhabditis elegans");
     $fa_file =  $fasta_path . "dmel.r5.9.dna.fa.fai" if ($fa_organism eq "Drosophila melanogaster");
-    $fa_file =  $fasta_path . "dpse.r2.6.dna.fa.fai" if ($fa_organism eq "Drosophila pseudoobscura pseudoobscura");
-    $fa_file =  $fasta_path . "dsim.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila simulans");
+    #$fa_file =  $fasta_path . "dpse.r2.6.dna.fa.fai" if ($fa_organism eq "Drosophila pseudoobscura pseudoobscura");
+    $fa_file =  $fasta_path . "dpse.ucsc4.dna.fa.fai" if ($fa_organism eq "Drosophila pseudoobscura pseudoobscura");
+    #$fa_file =  $fasta_path . "dsim.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila simulans");
+    $fa_file =  $fasta_path . "dsim.ucsc1.dna.fa.fai" if ($fa_organism eq "Drosophila simulans");
     $fa_file =  $fasta_path . "dsec.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila sechellia");
     $fa_file =  $fasta_path . "dper.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila persimilis");
-    $fa_file =  $fasta_path . "dmoj.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila mojavensis");
+    #$fa_file =  $fasta_path . "dmoj.r1.3.dna.fa.fai" if ($fa_organism eq "Drosophila mojavensis");
+    $fa_file =  $fasta_path . "dmoj.ucsc3.dna.fa.fai" if ($fa_organism eq "Drosophila mojavensis");
+    $fa_file =  $fasta_path . "dana.ucsc3.dna.fa.fai" if ($fa_organism eq "Drosophila ananassae");
+    $fa_file =  $fasta_path . "dvir.ucsc3.dna.fa.fai" if ($fa_organism eq "Drosophila virilis");
+    $fa_file =  $fasta_path . "dyak.ucsc2.dna.fa.fai" if ($fa_organism eq "Drosophila yakuba");
     
     log_error "Testing SAM->BAM conversion", "notice";
     unless ($fa_file) {
