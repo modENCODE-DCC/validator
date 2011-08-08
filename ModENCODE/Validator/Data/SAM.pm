@@ -154,6 +154,7 @@ sub validate {
 		$header =~ s/SN:chr/SN:/;
 		$chrom =~ s/chr//;
 	    }	  
+      # May need to add new worm species here if this module is actually used which I don't think it is
       if (($organism !~ /Drosophila (melanogaster|pseudoobscura pseudoobscura|simulans|sechellia|persimilis|mojavensis|ananassae|virilis|yakuba)/) && ($organism ne "Caenorhabditis elegans")) {
 		log_error "You have specified an invalid species of \"$organism\" at line $linenum", "error";
 		$success = 0;
@@ -240,6 +241,7 @@ sub validate {
 
     my $fa_file = "";
     #will need to change these if we allow different versions of builds
+    # May need to add new worm species here if this module is actually used which i dont think it is 
     $fa_file = $fasta_path . "elegans.WS190.dna.fa.fai" if ($fa_organism eq "Caenorhabditis elegans");
     $fa_file =  $fasta_path . "dmel.r5.9.dna.fa.fai" if ($fa_organism eq "Drosophila melanogaster");
     $fa_file =  $fasta_path . "dpse.r2.6.dna.fa.fai" if ($fa_organism eq "Drosophila pseudoobscura pseudoobscura");
