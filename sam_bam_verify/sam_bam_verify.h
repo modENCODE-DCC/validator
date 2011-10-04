@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "sam.h"
-
+#include "kstring.h"
 void show_usage();
 void update_header_text(bam_header_t* header);
 

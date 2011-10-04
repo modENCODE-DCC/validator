@@ -127,16 +127,19 @@ int main(int argc, char *argv[]) {
     if (!((core)->flag & BAM_FUNMAP)) ++mapped_read_count;
 
     // If we updated the header, we also have to update the content to remove "chr" prefixes
-    //&alignment->core->tid < 0 && ;
     bam1_core_t *c = &alignment->core;
+    char *qname = bam1_qname(alignment);
     if (c->tid < 0) {
       // This is an unmapped sequence, which should probably be error-worthy.
-      fprintf(stderr, "Unknown reference sequence found for a read. Check that your headers and reads match!\n");
-      fprintf(stderr, "  Provided reference sequences were:\n");
-      fprintf(stderr, "%s\n", infp->header->text);
-      exit(1);
+      fprintf(stderr, "Unknown reference sequence found for read %s. Discarding from processed file!\n", qname);
+      // fprintf(stderr, "  Provided reference sequences were:\n");
+      // fprintf(stderr, "%s\n", infp->header->text);
+      // exit(1);
+      continue;
+    } else {
+      //only write out those reads that have mapped references
+      bam_write1(outfp->x.bam, alignment);
     }
-    bam_write1(outfp->x.bam, alignment);
   }
 
   bam_destroy1(alignment);
