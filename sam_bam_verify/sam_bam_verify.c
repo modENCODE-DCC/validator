@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
   header->text = strdup(new_text);
   free(new_text);
 
-  header->l_text = strlen(header->text) + 1;
+  header->l_text = strlen(header->text) ; //  + 1; // Don't need to add a space for carriage return or whatever this was for!
   bam_init_header_hash(header);
 
   // Output the header if verbose mode
