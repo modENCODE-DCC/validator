@@ -183,6 +183,9 @@ sub validate {
     $bam_file = $filename . ".bam";
     my $cmd = "$sam_bam_tools_path/sam_bam_verify $filename $bam_file";
     my $output = `$cmd 2>&1`;
+    foreach (split("\n", $output)) {
+      log_error "[sam_bam_verify] $_", "notice";
+    }
     my ($read_count) = ($output =~ m/Unique mapped reads: (\d+)/);
 
     if ($read_count == 0) {
