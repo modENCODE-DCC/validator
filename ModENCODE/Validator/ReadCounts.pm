@@ -92,8 +92,30 @@ sub validate {
         log_error "Assuming provided read counts are accurate.", "notice";
       }
     } else {
-      $mapped_reads = $total_mapped_reads;
-      log_error "Using calculated value $mapped_reads for mapped read count", "notice";
+      if (!defined($total_mapped_reads)) {
+        log_error "Mapping of reads to the genome was not supplied in this submission", "notice";
+        #if there is an alignment protocol type, there should be a mapped read count supplied.
+        #this will only catch a problem if there is no defined result value in the wiki.  if
+        #there is a result value column for total mapped reads, it will be caught elsewhere
+        #TODO: untested
+        foreach my $applied_protocol_slot (@{$experiment->get_applied_protocol_slots}) {
+          foreach my $applied_protocol (@$applied_protocol_slot) {
+            my $protocol = $applied_protocol->get_protocol();
+            foreach my $attribute ($applied_protocol->get_protocol->get_object->get_attributes(1)) {
+              if ($attribute->get_value() =~ /alignment/i) {
+                log_error "At least one of your protocols is an alignment protocol, but you have not specified a read count value", "error";
+                return 0;
+              }
+            }
+          }
+        }
+        log_error "Since you did not supply an alignment protocol in this submission, we will skip the ratio calculation", "notice";
+        $mapped_reads = 0;
+        return 1;
+      } else {
+        $mapped_reads = $total_mapped_reads;
+        log_error "Using calculated value $mapped_reads for mapped read count", "notice";
+      }
     }
 
     if ($total_reads <= 0) {
