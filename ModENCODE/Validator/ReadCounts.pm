@@ -33,13 +33,14 @@ sub validate {
       log_error "Found $total_reads total reads (reported by submitter).", "notice";
     }
     if (!$total_reads) {
+      log_error "Didn't find total reads in this submission, checking referenced submissions.", "notice", ">";
       # First make sure we have as many of these as we can from somewhere (e.g. reffed experiments)
       # Look for referenced submissions
       my %referenced_submissions; 
       foreach my $applied_protocol_slot (@{$experiment->get_applied_protocol_slots}) { 
         foreach my $applied_protocol (@$applied_protocol_slot) { 
           foreach my $datum ($applied_protocol->get_input_data(1), $applied_protocol->get_output_data(1)) {
-            my ($reference) = grep { $_->get_termsource() && $_->get_termsource(1)->get_db(1)->get_description =~ /modencode_submission(_quick)?/ } $datum->get_attributes(1);
+            my ($reference) = grep { $_->get_termsource() && $_->get_termsource(1)->get_db(1)->get_description() =~ /modencode_submission(_quick)?/ } $datum->get_attributes(1);
             if ($reference) {
               $referenced_submissions{$reference->get_termsource(1)->get_db(1)->get_url()} = 1;
             }
@@ -78,6 +79,7 @@ sub validate {
           }
         }
       }
+      log_error "Finished checking referenced submissions", "notice", "<";
     }
 
     my $mapped_reads = 0;
