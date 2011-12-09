@@ -118,7 +118,9 @@ sub validate {
       }
     } else {
       # It's already a local file
-      if (!-r $datum_obj->get_value) {
+      if ($datum_obj->get_value =~ /TMPID/) {
+        log_error "Creating temporary object identifier " . $datum_obj->get_value, "notice";
+      } elsif (!-r $datum_obj->get_value) {
         log_error "Couldn't find file " . $datum_obj->get_value . "!", "error", "<";
         $success = 0;
         last;
