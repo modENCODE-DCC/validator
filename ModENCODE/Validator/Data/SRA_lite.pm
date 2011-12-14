@@ -263,6 +263,7 @@ sub handle_summary_results {
 	my $sra_id = $genbank_acc;
 	$sra_id =~ s/\.\S+//;  #can find individual reads this way, need to use the full read set
 	$url .= "&term=" . $sra_id;
+        #this adds a url reference to the SRA id
 	$datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
 	    'value' => $url,
 	    'type' => new ModENCODE::Chado::CVTerm({'name' => 'anyURI', 'cv' => new ModENCODE::Chado::CV({'name' => 'xsd'})}),
@@ -271,6 +272,15 @@ sub handle_summary_results {
 	    'datum' => $datum,
 	 })
 	);
+        #this adds the actual SRA id as an accession number
+        $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
+              'value' => $sra_id,
+              'type' => new ModENCODE::Chado::CVTerm({'name' => 'ShortReadArchive_project_ID (SRA)', 'cv' => new ModENCODE::Chado::CV({'name' => 'modencode-helper'})}),
+              'name' => $sra_id,
+              'heading' => "ShortReadArchive_project_ID (SRA)",
+              'datum' => $datum,
+            })
+        );
     } else {
 	log_error "You do not have a valid SRA id", "error";
 	push @ests_not_found, $ap_datum;
