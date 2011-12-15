@@ -39,38 +39,63 @@ sub validate {
       $experiment_name = $parser->set_schema($schema);
       log_error "Experiment name is \"$experiment_name\".", "notice";
     }
-
-    log_error "Finding referenced datum: " . $datum_obj->get_value . " of type " . $datum_obj->get_type(1)->to_string . ".", "debug";
-    my $new_datum = $parser->get_datum_id_by_value($datum_obj->get_value);
-    if ($new_datum) {
-      log_error "Found an old datum object for \"" . $datum_obj->get_value . "\".", "notice";
-      log_error "Got datum: " . $new_datum->get_object->to_string() . ".", "debug";
-      my $new_datum_obj = $new_datum->get_object;
-      if (
-        $datum_obj->get_type(1)->get_cv(1)->get_name ne $new_datum_obj->get_type(1)->get_cv(1)->get_name ||
-        $datum_obj->get_type(1)->get_name ne $new_datum_obj->get_type(1)->get_name
-      ) {
-        log_error "Found datum object for \"" . $datum_obj->get_value . "\", but it is of a different type. The old type was " . $datum_obj->get_type(1)->to_string . ", but the new type is " . $new_datum_obj->get_type(1)->to_string . ".", "warning";
+  
+    # Omit checking for attributes of gff3 because it may take an excessively long time.
+    if ($datum_obj->get_type(1)->to_string =~ /modencode:GFF3/) {
+      log_error "Datum " . $datum_obj->get_value . "is gff3 and is being checked only for existence of file. Attributes will be omitted." , "notice";
+      # Hacky hack: check for file in extracted dir. TODO make this a path in the config file.
+      my $gffpath = "/modencode/raw/data/$version/extracted/" . $datum_obj->get_value ;
+      if (-e $gffpath) { 
+        log_error "Found file $gffpath " , "notice" ; 
+        # Add only the reference attribute
+        $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
+              'datum' => $datum,
+              'heading' => 'modENCODE Reference for ' . $version,
+              'value' => $version . ":" . $datum_obj->get_value(),
+              'type' => new ModENCODE::Chado::CVTerm({
+                  'name' => 'reference',
+                  'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
+                }),
+              'termsource' => $datum_obj->get_termsource
+            })
+        );
+      } else {
+        log_error "Couldn't find referenced datum \"" . $datum_obj->get_value . "\" in #$version - \"$experiment_name\".", "error";
+        $success = 0;
       }
-      foreach my $attribute ($new_datum_obj->get_attributes()) {
-        $datum_obj->add_attribute($attribute);
-      }
-      $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
-            'datum' => $datum,
-            'heading' => 'modENCODE Reference for ' . $version,
-            'value' => $version . ":" . $datum_obj->get_value(),
-            'type' => new ModENCODE::Chado::CVTerm({
-                'name' => 'reference',
-                'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
-              }),
-            'termsource' => $datum_obj->get_termsource
-          })
-      );
-
-      $datum_obj->set_termsource($new_datum_obj->get_termsource);
     } else {
-      log_error "Couldn't find referenced datum \"" . $datum_obj->get_value . "\" in #$version - \"$experiment_name\".", "error";
-      $success = 0;
+      log_error "Finding referenced datum: " . $datum_obj->get_value . " of type " . $datum_obj->get_type(1)->to_string . ".", "debug";
+      my $new_datum = $parser->get_datum_id_by_value($datum_obj->get_value);
+      if ($new_datum) {
+        log_error "Found an old datum object for \"" . $datum_obj->get_value . "\".", "notice";
+        log_error "Got datum: " . $new_datum->get_object->to_string() . ".", "debug";
+        my $new_datum_obj = $new_datum->get_object;
+        if (
+          $datum_obj->get_type(1)->get_cv(1)->get_name ne $new_datum_obj->get_type(1)->get_cv(1)->get_name ||
+          $datum_obj->get_type(1)->get_name ne $new_datum_obj->get_type(1)->get_name
+        ) {
+          log_error "Found datum object for \"" . $datum_obj->get_value . "\", but it is of a different type. The old type was " . $datum_obj->get_type(1)->to_string . ", but the new type is " . $new_datum_obj->get_type(1)->to_string . ".", "warning";
+        }
+        foreach my $attribute ($new_datum_obj->get_attributes()) {
+          $datum_obj->add_attribute($attribute);
+        }
+        $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
+              'datum' => $datum,
+              'heading' => 'modENCODE Reference for ' . $version,
+              'value' => $version . ":" . $datum_obj->get_value(),
+              'type' => new ModENCODE::Chado::CVTerm({
+                  'name' => 'reference',
+                  'cv' => new ModENCODE::Chado::CV({ 'name' => 'modencode' })
+                }),
+              'termsource' => $datum_obj->get_termsource
+            })
+        );
+
+        $datum_obj->set_termsource($new_datum_obj->get_termsource);
+      } else {
+        log_error "Couldn't find referenced datum \"" . $datum_obj->get_value . "\" in #$version - \"$experiment_name\".", "error";
+        $success = 0;
+      }
     }
   }
   log_error "Done.", "notice", "<";
