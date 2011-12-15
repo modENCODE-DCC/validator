@@ -272,7 +272,7 @@ sub handle_summary_results {
 	);
     $datum_obj->add_attribute(new ModENCODE::Chado::DatumAttribute({
           'value' => $genbank_acc,
-          'type' => new ModENCODE::Chado::CVTerm({'name' => 'GEO_record', 'cv' => new ModENCODE::Chado::CV({'name' -> 'modencode-helper'})}),
+          'type' => new ModENCODE::Chado::CVTerm({'name' => 'GEO_record', 'cv' => new ModENCODE::Chado::CV({'name' => 'modencode-helper'})}),
           'name' => $genbank_acc,
           'heading' => "GEO_record",
           'datum' => $datum,
