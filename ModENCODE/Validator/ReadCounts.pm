@@ -73,12 +73,16 @@ sub validate {
           if ($others) { log_error "Got back more than one total read count from referenced submission $referenced_submission_id.", "warning"; }
           if ($total_reads) {
             $total_reads = $total_reads->get_object->get_value();
-            log_error "Found (missing from this submission) $total_reads total reads in submission $referenced_submission_id.", "notice";
+            log_error "Found (missing from this submission) $total_reads total reads in referenced submission $referenced_submission_id.", "notice";
           } else {
-            log_error "No total read count whatsoever found for this submission. Continuing anyway.", "error";
+            log_error "Total read count not found in referenced submission $referenced_submission_id.", "notice";
           }
         }
       }
+      if (!$total_reads) { 
+        log_error "No total read count whatsoever found for this submission. Continuing anyway.", "error";
+      }
+
       log_error "Finished checking referenced submissions", "notice", "<";
     }
 
