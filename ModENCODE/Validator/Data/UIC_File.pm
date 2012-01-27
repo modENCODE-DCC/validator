@@ -19,8 +19,8 @@ use IO::Select;
 
 my %cached_fastq_files  :ATTR( :default<{}> );
 my %seen_data           :ATTR( :default<{}> );
-my %transfer_host       :ATTR( :name<transfer_host>,     :default<"74.114.99.77"> );
-my %remote_url_prefix   :ATTR( :name<remote_url_prefix>, :default<"rsync://uberkeley\@74.114.99.63::berkeley/pipeline/"> );
+my %transfer_host       :ATTR( :name<transfer_host>,     :default<"74.114.99.142"> );
+my %remote_url_prefix   :ATTR( :name<remote_url_prefix>, :default<"rsync://uberkeley\@74.114.99.142::berkeley/pipeline/"> );
 my %local_web_prefix    :ATTR( :name<local_web_prefix>,  :default<"http://submit.modencode.org/submit/public/get_file/"> );
 my %transfer_cmd        :ATTR( :name<transfer_cmd>,      :default<"devel/fetcher.pl"> );
 my %remote_user         :ATTR( :name<remote_user>,       :default<"uberkeley"> );
