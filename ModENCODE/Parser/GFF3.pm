@@ -167,7 +167,7 @@ sub parse
                 }
 		chomp $line;
 		last if $line eq "###";
-		if ($line =~ /^##genome-build\s+(\w+)\s+(\w+)/) {
+    if ($line =~ /^##genome-build\s+([\w-]+)\s+(\w+)/) {
 			my $src = $1;
 			my $build_name = $2;
 			$this->{build} = $builds->{$src}->{$build_name} ||
