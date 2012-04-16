@@ -232,7 +232,9 @@ sub validate {
       $seen_filenames{ident $self}->{$filename} = $filename;
     }
 
-    if (!-r $filename) {
+    if ($filename =~ /TMPID/) {
+        log_error "Creating temporary object identifier " . $filename, "notice";
+    } elsif (!-r $filename) {
       log_error "Can't find Result File [" . $datum_obj->get_name() . "]=" . $filename . ".", "error";
       $success = 0;
     } else {
