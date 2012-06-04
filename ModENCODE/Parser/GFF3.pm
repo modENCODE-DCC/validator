@@ -170,6 +170,12 @@ sub parse
     if ($line =~ /^##genome-build\s+([\w-]+)\s+([\w\.]+)/) {
 			my $src = $1;
 			my $build_name = $2;
+      # SPECIAL CASE for D. mel : if it's a specific build within r5, strip the build id.
+      # The genome-builds file uses only the assembly number.
+      if( ($src eq "FlyBase") && ($build_name =~ /^r5\..+$/) ) {
+        log_error "Setting FlyBase build $build_name to r5 for consistency.", "notice" ;
+        $build_name = "r5" ; 
+      }
 			$this->{build} = $builds->{$src}->{$build_name} ||
 				die "Build data for $line not found";
 			next;
