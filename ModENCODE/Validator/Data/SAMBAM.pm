@@ -332,7 +332,12 @@ sub verify_header {
 		($source,$build) = ($build =~ m/(\S+) (\S+)/);
                 next if $source =~ /SPIKE/;
                 next if $source =~ /PLASMID/;
-		
+    # SPECIAL CASE for D. mel : if it's a specific build within r5, strip the build id.
+    # The genome-builds file uses only the assembly number.
+    if ( ($source eq "FlyBase") && ($build =~ /^r5\..+$/) ) {
+        log_error "Setting FlyBase build $build to r5 for consistency.", "notice" ;
+        $build = "r5" ; 
+    }
 		if (!exists $build_config->{$source}) {
 		    log_error "You have specified an invalid source of \"$source\" at line $header_linenum in the header","error" ;
 		    $success = 0;
