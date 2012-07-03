@@ -30,7 +30,7 @@ sub validate {
     }
     if ($total_reads) {
       $total_reads = $total_reads->get_value();
-      log_error "Found $total_reads total reads (reported by submitter).", "notice";
+      log_error "Found $total_reads total (raw) reads (reported by submitter).", "notice";
     }
     if (!$total_reads) {
       log_error "Didn't find total reads in this submission, checking referenced submissions.", "notice", ">";
@@ -90,7 +90,7 @@ sub validate {
     if ($uniq_reads || $multiply_mapped_reads) {
       $mapped_reads = $uniq_reads + $multiply_mapped_reads;
       if (defined($total_mapped_reads) && $mapped_reads != $total_mapped_reads) {
-        log_error "We have calculated $total_mapped_reads total reads, but you reported a total of $mapped_reads in this submission.  Please verify that your alignment files are complete.", "error";
+        log_error "We have calculated $total_mapped_reads total mapped reads (with unique ids, that which does not distinguish between unique and non-unique mappers), but you reported a total of $mapped_reads (uniquely + non-uniquely) mapped reads in this submission.  Please verify that your alignment files are complete.", "error";
         return 0;
       } else {
         log_error "Assuming provided read counts are accurate.", "notice";
