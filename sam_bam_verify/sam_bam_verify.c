@@ -120,25 +120,37 @@ int main(int argc, char *argv[]) {
   long long total_reads = 0;
 
   // Write out updated file as BAM
+  // Increment total_reads for every read in the file.
+  // Increment mapped_reads for every read where
+  //    a) the unmapped flag is NOT set, AND
+  //    b) there is a non-* CIGAR string.
+  // Discard reads mapping to * or to a chromosome not in the header
+  // (Note that these reads have already incremented mapped_reads.)
+  // Also discard unmapped reads (ie, those which didn't increment mapped_reads).
+
   long long mapped_read_count = 0;
+  // Have we complained about an unmapped read yet
+  int seen_unmapped_read = 0;
   while (samread(infp, alignment) >= 0) {
     // Generate BAM with chromosome prefixes stripped off
     ++total_reads;
-    if (!((core)->flag & BAM_FUNMAP)) ++mapped_read_count;
-
-    // If we updated the header, we also have to update the content to remove "chr" prefixes
-    bam1_core_t *c = &alignment->core;
-    char *qname = bam1_qname(alignment);
-    if (c->tid < 0) {
-      // This is an unmapped sequence, which should probably be error-worthy.
-      fprintf(stderr, "Unknown reference sequence found for read %s. Discarding from processed file!\n", qname);
-      // fprintf(stderr, "  Provided reference sequences were:\n");
-      // fprintf(stderr, "%s\n", infp->header->text);
-      // exit(1);
-      continue;
-    } else {
-      //only write out those reads that have mapped references
-      bam_write1(outfp->x.bam, alignment);
+    // If the unmapped flag is not set
+    if (!((core)->flag & BAM_FUNMAP)){
+      ++mapped_read_count;
+      // If we can't find the chromosome in the header and it claims to be mapped,
+      bam1_core_t *c = &alignment->core;
+      if (c->tid < 0) {
+        // Freak out the first time this happens in a file
+        if (seen_unmapped_read == 0) {
+          char *qname = bam1_qname(alignment);
+          fprintf(stderr,"Read '%s' maps to a reference sequence not found in the SAM header! Please check this read.\n", qname);
+          fprintf(stderr,"This message appears only once; multiple reads in this file may be affected.\n");
+          seen_unmapped_read = 1;
+        }
+      } else {
+        // It's mapped, to a chrom we recognize; write it out
+        bam_write1(outfp->x.bam, alignment);
+      }
     }
   }
 
@@ -179,16 +191,25 @@ int main(int argc, char *argv[]) {
 
   long long unique_mapped_reads = 0;
   long long unique_reads = 0;
+  long long unique_multi_mapped_reads = 0 ; // Unique multiply-mapped reads. Each id can count for up to 2 (ie, one read pair)
   int last_read_nums[2];
+  int seen_multi_mapped[2] ; // Have we seen this multiply-mapped read?
 
   while (samread(infp, alignment) >= 0) {
     current_read_id = bam1_qname(alignment);
     current_read_num = !((core)->flag & BAM_FREAD1);
+    // If this read is the same ID as the previous
     if (last_read_id && strcmp(current_read_id, last_read_id) == 0) {
-      // IDs are unique
+      // And we've seen this read number before:
       if (last_read_nums[current_read_num]) {
-        // And we've seen this read number before:
-        // Dup!
+        // And we haven't yet seen that it's multiply mapped
+        if (! seen_multi_mapped[current_read_num]) {
+          // increment if it was mapped
+          if (!((core)->flag & BAM_FUNMAP)) { unique_multi_mapped_reads++; }
+          // and mark as seen
+          seen_multi_mapped[current_read_num] = 1;
+        }
+        // When debugging, alert on ALL multiply-mapped, first time or no.
         if (debug_level & 2) {
           printf("Duplicate id:\n");
           printf("  %s %d\n", current_read_id, current_read_num);
@@ -202,6 +223,7 @@ int main(int argc, char *argv[]) {
     } else {
       // New read ID
       last_read_nums[0] = last_read_nums[1] = 0;
+      seen_multi_mapped[0] = seen_multi_mapped[1] = 0;
       last_read_id = strdup(current_read_id);
 
       // Unique by ID, increment
@@ -218,6 +240,7 @@ int main(int argc, char *argv[]) {
   printf("Mapped reads: %lld\n", mapped_read_count);
   printf("Total reads: %lld\n", total_reads);
   printf("Unique mapped reads: %lld\n", unique_mapped_reads);
+  printf("Unique multiply-mapped reads: %lld\n", unique_multi_mapped_reads);
   printf("Unique total reads: %lld\n", unique_reads);
 
 
