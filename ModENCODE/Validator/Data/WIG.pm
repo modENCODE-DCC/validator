@@ -185,8 +185,7 @@ sub validate {
     }
     close FH;
 
-    if (length($wiggle_data) > (512*1024*1024)) {
-      # 512MB, just write to a new file, don't put in DB
+      # Write wiggle data to a file by default.
       log_error "WIG data too large for Chado; storing reference to file instead.", "notice";
       open FH, ">", "$filename.cleaned.wig" or croak "Couldn't open $filename.cleaned.wig for writing.";
       print FH $wiggle_data;
@@ -199,9 +198,6 @@ sub validate {
           })
       );
       $wiggle->get_object->set_data("Too large, see: $filename.cleaned.wig");
-    } else {
-      $wiggle->get_object->set_data($wiggle_data);
-    }
   }
 
   log_error "Done.", "notice", "<";
