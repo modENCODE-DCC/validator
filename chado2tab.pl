@@ -15,7 +15,7 @@ use ModENCODE::Chado::Attribute;
 use ModENCODE::Cache;
 ModENCODE::Cache::init();
 
-my $dbh; # = DBI->connect("dbi:Pg:dbname=mepipe;host=localhost", "db_public", "limecat") or die "Couldn't connect to DB";
+my $dbh; # = DBI->connect("dbi:Pg:dbname=mepipe;host=localhost", "db_public", "pw") or die "Couldn't connect to DB";
 
 my $experiment_id = $ARGV[0];
 
@@ -23,7 +23,7 @@ my $reader = new ModENCODE::Parser::Chado({
     'dbname' => 'modencode_chado' ,
     'host' => 'localhost',
     'username' => 'db_public',
-    'password' => 'ir84#4nm',
+    'password' => 'pw',
   });
 
 if (!$experiment_id) {
